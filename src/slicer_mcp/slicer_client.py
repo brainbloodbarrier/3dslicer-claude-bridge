@@ -3,10 +3,15 @@
 import json
 import logging
 import sys
-from typing import Optional, Dict, List, Any
+import time
+from functools import wraps
+from typing import Optional, Dict, List, Any, Callable, TypeVar, Tuple, Type
 
 import requests
 from requests.exceptions import RequestException, Timeout, ConnectionError
+
+# Type variable for generic return type
+T = TypeVar('T')
 
 # Configure logging to stderr (stdout reserved for MCP)
 logging.basicConfig(
@@ -18,7 +23,7 @@ logger = logging.getLogger("slicer-mcp")
 
 
 class SlicerConnectionError(Exception):
-    """Raised when connection to Slicer WebServer fails."""
+    """Raised when connection to Slicer WebServer fails (retryable)."""
 
     def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
         self.message = message
@@ -26,20 +31,126 @@ class SlicerConnectionError(Exception):
         super().__init__(self.message)
 
 
+class SlicerTimeoutError(Exception):
+    """Raised when request to Slicer times out (not retryable - Slicer may be frozen)."""
+
+    def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
+        self.message = message
+        self.details = details or {}
+        super().__init__(self.message)
+
+
+def with_retry(
+    max_retries: int = 3,
+    backoff_base: float = 1.0,
+    retryable_exceptions: Tuple[Type[Exception], ...] = (ConnectionError,)
+) -> Callable[[Callable[..., T]], Callable[..., T]]:
+    """Decorator for retry with exponential backoff.
+
+    Implements retry logic as specified in SPECIFICATION.md:
+    - Connection errors: Retry up to 3 times with exponential backoff (1s, 2s, 4s)
+    - Timeout errors: No retry (likely Slicer is frozen)
+    - Other errors: No retry
+
+    Args:
+        max_retries: Maximum number of retry attempts (default: 3)
+        backoff_base: Base delay in seconds for exponential backoff (default: 1.0)
+        retryable_exceptions: Tuple of exception types that should trigger retry
+
+    Returns:
+        Decorated function with retry logic
+    """
+    def decorator(func: Callable[..., T]) -> Callable[..., T]:
+        @wraps(func)
+        def wrapper(*args, **kwargs) -> T:
+            last_exception = None
+            for attempt in range(max_retries + 1):
+                try:
+                    return func(*args, **kwargs)
+                except retryable_exceptions as e:
+                    last_exception = e
+                    if attempt < max_retries:
+                        sleep_time = backoff_base * (2 ** attempt)
+                        logger.warning(
+                            f"Retry {attempt + 1}/{max_retries} for {func.__name__} "
+                            f"after {sleep_time}s delay. Error: {e}"
+                        )
+                        time.sleep(sleep_time)
+                    else:
+                        logger.error(
+                            f"All {max_retries} retries exhausted for {func.__name__}. "
+                            f"Final error: {e}"
+                        )
+            raise last_exception
+        return wrapper
+    return decorator
+
+
+# Singleton instance management
+_client_instance: Optional['SlicerClient'] = None
+_client_lock = None  # Lazy initialization to avoid import-time threading issues
+
+
+def get_client() -> 'SlicerClient':
+    """Get the singleton SlicerClient instance.
+
+    Creates the client on first call, reuses it for subsequent calls.
+    Thread-safe initialization using a lock.
+
+    Returns:
+        The singleton SlicerClient instance configured from environment variables.
+    """
+    global _client_instance, _client_lock
+    import threading
+
+    # Lazy initialize the lock
+    if _client_lock is None:
+        _client_lock = threading.Lock()
+
+    if _client_instance is None:
+        with _client_lock:
+            # Double-check locking pattern
+            if _client_instance is None:
+                _client_instance = SlicerClient()
+                logger.info("Created singleton SlicerClient instance")
+
+    return _client_instance
+
+
+def reset_client() -> None:
+    """Reset the singleton client instance.
+
+    Useful for testing or when connection parameters change.
+    """
+    global _client_instance
+    _client_instance = None
+    logger.info("Reset singleton SlicerClient instance")
+
+
 class SlicerClient:
     """HTTP client for 3D Slicer WebServer API.
 
     This client provides methods to interact with Slicer's REST API endpoints
     including Python execution, screenshot capture, scene inspection, and data loading.
+
+    For most use cases, use the `get_client()` function to get the singleton instance
+    rather than creating new instances directly.
     """
 
-    def __init__(self, base_url: str = "http://localhost:2016", timeout: int = 30):
+    def __init__(self, base_url: str = None, timeout: int = None):
         """Initialize Slicer HTTP client.
 
         Args:
-            base_url: Base URL of Slicer WebServer (default: http://localhost:2016)
-            timeout: Request timeout in seconds (default: 30)
+            base_url: Base URL of Slicer WebServer. If None, reads from SLICER_URL
+                      environment variable (default: http://localhost:2016)
+            timeout: Request timeout in seconds. If None, reads from SLICER_TIMEOUT
+                     environment variable (default: 30)
         """
+        import os
+        if base_url is None:
+            base_url = os.environ.get('SLICER_URL', 'http://localhost:2016')
+        if timeout is None:
+            timeout = int(os.environ.get('SLICER_TIMEOUT', '30'))
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         # Note: We use direct requests.get/post instead of Session to avoid
@@ -48,6 +159,7 @@ class SlicerClient:
 
         logger.info(f"Initialized SlicerClient with base_url={self.base_url}, timeout={self.timeout}s")
 
+    @with_retry(max_retries=3, backoff_base=1.0, retryable_exceptions=(SlicerConnectionError,))
     def health_check(self) -> Dict[str, Any]:
         """Check connection to Slicer WebServer.
 
@@ -55,10 +167,10 @@ class SlicerClient:
             Dict with connection status and response time
 
         Raises:
-            SlicerConnectionError: If Slicer is not reachable
+            SlicerConnectionError: If Slicer is not reachable (will retry)
+            SlicerTimeoutError: If request times out (no retry - Slicer may be frozen)
         """
         try:
-            import time
             start_time = time.time()
 
             response = requests.get(
@@ -78,8 +190,20 @@ class SlicerClient:
                 "response_time_ms": elapsed_ms,
             }
 
-        except (ConnectionError, Timeout) as e:
-            logger.error(f"Health check failed: {e}")
+        except Timeout as e:
+            # Timeout errors are NOT retried - Slicer may be frozen
+            logger.error(f"Health check timeout: {e}")
+            raise SlicerTimeoutError(
+                f"Slicer WebServer request timed out after {self.timeout}s",
+                details={
+                    "url": self.base_url,
+                    "timeout": self.timeout,
+                    "suggestion": "Slicer may be frozen. Try restarting Slicer."
+                }
+            )
+        except ConnectionError as e:
+            # Connection errors ARE retried
+            logger.error(f"Health check connection failed: {e}")
             raise SlicerConnectionError(
                 f"Could not connect to Slicer WebServer at {self.base_url}",
                 details={
@@ -95,6 +219,7 @@ class SlicerClient:
                 details={"url": self.base_url}
             )
 
+    @with_retry(max_retries=3, backoff_base=1.0, retryable_exceptions=(SlicerConnectionError,))
     def exec_python(self, code: str) -> Dict[str, Any]:
         """Execute Python code in Slicer's Python environment.
 
@@ -105,7 +230,8 @@ class SlicerClient:
             Dict with success status and result/output
 
         Raises:
-            SlicerConnectionError: If request fails
+            SlicerConnectionError: If connection fails (will retry)
+            SlicerTimeoutError: If request times out (no retry)
         """
         try:
             logger.debug(f"Executing Python code: {code[:100]}...")
@@ -130,7 +256,17 @@ class SlicerClient:
                 "stderr": ""
             }
 
-        except (ConnectionError, Timeout) as e:
+        except Timeout as e:
+            logger.error(f"Python execution timeout: {e}")
+            raise SlicerTimeoutError(
+                f"Python execution timed out after {self.timeout}s",
+                details={
+                    "url": self.base_url,
+                    "code_preview": code[:100],
+                    "suggestion": "Code may be too complex or Slicer may be frozen"
+                }
+            )
+        except ConnectionError as e:
             logger.error(f"Python execution connection failed: {e}")
             raise SlicerConnectionError(
                 f"Could not connect to Slicer WebServer at {self.base_url}",

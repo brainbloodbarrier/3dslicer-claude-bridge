@@ -5,7 +5,7 @@ import pytest
 from unittest.mock import Mock, patch, MagicMock
 from requests.exceptions import ConnectionError, Timeout
 
-from slicer_mcp.slicer_client import SlicerClient, SlicerConnectionError
+from slicer_mcp.slicer_client import SlicerClient, SlicerConnectionError, SlicerTimeoutError
 
 
 @pytest.fixture
@@ -33,6 +33,26 @@ class TestSlicerClientInit:
         """Test trailing slash is removed from base URL."""
         client = SlicerClient(base_url="http://localhost:2016/")
         assert client.base_url == "http://localhost:2016"
+
+    def test_environment_variable_slicer_url(self, monkeypatch):
+        """Test SLICER_URL environment variable is respected."""
+        monkeypatch.setenv('SLICER_URL', 'http://custom-slicer:8080')
+        client = SlicerClient()
+        assert client.base_url == "http://custom-slicer:8080"
+
+    def test_environment_variable_slicer_timeout(self, monkeypatch):
+        """Test SLICER_TIMEOUT environment variable is respected."""
+        monkeypatch.setenv('SLICER_TIMEOUT', '120')
+        client = SlicerClient()
+        assert client.timeout == 120
+
+    def test_explicit_params_override_env_vars(self, monkeypatch):
+        """Test explicit parameters override environment variables."""
+        monkeypatch.setenv('SLICER_URL', 'http://env-url:9999')
+        monkeypatch.setenv('SLICER_TIMEOUT', '999')
+        client = SlicerClient(base_url="http://explicit:1234", timeout=45)
+        assert client.base_url == "http://explicit:1234"
+        assert client.timeout == 45
 
 
 class TestHealthCheck:
@@ -68,10 +88,10 @@ class TestHealthCheck:
         with patch('slicer_mcp.slicer_client.requests.get') as mock_get:
             mock_get.side_effect = Timeout("Request timeout")
 
-            with pytest.raises(SlicerConnectionError) as exc_info:
+            with pytest.raises(SlicerTimeoutError) as exc_info:
                 slicer_client.health_check()
 
-            assert "Could not connect" in str(exc_info.value)
+            assert "timed out" in str(exc_info.value)
 
 
 class TestExecPython:

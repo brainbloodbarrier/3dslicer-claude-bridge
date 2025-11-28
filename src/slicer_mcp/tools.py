@@ -1,12 +1,171 @@
 """MCP tool implementations for Slicer Bridge."""
 
 import base64
+import hashlib
+import json
 import logging
+import os
+import re
+import uuid
+from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
 
-from slicer_mcp.slicer_client import SlicerClient, SlicerConnectionError
+from slicer_mcp.slicer_client import get_client, SlicerConnectionError
 
 logger = logging.getLogger("slicer-mcp")
+
+# =============================================================================
+# Audit Logging (Security)
+# =============================================================================
+
+# Dedicated audit logger for Python code execution
+audit_logger = logging.getLogger("slicer-mcp.audit")
+
+# Configure audit logging based on environment
+_audit_file = os.environ.get("SLICER_AUDIT_LOG")
+if _audit_file:
+    _audit_handler = logging.FileHandler(_audit_file)
+    _audit_handler.setFormatter(logging.Formatter('%(message)s'))
+    audit_logger.addHandler(_audit_handler)
+    audit_logger.setLevel(logging.INFO)
+
+# Maximum code length to log in full (larger code is truncated with hash)
+AUDIT_CODE_MAX_LENGTH = 500
+
+
+def _audit_log_execution(
+    code: str,
+    request_id: str,
+    success: bool,
+    result: Optional[Dict[str, Any]] = None,
+    error: Optional[str] = None
+) -> None:
+    """Log Python code execution to audit log.
+
+    Creates structured JSON audit entries for security monitoring.
+
+    Args:
+        code: The Python code that was executed
+        request_id: Unique identifier for this execution request
+        success: Whether execution succeeded
+        result: Execution result (if successful)
+        error: Error message (if failed)
+    """
+    # Compute hash for code identification (useful for large code blocks)
+    code_hash = hashlib.sha256(code.encode()).hexdigest()[:16]
+
+    # Truncate code for logging if too long
+    code_preview = code[:AUDIT_CODE_MAX_LENGTH]
+    if len(code) > AUDIT_CODE_MAX_LENGTH:
+        code_preview += f"... [truncated, {len(code)} chars total]"
+
+    audit_entry = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "event": "python_execution",
+        "request_id": request_id,
+        "code_hash": code_hash,
+        "code_length": len(code),
+        "code_preview": code_preview,
+        "success": success,
+    }
+
+    if success and result:
+        # Log result preview (truncated if needed)
+        result_str = str(result.get("result", ""))
+        if len(result_str) > 200:
+            result_str = result_str[:200] + "..."
+        audit_entry["result_preview"] = result_str
+        audit_entry["has_stdout"] = bool(result.get("stdout"))
+        audit_entry["has_stderr"] = bool(result.get("stderr"))
+    elif error:
+        audit_entry["error"] = error[:500] if len(error) > 500 else error
+
+    audit_logger.info(json.dumps(audit_entry))
+
+
+# =============================================================================
+# Input Validation Functions (Security)
+# =============================================================================
+
+# Pattern for valid MRML node IDs: starts with letter, alphanumeric + underscore
+MRML_ID_PATTERN = re.compile(r'^[a-zA-Z][a-zA-Z0-9_]*$')
+
+# Pattern for valid segment names: alphanumeric, spaces, underscores, hyphens
+SEGMENT_NAME_PATTERN = re.compile(r'^[a-zA-Z0-9_\- ]+$')
+
+
+class ValidationError(Exception):
+    """Raised when input validation fails."""
+
+    def __init__(self, message: str, field: str, value: str):
+        self.message = message
+        self.field = field
+        self.value = value
+        super().__init__(self.message)
+
+
+def validate_mrml_node_id(node_id: str) -> str:
+    """Validate MRML node ID format to prevent code injection.
+
+    Valid format: starts with letter, contains only alphanumeric and underscore.
+    Examples: vtkMRMLScalarVolumeNode1, vtkMRMLSegmentationNode2
+
+    Args:
+        node_id: The MRML node ID to validate
+
+    Returns:
+        The validated node_id (unchanged if valid)
+
+    Raises:
+        ValidationError: If node_id format is invalid
+    """
+    if not node_id:
+        raise ValidationError("Node ID cannot be empty", "node_id", node_id or "")
+
+    if len(node_id) > 256:
+        raise ValidationError("Node ID exceeds maximum length (256)", "node_id", node_id[:50] + "...")
+
+    if not MRML_ID_PATTERN.match(node_id):
+        raise ValidationError(
+            f"Invalid node_id format. Must start with letter and contain only "
+            f"alphanumeric characters and underscores. Got: '{node_id[:50]}'",
+            "node_id",
+            node_id
+        )
+
+    return node_id
+
+
+def validate_segment_name(segment_name: str) -> str:
+    """Validate segment name format to prevent code injection.
+
+    Valid format: alphanumeric characters, spaces, underscores, and hyphens.
+    Examples: Tumor, Left Lung, Segment_1, Brain-Stem
+
+    Args:
+        segment_name: The segment name to validate
+
+    Returns:
+        The validated segment_name (unchanged if valid)
+
+    Raises:
+        ValidationError: If segment_name format is invalid
+    """
+    if not segment_name:
+        raise ValidationError("Segment name cannot be empty", "segment_name", segment_name or "")
+
+    if len(segment_name) > 256:
+        raise ValidationError("Segment name exceeds maximum length (256)", "segment_name", segment_name[:50] + "...")
+
+    if not SEGMENT_NAME_PATTERN.match(segment_name):
+        raise ValidationError(
+            f"Invalid segment_name format. Must contain only alphanumeric characters, "
+            f"spaces, underscores, and hyphens. Got: '{segment_name[:50]}'",
+            "segment_name",
+            segment_name
+        )
+
+    return segment_name
 
 
 def capture_screenshot(
@@ -43,7 +202,7 @@ def capture_screenshot(
             f"Must be one of: {', '.join(view_map.keys())}"
         )
 
-    client = SlicerClient()
+    client = get_client()
 
     try:
         # Capture screenshot based on view type
@@ -90,7 +249,7 @@ def list_scene_nodes() -> Dict[str, Any]:
     Raises:
         SlicerConnectionError: If Slicer is not reachable
     """
-    client = SlicerClient()
+    client = get_client()
 
     try:
         nodes = client.get_scene_nodes()
@@ -111,6 +270,7 @@ def execute_python(code: str) -> Dict[str, Any]:
     """Execute arbitrary Python code in Slicer's Python environment.
 
     Security Warning: This executes code directly in Slicer. Use only with trusted code.
+    All executions are logged to the audit log for security monitoring.
 
     Args:
         code: Python code to execute
@@ -121,17 +281,26 @@ def execute_python(code: str) -> Dict[str, Any]:
     Raises:
         SlicerConnectionError: If Slicer is not reachable or execution fails
     """
-    client = SlicerClient()
+    # Generate unique request ID for audit trail
+    request_id = str(uuid.uuid4())[:8]
+
+    client = get_client()
 
     try:
         result = client.exec_python(code)
 
-        logger.info(f"Python code executed successfully")
+        # Audit log successful execution
+        _audit_log_execution(code, request_id, success=True, result=result)
+
+        logger.info(f"Python code executed successfully (request_id={request_id})")
 
         return result
 
     except SlicerConnectionError as e:
-        logger.error(f"Python execution failed: {e.message}")
+        # Audit log failed execution
+        _audit_log_execution(code, request_id, success=False, error=e.message)
+
+        logger.error(f"Python execution failed (request_id={request_id}): {e.message}")
         raise
 
 
@@ -146,9 +315,15 @@ def measure_volume(node_id: str, segment_name: Optional[str] = None) -> Dict[str
         Dict with volume measurements in mm3 and ml
 
     Raises:
+        ValidationError: If node_id or segment_name format is invalid
         SlicerConnectionError: If Slicer is not reachable or calculation fails
     """
-    client = SlicerClient()
+    # Validate inputs to prevent code injection
+    node_id = validate_mrml_node_id(node_id)
+    if segment_name is not None:
+        segment_name = validate_segment_name(segment_name)
+
+    client = get_client()
 
     # Build Python code to calculate volumes using SegmentStatistics
     if segment_name:
@@ -267,11 +442,127 @@ json.dumps(result)
         )
 
 
+# Fallback list of common sample datasets (used when dynamic discovery fails)
+FALLBACK_SAMPLE_DATASETS = [
+    "MRHead", "CTChest", "CTACardio", "DTIBrain", "MRBrainTumor1", "MRBrainTumor2"
+]
+
+
+def list_sample_data() -> Dict[str, Any]:
+    """List all available sample datasets from 3D Slicer's SampleData module.
+
+    Dynamically queries Slicer to discover available sample datasets.
+    Falls back to a known list if Slicer is not connected.
+
+    Returns:
+        Dict with available datasets list and metadata
+
+    Raises:
+        SlicerConnectionError: If Slicer is not reachable
+    """
+    client = get_client()
+
+    # Python code to get available sample datasets from SampleData module
+    python_code = """
+import slicer
+import json
+
+try:
+    import SampleData
+
+    # Get all registered sample data sources
+    sampleDataLogic = SampleData.SampleDataLogic()
+    sources = sampleDataLogic.builtInSources() if hasattr(sampleDataLogic, 'builtInSources') else []
+
+    # Also check for registered sources in the module
+    registeredSources = []
+    if hasattr(SampleData, 'SampleDataSources'):
+        for category, sourceList in SampleData.SampleDataSources.items():
+            for source in sourceList:
+                registeredSources.append({
+                    'name': source.get('sampleName', source.get('loadFileType', 'Unknown')),
+                    'category': category,
+                    'description': source.get('uris', [''])[0] if source.get('uris') else ''
+                })
+
+    # Fallback: query the SampleData module widget for available items
+    if not registeredSources:
+        # Try to get sample names from the logic
+        sampleNames = []
+        for attr in dir(sampleDataLogic):
+            if attr.startswith('download') and callable(getattr(sampleDataLogic, attr)):
+                # Extract dataset name from method name (e.g., downloadMRHead -> MRHead)
+                name = attr.replace('download', '')
+                if name and name[0].isupper():
+                    sampleNames.append(name)
+
+        registeredSources = [{'name': name, 'category': 'BuiltIn', 'description': ''} for name in sampleNames]
+
+    result = {
+        'datasets': registeredSources,
+        'total_count': len(registeredSources),
+        'source': 'dynamic'
+    }
+except Exception as e:
+    # Fallback to known common datasets
+    result = {
+        'datasets': [
+            {'name': 'MRHead', 'category': 'BuiltIn', 'description': 'MR head scan'},
+            {'name': 'CTChest', 'category': 'BuiltIn', 'description': 'CT chest scan'},
+            {'name': 'CTACardio', 'category': 'BuiltIn', 'description': 'CTA cardiac scan'},
+            {'name': 'DTIBrain', 'category': 'BuiltIn', 'description': 'DTI brain scan'},
+            {'name': 'MRBrainTumor1', 'category': 'BuiltIn', 'description': 'MR brain tumor case 1'},
+            {'name': 'MRBrainTumor2', 'category': 'BuiltIn', 'description': 'MR brain tumor case 2'}
+        ],
+        'total_count': 6,
+        'source': 'fallback',
+        'error': str(e)
+    }
+
+json.dumps(result)
+"""
+
+    try:
+        exec_result = client.exec_python(python_code)
+        import json
+        sample_data = json.loads(exec_result["result"])
+
+        logger.info(f"Sample data list retrieved: {sample_data['total_count']} datasets ({sample_data['source']})")
+
+        return sample_data
+
+    except SlicerConnectionError as e:
+        logger.warning(f"Dynamic sample data discovery failed, using fallback: {e.message}")
+        # Return fallback list when Slicer is not connected
+        return {
+            "datasets": [
+                {"name": name, "category": "BuiltIn", "description": ""}
+                for name in FALLBACK_SAMPLE_DATASETS
+            ],
+            "total_count": len(FALLBACK_SAMPLE_DATASETS),
+            "source": "fallback",
+            "error": e.message
+        }
+
+
+def _get_valid_datasets() -> List[str]:
+    """Get list of valid dataset names, trying dynamic discovery first.
+
+    Returns:
+        List of valid dataset names
+    """
+    try:
+        sample_data = list_sample_data()
+        return [d["name"] for d in sample_data["datasets"]]
+    except Exception:
+        return FALLBACK_SAMPLE_DATASETS
+
+
 def load_sample_data(dataset_name: str) -> Dict[str, Any]:
     """Load a sample dataset into 3D Slicer.
 
     Args:
-        dataset_name: Name of sample dataset - "MRHead", "CTChest", "CTACardio", "DTIBrain", "MRBrainTumor1", "MRBrainTumor2"
+        dataset_name: Name of sample dataset (use list_sample_data() to see available options)
 
     Returns:
         Dict with success status and loaded node information
@@ -280,15 +571,16 @@ def load_sample_data(dataset_name: str) -> Dict[str, Any]:
         ValueError: If dataset_name is invalid
         SlicerConnectionError: If Slicer is not reachable or load fails
     """
-    valid_datasets = ["MRHead", "CTChest", "CTACardio", "DTIBrain", "MRBrainTumor1", "MRBrainTumor2"]
+    # Try dynamic discovery first, fall back to static list
+    valid_datasets = _get_valid_datasets()
 
     if dataset_name not in valid_datasets:
         raise ValueError(
             f"Invalid dataset_name '{dataset_name}'. "
-            f"Must be one of: {', '.join(valid_datasets)}"
+            f"Available datasets: {', '.join(valid_datasets)}"
         )
 
-    client = SlicerClient()
+    client = get_client()
 
     try:
         result = client.load_sample_data(dataset_name)
@@ -359,7 +651,7 @@ def set_layout(layout: str, gui_mode: str = "full") -> Dict[str, Any]:
             f"Must be one of: {', '.join(valid_gui_modes)}"
         )
 
-    client = SlicerClient()
+    client = get_client()
 
     try:
         result = client.set_layout(layout, gui_mode)

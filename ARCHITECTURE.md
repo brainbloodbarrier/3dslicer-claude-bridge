@@ -158,69 +158,63 @@ async def capture_screenshot(view_type: str, slice_offset: float = 0) -> dict:
 
 ### 3. HTTP Client Design
 
-**Decision**: Implement a dedicated `SlicerClient` class with session reuse and 30-second timeout.
+**Decision**: Implement a dedicated `SlicerClient` class as a **singleton** with per-request connections and configurable timeout.
 
 **Architecture**:
 ```python
-class SlicerClient:
-    def __init__(self, base_url: str = "http://localhost:2016"):
-        self.base_url = base_url
-        self.session = requests.Session()  # Connection pooling
-        self.timeout = 30  # Seconds
+# Singleton pattern for client reuse
+_client_instance = None
 
+def get_client() -> SlicerClient:
+    """Get the singleton SlicerClient instance."""
+    global _client_instance
+    if _client_instance is None:
+        _client_instance = SlicerClient()
+    return _client_instance
+
+class SlicerClient:
+    def __init__(self, base_url: str = None, timeout: int = None):
+        # Read from environment variables with defaults
+        self.base_url = base_url or os.environ.get('SLICER_URL', 'http://localhost:2016')
+        self.timeout = timeout or int(os.environ.get('SLICER_TIMEOUT', '30'))
+        # Note: Per-request connections used (not session pooling)
+        # Slicer WebServer closes connections immediately, causing
+        # "Connection reset by peer" errors with session reuse
+
+    @with_retry(max_retries=3, backoff_base=1.0)
     def exec_python(self, code: str) -> dict:
         """Execute Python code in Slicer via POST /slicer/exec."""
-        response = self.session.post(
+        response = requests.post(
             f"{self.base_url}/slicer/exec",
-            data=code,  # Plain text Python code
+            data=code,
             timeout=self.timeout
         )
         return {"success": True, "result": response.text}
-
-    def get_screenshot(self, view: str = "Red", scroll_to: float = None) -> bytes:
-        """Capture screenshot via GET /slicer/slice or /slicer/threeD."""
-        if view == "3d":
-            url = f"{self.base_url}/slicer/threeD"
-        else:
-            # view: Red (axial), Yellow (sagittal), Green (coronal)
-            url = f"{self.base_url}/slicer/slice?view={view}"
-            if scroll_to is not None:
-                url += f"&scrollTo={scroll_to}"
-
-        response = self.session.get(url, timeout=self.timeout)
-        return response.content  # PNG bytes
-
-    def load_sample_data(self, name: str) -> dict:
-        """Load sample data via GET /slicer/sampledata."""
-        response = self.session.get(
-            f"{self.base_url}/slicer/sampledata?name={name}",
-            timeout=self.timeout
-        )
-        return {"success": response.status_code == 200}
-
-    def set_layout(self, layout: str, gui_mode: str = "full") -> dict:
-        """Set GUI layout via GET /slicer/gui."""
-        response = self.session.get(
-            f"{self.base_url}/slicer/gui?contents={gui_mode}&viewersLayout={layout}",
-            timeout=self.timeout
-        )
-        return {"success": response.status_code == 200}
 ```
 
+**Why NOT Session Pooling**:
+Slicer's WebServer extension closes HTTP connections immediately after each response.
+Using `requests.Session()` for connection pooling causes "Connection reset by peer" errors.
+Per-request connections are more reliable, though slightly less efficient.
+
 **Rationale**:
-- **Session Reuse**: Connection pooling reduces overhead for multiple requests
-- **Timeout**: Prevents hanging on frozen Slicer instances
+- **Environment Configuration**: `SLICER_URL` and `SLICER_TIMEOUT` environment variables
+- **Singleton Pattern**: Single client instance reused across all tool/resource calls
+- **Retry Logic**: Exponential backoff (1s, 2s, 4s) for connection errors
+- **Timeout Separation**: Timeouts not retried (Slicer may be frozen)
+- **Input Validation**: Security validation for code injection prevention
 - **Encapsulation**: Isolates HTTP communication details from MCP tool logic
 - **Error Mapping**: Translates HTTP errors to domain-specific error codes
 
 **Design Patterns**:
-- **Singleton**: Single client instance per MCP server process
+- **Singleton**: `get_client()` returns single instance per process
+- **Decorator**: `@with_retry` for retry logic
 - **Adapter**: Adapts HTTP API to clean Python interface
-- **Template Method**: Common request/response handling with specialized endpoints
 
 **Trade-offs**:
-- **Blocking I/O**: requests library is synchronous (acceptable for MVP)
-- **No Retry**: Simple fail-fast approach (add retry in production)
+- **Blocking I/O**: requests library is synchronous (FastMCP handles async wrapping)
+- **No Connection Pooling**: Per-request connections due to Slicer WebServer behavior
+- **Retry Overhead**: Exponential backoff adds latency for transient failures
 
 ---
 

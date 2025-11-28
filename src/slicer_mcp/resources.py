@@ -5,7 +5,7 @@ import logging
 from datetime import datetime
 from typing import Dict, Any
 
-from slicer_mcp.slicer_client import SlicerClient, SlicerConnectionError
+from slicer_mcp.slicer_client import get_client, SlicerClient, SlicerConnectionError
 
 logger = logging.getLogger("slicer-mcp")
 
@@ -19,7 +19,7 @@ def get_scene_resource() -> str:
     Raises:
         SlicerConnectionError: If Slicer is not reachable
     """
-    client = SlicerClient()
+    client = get_client()
 
     try:
         nodes = client.get_scene_nodes()
@@ -51,7 +51,7 @@ def get_volumes_resource() -> str:
     Raises:
         SlicerConnectionError: If Slicer is not reachable
     """
-    client = SlicerClient()
+    client = get_client()
 
     # Python code to get volume information
     python_code = """
@@ -137,7 +137,7 @@ def get_status_resource() -> str:
     Raises:
         SlicerConnectionError: If Slicer is not reachable
     """
-    client = SlicerClient()
+    client = get_client()
 
     try:
         # Perform health check

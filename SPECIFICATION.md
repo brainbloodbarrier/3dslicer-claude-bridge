@@ -74,9 +74,13 @@ The MCP server communicates with Slicer via these REST endpoints:
 ### Scene Data
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/slicer/mrml` | GET | List MRML node names |
-| `/slicer/mrml/ids` | GET | List MRML node IDs |
-| `/slicer/mrml/properties?id=<id>` | GET | Get node properties |
+| `/slicer/mrml` | GET | List MRML node names (alias for /slicer/mrml/names) |
+| `/slicer/mrml/names` | GET | List MRML node names as JSON array |
+| `/slicer/mrml/ids` | GET | List MRML node IDs as JSON array |
+| `/slicer/mrml/properties?id=<id>` | GET | Get node properties as key=value pairs |
+
+> **Note**: The implementation uses `/slicer/mrml/names` and `/slicer/mrml/ids` endpoints
+> to retrieve separate lists of names and IDs, which are then combined into node objects.
 
 ### DICOMweb (if enabled)
 | Endpoint | Method | Description |
@@ -89,6 +93,12 @@ The MCP server communicates with Slicer via these REST endpoints:
 - `viewersLayout`: `FourUp`, `OneUp3D`, `OneUpRedSlice`, `Conventional`, etc.
 
 ## Tools Specification
+
+> **Implementation Note**: All tools are implemented as synchronous functions. FastMCP
+> handles the async wrapping internally, so tools can be called without `await` in the
+> Python code examples below. HTTP calls use retry logic with exponential backoff for
+> connection errors (max 3 retries with 1s, 2s, 4s delays). Timeout errors are NOT
+> retried as they indicate Slicer may be frozen.
 
 ### 1. capture_screenshot
 
@@ -133,17 +143,19 @@ Captures a screenshot from a specific 3D Slicer viewport and returns it as a bas
 
 **Example**:
 ```python
+# Note: Tools are implemented as sync functions. FastMCP handles async wrapping internally.
+
 # Capture axial view at middle of volume
-result = await capture_screenshot(view_type="axial", scroll_position=0.5)
+result = capture_screenshot(view_type="axial", scroll_position=0.5)
 
 # Capture sagittal view at 30% position
-result = await capture_screenshot(view_type="sagittal", scroll_position=0.3)
+result = capture_screenshot(view_type="sagittal", scroll_position=0.3)
 
 # Capture 3D rendering from left side
-result = await capture_screenshot(view_type="3d", look_from_axis="left")
+result = capture_screenshot(view_type="3d", look_from_axis="left")
 
 # Capture full application window
-result = await capture_screenshot(view_type="full")
+result = capture_screenshot(view_type="full")
 ```
 
 **Error Cases**:
@@ -195,7 +207,7 @@ Lists all nodes in the current MRML scene with metadata including type, name, an
 **Example**:
 ```python
 # List all scene nodes
-result = await list_scene_nodes()
+result = list_scene_nodes()
 for node in result["nodes"]:
     print(f"{node['name']} ({node['type']})")
 ```
@@ -235,7 +247,7 @@ Executes arbitrary Python code in the 3D Slicer Python environment and returns t
 **Example**:
 ```python
 # Get Slicer version
-result = await execute_python(code="import slicer; slicer.app.applicationVersion")
+result = execute_python(code="import slicer; slicer.app.applicationVersion")
 
 # Count scene nodes
 code = """
@@ -244,7 +256,7 @@ scene = slicer.mrmlScene
 node_count = scene.GetNumberOfNodes()
 node_count
 """
-result = await execute_python(code=code)
+result = execute_python(code=code)
 
 # Create segmentation
 code = """
@@ -253,7 +265,7 @@ segmentation = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLSegmentationNode')
 segmentation.SetName('NewSegmentation')
 segmentation.GetID()
 """
-result = await execute_python(code=code)
+result = execute_python(code=code)
 ```
 
 **Error Cases**:
@@ -305,11 +317,11 @@ Calculates the volume of a segmentation node or specific segment in cubic millim
 **Example**:
 ```python
 # Measure all segments
-result = await measure_volume(node_id="vtkMRMLSegmentationNode1")
+result = measure_volume(node_id="vtkMRMLSegmentationNode1")
 print(f"Total volume: {result['total_volume_ml']} ml")
 
 # Measure specific segment
-result = await measure_volume(
+result = measure_volume(
     node_id="vtkMRMLSegmentationNode1",
     segment_name="Tumor"
 )
@@ -354,11 +366,11 @@ Loads a sample dataset into 3D Slicer for testing and demonstration purposes.
 **Example**:
 ```python
 # Load MRHead sample data for testing
-result = await load_sample_data(dataset_name="MRHead")
+result = load_sample_data(dataset_name="MRHead")
 print(f"Loaded: {result['loaded_node_name']}")
 
 # Load CT chest scan
-result = await load_sample_data(dataset_name="CTChest")
+result = load_sample_data(dataset_name="CTChest")
 ```
 
 **Error Cases**:
@@ -400,13 +412,13 @@ Sets the viewer layout and GUI mode in 3D Slicer.
 **Example**:
 ```python
 # Set standard 4-panel layout
-result = await set_layout(layout="FourUp")
+result = set_layout(layout="FourUp")
 
 # Maximize 3D view for surgical planning
-result = await set_layout(layout="OneUp3D", gui_mode="viewers")
+result = set_layout(layout="OneUp3D", gui_mode="viewers")
 
 # Set axial-only view for slice review
-result = await set_layout(layout="OneUpRedSlice")
+result = set_layout(layout="OneUpRedSlice")
 ```
 
 **Error Cases**:

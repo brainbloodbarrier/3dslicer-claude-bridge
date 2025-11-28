@@ -86,11 +86,26 @@ def measure_volume(node_id: str, segment_name: Optional[str] = None) -> dict:
 
 
 @mcp.tool()
+def list_sample_data() -> dict:
+    """List all available sample datasets from 3D Slicer's SampleData module.
+
+    Dynamically queries Slicer to discover available sample datasets.
+    Falls back to a known list if dynamic discovery fails.
+
+    Returns:
+        Dict with datasets list (name, category, description), total_count, and source (dynamic/fallback)
+    """
+    return tools.list_sample_data()
+
+
+@mcp.tool()
 def load_sample_data(dataset_name: str) -> dict:
     """Load a sample dataset into 3D Slicer for testing and demonstration.
 
+    Use list_sample_data() first to see available datasets.
+
     Args:
-        dataset_name: Name of sample dataset - "MRHead", "CTChest", "CTACardio", "DTIBrain", "MRBrainTumor1", "MRBrainTumor2"
+        dataset_name: Name of sample dataset (e.g., "MRHead", "CTChest", "CTACardio")
 
     Returns:
         Dict with success status, dataset_name, loaded_node_id, loaded_node_name, and message
@@ -151,7 +166,7 @@ def get_status() -> str:
 def main():
     """Run the MCP Slicer Bridge server with stdio transport."""
     logger.info("Starting MCP Slicer Bridge server")
-    logger.info("Registered 6 tools: capture_screenshot, list_scene_nodes, execute_python, measure_volume, load_sample_data, set_layout")
+    logger.info("Registered 7 tools: capture_screenshot, list_scene_nodes, execute_python, measure_volume, list_sample_data, load_sample_data, set_layout")
     logger.info("Registered 3 resources: slicer://scene, slicer://volumes, slicer://status")
 
     try:

@@ -15,11 +15,11 @@ The MCP Slicer Bridge enables Claude Code to interact with [3D Slicer](https://w
 
 ## Features
 
-### Tools (4)
+### Tools (7)
 
 1. **capture_screenshot** - Capture PNG screenshots from any Slicer viewport
-   - Support for axial, sagittal, coronal, and 3D views
-   - Optional slice offset for 2D views
+   - Support for axial, sagittal, coronal, 3D, and full window views
+   - Optional slice position and camera axis configuration
    - Returns base64-encoded PNG with metadata
 
 2. **list_scene_nodes** - Inspect MRML scene structure
@@ -30,12 +30,27 @@ The MCP Slicer Bridge enables Claude Code to interact with [3D Slicer](https://w
 3. **execute_python** - Execute Python code in Slicer's environment
    - Full access to Slicer, VTK, and Qt APIs
    - Create/modify nodes, perform calculations
-   - Capture stdout/stderr for debugging
+   - All executions logged to audit log for security monitoring
 
 4. **measure_volume** - Calculate segmentation volumes
    - Measure total or per-segment volumes
    - Returns volumes in mm³ and mL
-   - Supports multi-segment analysis
+   - Input validation prevents code injection
+
+5. **list_sample_data** - Discover available sample datasets
+   - Dynamically queries Slicer for registered samples
+   - Falls back to known list when disconnected
+   - Returns dataset names, categories, and descriptions
+
+6. **load_sample_data** - Load sample datasets for testing
+   - Load MRHead, CTChest, CTACardio, and other sample volumes
+   - Great for demonstrations and testing
+   - Returns loaded node information
+
+7. **set_layout** - Configure viewer layout
+   - Switch between FourUp, OneUp3D, Conventional, etc.
+   - Control GUI mode (full or viewers-only)
+   - Optimize display for specific workflows
 
 ### Resources (3)
 
@@ -107,19 +122,29 @@ Add to `~/.claude/mcp.json`:
       "command": "uv",
       "args": [
         "--directory",
-        "/absolute/path/to/escritor/mcp-servers/slicer-bridge",
+        "/absolute/path/to/slicer-bridge",
         "run",
         "slicer-mcp"
       ],
       "env": {
-        "SLICER_URL": "http://localhost:2016"
+        "SLICER_URL": "http://localhost:2016",
+        "SLICER_TIMEOUT": "30",
+        "SLICER_AUDIT_LOG": "/var/log/slicer-mcp-audit.log"
       }
     }
   }
 }
 ```
 
-**Important**: Replace `/absolute/path/to/escritor` with the actual absolute path to your repository.
+**Important**: Replace `/absolute/path/to/slicer-bridge` with the actual absolute path to your repository.
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SLICER_URL` | `http://localhost:2016` | URL of Slicer WebServer |
+| `SLICER_TIMEOUT` | `30` | HTTP request timeout in seconds |
+| `SLICER_AUDIT_LOG` | *(none)* | Path to audit log file (optional) |
 
 ### 4. Restart Claude Code
 
@@ -294,7 +319,7 @@ Then send MCP commands via stdin:
 
 ## Security Notice
 
-**IMPORTANT**: This MVP implementation is designed for:
+**IMPORTANT**: This implementation is designed for:
 - **Educational use**: Learning medical image analysis with AI assistance
 - **Personal research**: Individual research projects
 - **Local environments**: Server and Slicer run on same machine
@@ -303,13 +328,17 @@ Then send MCP commands via stdin:
 - Clinical use with patient data (lacks HIPAA/GDPR compliance)
 - Multi-user environments (no authentication)
 - Remote access (no encryption or access controls)
-- Production deployments (no sandboxing or audit logging)
+
+**Security Features**:
+- **Input validation**: Node IDs and segment names are validated to prevent code injection
+- **Audit logging**: All Python code executions are logged with timestamps, code hashes, and results
+- **Configurable audit file**: Set `SLICER_AUDIT_LOG` for persistent audit trail
+- **Retry with backoff**: Network errors are handled gracefully with exponential backoff
 
 **Security Limitations**:
 - `execute_python` tool executes arbitrary code in Slicer (no sandboxing)
 - No authentication or authorization mechanisms
 - Medical imaging data transmitted over unencrypted localhost HTTP
-- No audit logging of operations
 
 **Recommendations**: Use only with de-identified research data in controlled environments.
 
