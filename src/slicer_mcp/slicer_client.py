@@ -3,12 +3,20 @@
 import json
 import logging
 import sys
+import threading
 import time
 from functools import wraps
 from typing import Optional, Dict, List, Any, Callable, TypeVar, Tuple, Type
 
 import requests
 from requests.exceptions import RequestException, Timeout, ConnectionError
+
+from slicer_mcp.constants import (
+    DEFAULT_SLICER_URL,
+    DEFAULT_TIMEOUT_SECONDS,
+    RETRY_MAX_ATTEMPTS,
+    RETRY_BACKOFF_BASE,
+)
 
 # Type variable for generic return type
 T = TypeVar('T')
@@ -41,8 +49,8 @@ class SlicerTimeoutError(Exception):
 
 
 def with_retry(
-    max_retries: int = 3,
-    backoff_base: float = 1.0,
+    max_retries: int = RETRY_MAX_ATTEMPTS,
+    backoff_base: float = RETRY_BACKOFF_BASE,
     retryable_exceptions: Tuple[Type[Exception], ...] = (ConnectionError,)
 ) -> Callable[[Callable[..., T]], Callable[..., T]]:
     """Decorator for retry with exponential backoff.
@@ -87,32 +95,33 @@ def with_retry(
 
 
 # Singleton instance management
+# Lock initialized at module load time to avoid race conditions
+# (module loading is guaranteed to be single-threaded in Python)
 _client_instance: Optional['SlicerClient'] = None
-_client_lock = None  # Lazy initialization to avoid import-time threading issues
+_client_lock: threading.Lock = threading.Lock()
 
 
 def get_client() -> 'SlicerClient':
     """Get the singleton SlicerClient instance.
 
     Creates the client on first call, reuses it for subsequent calls.
-    Thread-safe initialization using a lock.
+    Thread-safe initialization using double-checked locking pattern.
 
     Returns:
         The singleton SlicerClient instance configured from environment variables.
     """
-    global _client_instance, _client_lock
-    import threading
+    global _client_instance
 
-    # Lazy initialize the lock
-    if _client_lock is None:
-        _client_lock = threading.Lock()
+    # Fast path: if already initialized, return immediately (no lock needed)
+    if _client_instance is not None:
+        return _client_instance
 
-    if _client_instance is None:
-        with _client_lock:
-            # Double-check locking pattern
-            if _client_instance is None:
-                _client_instance = SlicerClient()
-                logger.info("Created singleton SlicerClient instance")
+    # Slow path: acquire lock and check again (double-checked locking)
+    with _client_lock:
+        # Re-check after acquiring lock (another thread may have initialized)
+        if _client_instance is None:
+            _client_instance = SlicerClient()
+            logger.info("Created singleton SlicerClient instance")
 
     return _client_instance
 
@@ -148,9 +157,9 @@ class SlicerClient:
         """
         import os
         if base_url is None:
-            base_url = os.environ.get('SLICER_URL', 'http://localhost:2016')
+            base_url = os.environ.get('SLICER_URL', DEFAULT_SLICER_URL)
         if timeout is None:
-            timeout = int(os.environ.get('SLICER_TIMEOUT', '30'))
+            timeout = int(os.environ.get('SLICER_TIMEOUT', str(DEFAULT_TIMEOUT_SECONDS)))
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         # Note: We use direct requests.get/post instead of Session to avoid
@@ -159,7 +168,42 @@ class SlicerClient:
 
         logger.info(f"Initialized SlicerClient with base_url={self.base_url}, timeout={self.timeout}s")
 
-    @with_retry(max_retries=3, backoff_base=1.0, retryable_exceptions=(SlicerConnectionError,))
+    def _handle_request_error(self, operation: str, error: Exception, extra_details: dict = None) -> None:
+        """Handle HTTP request errors with consistent logging and exception raising.
+
+        Args:
+            operation: Description of the failed operation (for logging)
+            error: The caught exception
+            extra_details: Additional details to include in the exception
+
+        Raises:
+            SlicerConnectionError: Always raised with standardized details
+            SlicerTimeoutError: If the error is a Timeout
+        """
+        details = {"url": self.base_url}
+        if extra_details:
+            details.update(extra_details)
+
+        if isinstance(error, Timeout):
+            logger.error(f"{operation} timeout: {error}")
+            raise SlicerTimeoutError(
+                f"{operation} timed out after {self.timeout}s",
+                details={**details, "timeout": self.timeout, "suggestion": "Slicer may be frozen. Try restarting Slicer."}
+            )
+        elif isinstance(error, ConnectionError):
+            logger.error(f"{operation} connection failed: {error}")
+            raise SlicerConnectionError(
+                f"Could not connect to Slicer WebServer at {self.base_url}",
+                details={**details, "suggestion": "Ensure Slicer is running with WebServer extension enabled"}
+            )
+        else:
+            logger.error(f"{operation} failed: {error}")
+            raise SlicerConnectionError(
+                f"{operation} failed: {str(error)}",
+                details=details
+            )
+
+    @with_retry(max_retries=RETRY_MAX_ATTEMPTS, backoff_base=RETRY_BACKOFF_BASE, retryable_exceptions=(SlicerConnectionError,))
     def health_check(self) -> Dict[str, Any]:
         """Check connection to Slicer WebServer.
 
@@ -190,36 +234,12 @@ class SlicerClient:
                 "response_time_ms": elapsed_ms,
             }
 
-        except Timeout as e:
+        except (Timeout, ConnectionError, RequestException) as e:
             # Timeout errors are NOT retried - Slicer may be frozen
-            logger.error(f"Health check timeout: {e}")
-            raise SlicerTimeoutError(
-                f"Slicer WebServer request timed out after {self.timeout}s",
-                details={
-                    "url": self.base_url,
-                    "timeout": self.timeout,
-                    "suggestion": "Slicer may be frozen. Try restarting Slicer."
-                }
-            )
-        except ConnectionError as e:
             # Connection errors ARE retried
-            logger.error(f"Health check connection failed: {e}")
-            raise SlicerConnectionError(
-                f"Could not connect to Slicer WebServer at {self.base_url}",
-                details={
-                    "url": self.base_url,
-                    "timeout": self.timeout,
-                    "suggestion": "Ensure Slicer is running with WebServer extension enabled"
-                }
-            )
-        except RequestException as e:
-            logger.error(f"Health check request failed: {e}")
-            raise SlicerConnectionError(
-                f"Slicer WebServer request failed: {str(e)}",
-                details={"url": self.base_url}
-            )
+            self._handle_request_error("Health check", e, {"timeout": self.timeout})
 
-    @with_retry(max_retries=3, backoff_base=1.0, retryable_exceptions=(SlicerConnectionError,))
+    @with_retry(max_retries=RETRY_MAX_ATTEMPTS, backoff_base=RETRY_BACKOFF_BASE, retryable_exceptions=(SlicerConnectionError,))
     def exec_python(self, code: str) -> Dict[str, Any]:
         """Execute Python code in Slicer's Python environment.
 
@@ -256,32 +276,10 @@ class SlicerClient:
                 "stderr": ""
             }
 
-        except Timeout as e:
-            logger.error(f"Python execution timeout: {e}")
-            raise SlicerTimeoutError(
-                f"Python execution timed out after {self.timeout}s",
-                details={
-                    "url": self.base_url,
-                    "code_preview": code[:100],
-                    "suggestion": "Code may be too complex or Slicer may be frozen"
-                }
-            )
-        except ConnectionError as e:
-            logger.error(f"Python execution connection failed: {e}")
-            raise SlicerConnectionError(
-                f"Could not connect to Slicer WebServer at {self.base_url}",
-                details={
-                    "url": self.base_url,
-                    "suggestion": "Ensure Slicer is running with WebServer extension enabled"
-                }
-            )
-        except RequestException as e:
-            logger.error(f"Python execution failed: {e}")
-            raise SlicerConnectionError(
-                f"Python execution failed: {str(e)}",
-                details={"code": code[:200]}
-            )
+        except (Timeout, ConnectionError, RequestException) as e:
+            self._handle_request_error("Python execution", e, {"code_preview": code[:100]})
 
+    @with_retry(max_retries=RETRY_MAX_ATTEMPTS, backoff_base=RETRY_BACKOFF_BASE, retryable_exceptions=(SlicerConnectionError,))
     def get_screenshot(self, view: str = "Red", scroll_to: Optional[float] = None) -> bytes:
         """Capture screenshot from a slice view.
 
@@ -293,7 +291,7 @@ class SlicerClient:
             PNG image as bytes
 
         Raises:
-            SlicerConnectionError: If request fails
+            SlicerConnectionError: If request fails (will retry up to 3 times)
         """
         try:
             url = f"{self.base_url}/slicer/slice?view={view}"
@@ -311,22 +309,10 @@ class SlicerClient:
 
             return image_bytes
 
-        except (ConnectionError, Timeout) as e:
-            logger.error(f"Screenshot connection failed: {e}")
-            raise SlicerConnectionError(
-                f"Could not connect to Slicer WebServer at {self.base_url}",
-                details={
-                    "url": self.base_url,
-                    "suggestion": "Ensure Slicer is running with WebServer extension enabled"
-                }
-            )
-        except RequestException as e:
-            logger.error(f"Screenshot capture failed: {e}")
-            raise SlicerConnectionError(
-                f"Screenshot capture failed: {str(e)}",
-                details={"view": view, "scroll_to": scroll_to}
-            )
+        except (ConnectionError, Timeout, RequestException) as e:
+            self._handle_request_error("Screenshot capture", e, {"view": view, "scroll_to": scroll_to})
 
+    @with_retry(max_retries=RETRY_MAX_ATTEMPTS, backoff_base=RETRY_BACKOFF_BASE, retryable_exceptions=(SlicerConnectionError,))
     def get_3d_screenshot(self, look_from_axis: Optional[str] = None) -> bytes:
         """Capture screenshot from 3D view.
 
@@ -337,7 +323,7 @@ class SlicerClient:
             PNG image as bytes
 
         Raises:
-            SlicerConnectionError: If request fails
+            SlicerConnectionError: If request fails (will retry up to 3 times)
         """
         try:
             url = f"{self.base_url}/slicer/threeD"
@@ -355,22 +341,10 @@ class SlicerClient:
 
             return image_bytes
 
-        except (ConnectionError, Timeout) as e:
-            logger.error(f"3D screenshot connection failed: {e}")
-            raise SlicerConnectionError(
-                f"Could not connect to Slicer WebServer at {self.base_url}",
-                details={
-                    "url": self.base_url,
-                    "suggestion": "Ensure Slicer is running with WebServer extension enabled"
-                }
-            )
-        except RequestException as e:
-            logger.error(f"3D screenshot capture failed: {e}")
-            raise SlicerConnectionError(
-                f"3D screenshot capture failed: {str(e)}",
-                details={"look_from_axis": look_from_axis}
-            )
+        except (ConnectionError, Timeout, RequestException) as e:
+            self._handle_request_error("3D screenshot capture", e, {"look_from_axis": look_from_axis})
 
+    @with_retry(max_retries=RETRY_MAX_ATTEMPTS, backoff_base=RETRY_BACKOFF_BASE, retryable_exceptions=(SlicerConnectionError,))
     def get_full_screenshot(self) -> bytes:
         """Capture screenshot of full Slicer window.
 
@@ -378,7 +352,7 @@ class SlicerClient:
             PNG image as bytes
 
         Raises:
-            SlicerConnectionError: If request fails
+            SlicerConnectionError: If request fails (will retry up to 3 times)
         """
         try:
             logger.debug("Capturing full window screenshot")
@@ -395,20 +369,8 @@ class SlicerClient:
 
             return image_bytes
 
-        except (ConnectionError, Timeout) as e:
-            logger.error(f"Full screenshot connection failed: {e}")
-            raise SlicerConnectionError(
-                f"Could not connect to Slicer WebServer at {self.base_url}",
-                details={
-                    "url": self.base_url,
-                    "suggestion": "Ensure Slicer is running with WebServer extension enabled"
-                }
-            )
-        except RequestException as e:
-            logger.error(f"Full screenshot capture failed: {e}")
-            raise SlicerConnectionError(
-                f"Full screenshot capture failed: {str(e)}"
-            )
+        except (ConnectionError, Timeout, RequestException) as e:
+            self._handle_request_error("Full screenshot capture", e)
 
     def get_scene_nodes(self) -> List[Dict[str, Any]]:
         """Get list of all MRML scene nodes with IDs and names.
@@ -455,20 +417,8 @@ class SlicerClient:
 
             return nodes
 
-        except (ConnectionError, Timeout) as e:
-            logger.error(f"Scene nodes connection failed: {e}")
-            raise SlicerConnectionError(
-                f"Could not connect to Slicer WebServer at {self.base_url}",
-                details={
-                    "url": self.base_url,
-                    "suggestion": "Ensure Slicer is running with WebServer extension enabled"
-                }
-            )
-        except RequestException as e:
-            logger.error(f"Scene nodes fetch failed: {e}")
-            raise SlicerConnectionError(
-                f"Failed to fetch scene nodes: {str(e)}"
-            )
+        except (ConnectionError, Timeout, RequestException) as e:
+            self._handle_request_error("Scene nodes fetch", e)
 
     def get_node_properties(self, node_id: str) -> Dict[str, Any]:
         """Get properties of a specific MRML node.
@@ -506,21 +456,8 @@ class SlicerClient:
 
             return properties
 
-        except (ConnectionError, Timeout) as e:
-            logger.error(f"Node properties connection failed: {e}")
-            raise SlicerConnectionError(
-                f"Could not connect to Slicer WebServer at {self.base_url}",
-                details={
-                    "url": self.base_url,
-                    "suggestion": "Ensure Slicer is running with WebServer extension enabled"
-                }
-            )
-        except RequestException as e:
-            logger.error(f"Node properties fetch failed: {e}")
-            raise SlicerConnectionError(
-                f"Failed to fetch node properties: {str(e)}",
-                details={"node_id": node_id}
-            )
+        except (ConnectionError, Timeout, RequestException) as e:
+            self._handle_request_error("Node properties fetch", e, {"node_id": node_id})
 
     def load_sample_data(self, name: str) -> Dict[str, Any]:
         """Load a sample dataset into Slicer.
@@ -552,24 +489,12 @@ class SlicerClient:
                 "message": f"Sample data '{name}' loaded successfully"
             }
 
-        except (ConnectionError, Timeout) as e:
-            logger.error(f"Sample data load connection failed: {e}")
-            raise SlicerConnectionError(
-                f"Could not connect to Slicer WebServer at {self.base_url}",
-                details={
-                    "url": self.base_url,
-                    "suggestion": "Ensure Slicer is running with WebServer extension enabled"
-                }
-            )
-        except RequestException as e:
-            logger.error(f"Sample data load failed: {e}")
-            raise SlicerConnectionError(
-                f"Failed to load sample data '{name}': {str(e)}",
-                details={
-                    "dataset_name": name,
-                    "suggestion": "Check dataset name is valid (MRHead, CTChest, CTACardio, DTIBrain, MRBrainTumor1, MRBrainTumor2)"
-                }
-            )
+        except (ConnectionError, Timeout, RequestException) as e:
+            extra_details = {
+                "dataset_name": name,
+                "suggestion": "Check dataset name is valid (MRHead, CTChest, CTACardio, DTIBrain, MRBrainTumor1, MRBrainTumor2)"
+            }
+            self._handle_request_error(f"Sample data load '{name}'", e, extra_details)
 
     def set_layout(self, layout: str, gui_mode: str = "full") -> Dict[str, Any]:
         """Set Slicer viewer layout and GUI mode.
@@ -606,22 +531,10 @@ class SlicerClient:
                 "message": f"Layout changed to {layout}"
             }
 
-        except (ConnectionError, Timeout) as e:
-            logger.error(f"Layout change connection failed: {e}")
-            raise SlicerConnectionError(
-                f"Could not connect to Slicer WebServer at {self.base_url}",
-                details={
-                    "url": self.base_url,
-                    "suggestion": "Ensure Slicer is running with WebServer extension enabled"
-                }
-            )
-        except RequestException as e:
-            logger.error(f"Layout change failed: {e}")
-            raise SlicerConnectionError(
-                f"Failed to set layout: {str(e)}",
-                details={
-                    "layout": layout,
-                    "gui_mode": gui_mode,
-                    "suggestion": "Check layout name is valid (FourUp, OneUp3D, OneUpRedSlice, Conventional, SideBySide)"
-                }
-            )
+        except (ConnectionError, Timeout, RequestException) as e:
+            extra_details = {
+                "layout": layout,
+                "gui_mode": gui_mode,
+                "suggestion": "Check layout name is valid (FourUp, OneUp3D, OneUpRedSlice, Conventional, SideBySide)"
+            }
+            self._handle_request_error("Layout change", e, extra_details)

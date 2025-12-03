@@ -1,5 +1,6 @@
 """Unit tests for MCP tool implementations."""
 
+import os
 import pytest
 from unittest.mock import Mock, patch
 
@@ -8,6 +9,7 @@ from slicer_mcp.tools import (
     validate_segment_name,
     ValidationError,
     measure_volume,
+    _validate_audit_log_path,
 )
 
 
@@ -125,6 +127,41 @@ class TestValidateSegmentName:
         assert "maximum length" in str(exc_info.value)
 
 
+class TestSegmentNameNormalization:
+    """Test segment name whitespace normalization."""
+
+    def test_segment_name_strips_leading_whitespace(self):
+        """Test leading whitespace is stripped."""
+        result = validate_segment_name("  Brain")
+        assert result == "Brain"
+
+    def test_segment_name_strips_trailing_whitespace(self):
+        """Test trailing whitespace is stripped."""
+        result = validate_segment_name("Brain  ")
+        assert result == "Brain"
+
+    def test_segment_name_collapses_multiple_spaces(self):
+        """Test multiple spaces are collapsed to single space."""
+        result = validate_segment_name("Left   Lung")
+        assert result == "Left Lung"
+
+    def test_segment_name_normalizes_complex_whitespace(self):
+        """Test complex whitespace is fully normalized."""
+        result = validate_segment_name("  Brain   Stem  ")
+        assert result == "Brain Stem"
+
+    def test_segment_name_only_whitespace_rejected(self):
+        """Test segment name with only whitespace is rejected."""
+        with pytest.raises(ValidationError) as exc_info:
+            validate_segment_name("   ")
+        assert "only whitespace" in str(exc_info.value) or "cannot be" in str(exc_info.value)
+
+    def test_segment_name_tabs_normalized(self):
+        """Test tabs are treated as whitespace and normalized."""
+        result = validate_segment_name("Brain\tStem")
+        assert result == "Brain Stem"
+
+
 class TestMeasureVolumeValidation:
     """Test measure_volume input validation integration."""
 
@@ -154,3 +191,296 @@ class TestMeasureVolumeValidation:
 
             assert result["node_id"] == "vtkMRMLSegmentationNode1"
             mock_client.exec_python.assert_called_once()
+
+
+# =============================================================================
+# Code Injection Defense-in-Depth Tests (Batch 1 Fix 1.3)
+# =============================================================================
+
+class TestMeasureVolumeCodeGeneration:
+    """Test measure_volume generates safe Python code using json.dumps()."""
+
+    def test_measure_volume_uses_json_escaped_node_id(self):
+        """Test measure_volume uses json.dumps for node_id escaping."""
+        import json
+        with patch('slicer_mcp.tools.get_client') as mock_get_client:
+            mock_client = Mock()
+            mock_client.exec_python.return_value = {
+                "success": True,
+                "result": '{"node_id": "vtkMRMLSegmentationNode1", "node_name": "Test", "total_volume_mm3": 1000, "total_volume_ml": 1.0, "segments": []}'
+            }
+            mock_get_client.return_value = mock_client
+
+            measure_volume("vtkMRMLSegmentationNode1")
+
+            # Get the Python code that was passed to exec_python
+            python_code = mock_client.exec_python.call_args[0][0]
+
+            # Verify json.dumps is used (node_id should be assigned via JSON)
+            # The code should contain: node_id = "vtkMRMLSegmentationNode1"
+            # (the value comes from json.dumps which produces quoted string)
+            assert 'node_id = "vtkMRMLSegmentationNode1"' in python_code
+            # Should NOT contain direct f-string interpolation like '{node_id}'
+            assert "'{vtkMRMLSegmentationNode1}'" not in python_code
+
+    def test_measure_volume_uses_json_escaped_segment_name(self):
+        """Test measure_volume uses json.dumps for segment_name escaping."""
+        import json
+        with patch('slicer_mcp.tools.get_client') as mock_get_client:
+            mock_client = Mock()
+            mock_client.exec_python.return_value = {
+                "success": True,
+                "result": '{"node_id": "vtkMRMLSegmentationNode1", "node_name": "Test", "total_volume_mm3": 1000, "total_volume_ml": 1.0, "segments": [{"name": "Tumor", "volume_mm3": 1000, "volume_ml": 1.0}]}'
+            }
+            mock_get_client.return_value = mock_client
+
+            measure_volume("vtkMRMLSegmentationNode1", "Tumor")
+
+            # Get the Python code that was passed to exec_python
+            python_code = mock_client.exec_python.call_args[0][0]
+
+            # Verify segment_name is JSON-escaped
+            assert 'segment_name = "Tumor"' in python_code
+            # Should NOT contain direct f-string interpolation
+            assert "'{Tumor}'" not in python_code
+
+    def test_measure_volume_code_uses_variable_not_interpolation(self):
+        """Test generated code uses variables instead of direct interpolation."""
+        with patch('slicer_mcp.tools.get_client') as mock_get_client:
+            mock_client = Mock()
+            mock_client.exec_python.return_value = {
+                "success": True,
+                "result": '{"node_id": "vtkMRMLSegmentationNode1", "node_name": "Test", "total_volume_mm3": 1000, "total_volume_ml": 1.0, "segments": []}'
+            }
+            mock_get_client.return_value = mock_client
+
+            measure_volume("vtkMRMLSegmentationNode1")
+
+            python_code = mock_client.exec_python.call_args[0][0]
+
+            # Verify the code uses the variable, not direct interpolation
+            assert 'GetNodeByID(node_id)' in python_code
+            # Should NOT have the old pattern with direct string interpolation
+            assert "GetNodeByID('vtkMRMLSegmentationNode1')" not in python_code
+
+    def test_measure_volume_segment_code_uses_variable(self):
+        """Test generated code for segment measurement uses variables."""
+        with patch('slicer_mcp.tools.get_client') as mock_get_client:
+            mock_client = Mock()
+            mock_client.exec_python.return_value = {
+                "success": True,
+                "result": '{"node_id": "vtkMRMLSegmentationNode1", "node_name": "Test", "total_volume_mm3": 1000, "total_volume_ml": 1.0, "segments": [{"name": "Brain", "volume_mm3": 1000, "volume_ml": 1.0}]}'
+            }
+            mock_get_client.return_value = mock_client
+
+            measure_volume("vtkMRMLSegmentationNode1", "Brain")
+
+            python_code = mock_client.exec_python.call_args[0][0]
+
+            # Verify GetSegment uses the variable
+            assert 'GetSegment(segment_name)' in python_code
+            # Should NOT have old pattern with direct interpolation
+            assert "GetSegment('Brain')" not in python_code
+
+
+# =============================================================================
+# Audit Log Path Validation Tests (Batch 5 Fix 5.1)
+# =============================================================================
+
+class TestAuditLogPathValidation:
+    """Test audit log path validation."""
+
+    def test_valid_path_in_home_directory(self):
+        """Test valid path in home directory is accepted."""
+        result = _validate_audit_log_path("~/audit.log")
+        assert result.endswith("audit.log")
+        assert os.path.expanduser("~") in result
+
+    def test_valid_path_relative(self):
+        """Test valid relative path is accepted."""
+        result = _validate_audit_log_path("./logs/audit.log")
+        assert "audit.log" in result
+
+    def test_forbidden_path_etc(self):
+        """Test path in /etc is rejected."""
+        with pytest.raises(ValueError) as exc_info:
+            _validate_audit_log_path("/etc/audit.log")
+        assert "forbidden directory" in str(exc_info.value)
+
+    def test_forbidden_path_system(self):
+        """Test path in /System is rejected."""
+        with pytest.raises(ValueError) as exc_info:
+            _validate_audit_log_path("/System/audit.log")
+        assert "forbidden directory" in str(exc_info.value)
+
+    def test_forbidden_path_usr(self):
+        """Test path in /usr is rejected."""
+        with pytest.raises(ValueError) as exc_info:
+            _validate_audit_log_path("/usr/local/audit.log")
+        assert "forbidden directory" in str(exc_info.value)
+
+    def test_forbidden_path_root(self):
+        """Test path in /root is rejected."""
+        with pytest.raises(ValueError) as exc_info:
+            _validate_audit_log_path("/root/audit.log")
+        assert "forbidden directory" in str(exc_info.value)
+
+    def test_forbidden_path_library_macos(self):
+        """Test path in /Library (macOS) is rejected."""
+        with pytest.raises(ValueError) as exc_info:
+            _validate_audit_log_path("/Library/Logs/audit.log")
+        assert "forbidden directory" in str(exc_info.value)
+
+    def test_forbidden_path_applications_macos(self):
+        """Test path in /Applications (macOS) is rejected."""
+        with pytest.raises(ValueError) as exc_info:
+            _validate_audit_log_path("/Applications/audit.log")
+        assert "forbidden directory" in str(exc_info.value)
+
+    def test_forbidden_path_windows_system32(self):
+        """Test path in /Windows is rejected."""
+        with pytest.raises(ValueError) as exc_info:
+            _validate_audit_log_path("/Windows/System32/audit.log")
+        assert "forbidden directory" in str(exc_info.value)
+
+    def test_forbidden_path_program_files(self):
+        """Test path in /Program Files is rejected."""
+        with pytest.raises(ValueError) as exc_info:
+            _validate_audit_log_path("/Program Files/MyApp/audit.log")
+        assert "forbidden directory" in str(exc_info.value)
+
+    def test_case_insensitive_validation_etc(self):
+        """Test forbidden path check is case-insensitive."""
+        with pytest.raises(ValueError) as exc_info:
+            _validate_audit_log_path("/ETC/audit.log")
+        assert "forbidden directory" in str(exc_info.value)
+
+    def test_case_insensitive_validation_system(self):
+        """Test forbidden path check is case-insensitive for /System."""
+        with pytest.raises(ValueError) as exc_info:
+            _validate_audit_log_path("/system/audit.log")
+        assert "forbidden directory" in str(exc_info.value)
+
+    def test_valid_path_absolute(self):
+        """Test valid absolute path is accepted."""
+        result = _validate_audit_log_path("/tmp/audit.log")
+        assert result == "/tmp/audit.log"
+
+    def test_path_expansion_tilde(self):
+        """Test ~ is properly expanded to home directory."""
+        result = _validate_audit_log_path("~/logs/audit.log")
+        # Should not contain ~ in result
+        assert "~" not in result
+        # Should contain expanded home path
+        assert result.startswith(os.path.expanduser("~"))
+
+    def test_path_converted_to_absolute(self):
+        """Test relative path is converted to absolute."""
+        result = _validate_audit_log_path("audit.log")
+        # Should be absolute path
+        assert os.path.isabs(result)
+        assert result.endswith("audit.log")
+
+
+# =============================================================================
+# Malformed JSON Response Tests (Batch 6 Fix 6.2)
+# =============================================================================
+
+class TestMalformedJsonHandling:
+    """Test handling of malformed JSON responses from Slicer."""
+
+    def test_measure_volume_malformed_json(self):
+        """Test measure_volume handles malformed JSON gracefully."""
+        from slicer_mcp.slicer_client import SlicerConnectionError
+        with patch('slicer_mcp.tools.get_client') as mock_get_client:
+            mock_client = Mock()
+            mock_client.exec_python.return_value = {
+                "success": True,
+                "result": "not valid json {"
+            }
+            mock_get_client.return_value = mock_client
+
+            with pytest.raises(SlicerConnectionError) as exc_info:
+                measure_volume("vtkMRMLSegmentationNode1")
+
+            assert "Failed to parse" in str(exc_info.value)
+
+    def test_measure_volume_empty_result(self):
+        """Test measure_volume handles empty result."""
+        from slicer_mcp.slicer_client import SlicerConnectionError
+        with patch('slicer_mcp.tools.get_client') as mock_get_client:
+            mock_client = Mock()
+            mock_client.exec_python.return_value = {
+                "success": True,
+                "result": ""
+            }
+            mock_get_client.return_value = mock_client
+
+            with pytest.raises(SlicerConnectionError) as exc_info:
+                measure_volume("vtkMRMLSegmentationNode1")
+
+            assert "Empty result" in str(exc_info.value)
+
+    def test_measure_volume_null_result(self):
+        """Test measure_volume handles null JSON result."""
+        from slicer_mcp.slicer_client import SlicerConnectionError
+        with patch('slicer_mcp.tools.get_client') as mock_get_client:
+            mock_client = Mock()
+            mock_client.exec_python.return_value = {
+                "success": True,
+                "result": "null"
+            }
+            mock_get_client.return_value = mock_client
+
+            with pytest.raises(SlicerConnectionError) as exc_info:
+                measure_volume("vtkMRMLSegmentationNode1")
+
+            assert "Empty result" in str(exc_info.value) or "null" in str(exc_info.value).lower()
+
+    def test_list_sample_data_malformed_json(self):
+        """Test list_sample_data handles malformed JSON gracefully."""
+        from slicer_mcp.tools import list_sample_data
+        with patch('slicer_mcp.tools.get_client') as mock_get_client:
+            mock_client = Mock()
+            mock_client.exec_python.return_value = {
+                "success": True,
+                "result": "invalid json"
+            }
+            mock_get_client.return_value = mock_client
+
+            # list_sample_data should handle errors gracefully and return fallback
+            result = list_sample_data()
+            assert result["source"] == "fallback"
+
+
+# =============================================================================
+# Unicode Segment Name Tests (Batch 6 Fix 6.3)
+# =============================================================================
+
+class TestUnicodeSegmentNames:
+    """Test Unicode handling in segment names."""
+
+    def test_segment_name_rejects_unicode_accents(self):
+        """Test segment names with Unicode accents are rejected."""
+        with pytest.raises(ValidationError):
+            validate_segment_name("Tumör")  # o with umlaut
+
+    def test_segment_name_rejects_unicode_letters(self):
+        """Test segment names with non-ASCII letters are rejected."""
+        with pytest.raises(ValidationError):
+            validate_segment_name("Cérebro")  # Portuguese for brain
+
+    def test_segment_name_rejects_emoji(self):
+        """Test segment names with emoji are rejected."""
+        with pytest.raises(ValidationError):
+            validate_segment_name("Heart ❤")
+
+    def test_segment_name_rejects_chinese_characters(self):
+        """Test segment names with Chinese characters are rejected."""
+        with pytest.raises(ValidationError):
+            validate_segment_name("肿瘤")  # Chinese for tumor
+
+    def test_node_id_rejects_unicode(self):
+        """Test node IDs with Unicode are rejected."""
+        with pytest.raises(ValidationError):
+            validate_mrml_node_id("vtkMRMLNödë1")

@@ -112,7 +112,23 @@ json.dumps(result)
 
     try:
         exec_result = client.exec_python(python_code)
-        volumes_data = json.loads(exec_result["result"])
+
+        # Parse JSON result with error handling
+        result = exec_result.get("result", "")
+        if not result or result.strip() in ('', 'null', 'None'):
+            raise SlicerConnectionError(
+                "Empty result from volumes resource",
+                details={"result": result[:100] if result else "None"}
+            )
+
+        try:
+            volumes_data = json.loads(result)
+        except json.JSONDecodeError as e:
+            logger.error(f"Volumes resource parsing failed: {e}")
+            raise SlicerConnectionError(
+                f"Failed to parse volumes resource: {str(e)}",
+                details={"result_preview": result[:100] if result else "None"}
+            )
 
         logger.info(f"Volumes resource retrieved: {volumes_data['total_count']} volumes")
 
@@ -121,11 +137,6 @@ json.dumps(result)
     except SlicerConnectionError as e:
         logger.error(f"Volumes resource retrieval failed: {e.message}")
         raise
-    except (json.JSONDecodeError, KeyError) as e:
-        logger.error(f"Volumes resource parsing failed: {e}")
-        raise SlicerConnectionError(
-            f"Failed to parse volumes resource: {str(e)}"
-        )
 
 
 def get_status_resource() -> str:
@@ -158,7 +169,23 @@ json.dumps(result)
 """
 
         exec_result = client.exec_python(python_code)
-        slicer_info = json.loads(exec_result["result"])
+
+        # Parse JSON result with error handling
+        result = exec_result.get("result", "")
+        if not result or result.strip() in ('', 'null', 'None'):
+            raise SlicerConnectionError(
+                "Empty result from status resource",
+                details={"result": result[:100] if result else "None"}
+            )
+
+        try:
+            slicer_info = json.loads(result)
+        except json.JSONDecodeError as e:
+            logger.error(f"Status resource parsing failed: {e}")
+            raise SlicerConnectionError(
+                f"Failed to parse status resource: {str(e)}",
+                details={"result_preview": result[:100] if result else "None"}
+            )
 
         # Combine health check and Slicer info
         status_data = {

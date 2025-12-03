@@ -304,8 +304,227 @@ class TestSetLayout:
             assert call_args.kwargs["params"]["viewersLayout"] == "OneUp3D"
 
 
+# =============================================================================
+# Thread Safety Tests (Batch 1 Fix 1.1)
+# =============================================================================
+
+class TestSingletonThreadSafety:
+    """Test thread-safe singleton pattern for SlicerClient."""
+
+    def test_concurrent_get_client_returns_same_instance(self):
+        """Test multiple threads calling get_client() get the same instance."""
+        import threading
+        from slicer_mcp.slicer_client import get_client, reset_client
+
+        # Reset to ensure clean state
+        reset_client()
+
+        instances = []
+        errors = []
+        barrier = threading.Barrier(10)  # Ensure all threads start together
+
+        def get_instance():
+            try:
+                barrier.wait()  # Synchronize thread start
+                client = get_client()
+                instances.append(id(client))
+            except Exception as e:
+                errors.append(e)
+
+        # Spawn 10 threads to get the client simultaneously
+        threads = [threading.Thread(target=get_instance) for _ in range(10)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        # Verify no errors occurred
+        assert not errors, f"Errors occurred: {errors}"
+
+        # Verify all threads got the same instance (all IDs should be identical)
+        assert len(set(instances)) == 1, f"Got {len(set(instances))} different instances"
+
+    def test_singleton_reset_allows_new_instance(self):
+        """Test reset_client() allows creation of a new singleton."""
+        from slicer_mcp.slicer_client import get_client, reset_client
+
+        client1 = get_client()
+        reset_client()
+        client2 = get_client()
+
+        # Should be different instances after reset
+        assert id(client1) != id(client2)
+
+
+# =============================================================================
+# Retry Decorator Tests (Batch 1 Fix 1.2)
+# =============================================================================
+
+class TestScreenshotRetry:
+    """Test retry decorator on screenshot methods."""
+
+    def test_get_screenshot_retries_on_connection_error(self, slicer_client):
+        """Test get_screenshot retries on SlicerConnectionError."""
+        with patch('slicer_mcp.slicer_client.requests.get') as mock_get, \
+             patch('slicer_mcp.slicer_client.time.sleep') as mock_sleep:
+            # First 3 calls fail with ConnectionError, 4th succeeds
+            mock_success = Mock()
+            mock_success.status_code = 200
+            mock_success.content = b'\x89PNG\r\n\x1a\n...'
+            mock_success.raise_for_status = Mock()
+
+            mock_get.side_effect = [
+                ConnectionError("Connection refused"),
+                ConnectionError("Connection refused"),
+                ConnectionError("Connection refused"),
+                mock_success,
+            ]
+
+            result = slicer_client.get_screenshot()
+
+            assert result.startswith(b'\x89PNG')
+            # Should have called 4 times (initial + 3 retries = 4 attempts)
+            assert mock_get.call_count == 4
+            # Should have slept 3 times (between retries)
+            assert mock_sleep.call_count == 3
+
+    def test_get_3d_screenshot_retries_on_connection_error(self, slicer_client):
+        """Test get_3d_screenshot retries on SlicerConnectionError."""
+        with patch('slicer_mcp.slicer_client.requests.get') as mock_get, \
+             patch('slicer_mcp.slicer_client.time.sleep') as mock_sleep:
+            mock_success = Mock()
+            mock_success.status_code = 200
+            mock_success.content = b'\x89PNG\r\n\x1a\n...'
+            mock_success.raise_for_status = Mock()
+
+            # Fail twice, then succeed
+            mock_get.side_effect = [
+                ConnectionError("Connection refused"),
+                ConnectionError("Connection refused"),
+                mock_success,
+            ]
+
+            result = slicer_client.get_3d_screenshot()
+
+            assert result.startswith(b'\x89PNG')
+            assert mock_get.call_count == 3
+
+    def test_get_full_screenshot_retries_on_connection_error(self, slicer_client):
+        """Test get_full_screenshot retries on SlicerConnectionError."""
+        with patch('slicer_mcp.slicer_client.requests.get') as mock_get, \
+             patch('slicer_mcp.slicer_client.time.sleep') as mock_sleep:
+            mock_success = Mock()
+            mock_success.status_code = 200
+            mock_success.content = b'\x89PNG\r\n\x1a\n...'
+            mock_success.raise_for_status = Mock()
+
+            # Fail once, then succeed
+            mock_get.side_effect = [
+                ConnectionError("Connection refused"),
+                mock_success,
+            ]
+
+            result = slicer_client.get_full_screenshot()
+
+            assert result.startswith(b'\x89PNG')
+            assert mock_get.call_count == 2
+
+    def test_get_screenshot_exhausts_retries(self, slicer_client):
+        """Test get_screenshot fails after exhausting all retries."""
+        with patch('slicer_mcp.slicer_client.requests.get') as mock_get, \
+             patch('slicer_mcp.slicer_client.time.sleep') as mock_sleep:
+            # All calls fail
+            mock_get.side_effect = ConnectionError("Connection refused")
+
+            with pytest.raises(SlicerConnectionError):
+                slicer_client.get_screenshot()
+
+            # Should have tried 4 times total (initial + 3 retries)
+            assert mock_get.call_count == 4
+
+
 # Integration Tests (require running Slicer instance)
 # ====================================================
+
+# =============================================================================
+# Retry Exhaustion Tests (Batch 6 Fix 6.1)
+# =============================================================================
+
+class TestRetryExhaustion:
+    """Test retry behavior when all attempts fail."""
+
+    def test_health_check_exhausts_all_retries(self, slicer_client):
+        """Test health check fails after exhausting all retries."""
+        with patch('slicer_mcp.slicer_client.requests.get') as mock_get, \
+             patch('slicer_mcp.slicer_client.time.sleep') as mock_sleep:
+            mock_get.side_effect = ConnectionError("Connection refused")
+
+            with pytest.raises(SlicerConnectionError):
+                slicer_client.health_check()
+
+            # Should have been called 4 times (initial + 3 retries)
+            assert mock_get.call_count == 4
+            # Should have slept 3 times with exponential backoff
+            assert mock_sleep.call_count == 3
+
+    def test_exec_python_exhausts_all_retries(self, slicer_client):
+        """Test exec_python fails after exhausting all retries."""
+        with patch('slicer_mcp.slicer_client.requests.post') as mock_post, \
+             patch('slicer_mcp.slicer_client.time.sleep') as mock_sleep:
+            mock_post.side_effect = ConnectionError("Connection refused")
+
+            with pytest.raises(SlicerConnectionError):
+                slicer_client.exec_python("print('test')")
+
+            assert mock_post.call_count == 4
+
+    def test_retry_exponential_backoff_timing(self, slicer_client):
+        """Test exponential backoff delays are correct."""
+        with patch('slicer_mcp.slicer_client.requests.get') as mock_get, \
+             patch('slicer_mcp.slicer_client.time.sleep') as mock_sleep:
+            mock_get.side_effect = ConnectionError("Connection refused")
+
+            with pytest.raises(SlicerConnectionError):
+                slicer_client.health_check()
+
+            # Verify backoff delays: 1s, 2s, 4s (exponential)
+            sleep_calls = [call[0][0] for call in mock_sleep.call_args_list]
+            assert sleep_calls == [1.0, 2.0, 4.0]
+
+
+# =============================================================================
+# Error Handler Edge Cases (Batch 6 Fix 6.4)
+# =============================================================================
+
+class TestErrorHandlerEdgeCases:
+    """Test edge cases in error handling."""
+
+    def test_timeout_not_retried(self, slicer_client):
+        """Test that Timeout errors are NOT retried (Slicer may be frozen)."""
+        with patch('slicer_mcp.slicer_client.requests.get') as mock_get:
+            mock_get.side_effect = Timeout("Request timeout")
+
+            with pytest.raises(SlicerTimeoutError):
+                slicer_client.health_check()
+
+            # Should only be called once - no retries for timeout
+            assert mock_get.call_count == 1
+
+    def test_generic_request_exception_retried(self, slicer_client):
+        """Test that generic RequestException is converted to SlicerConnectionError and retried."""
+        from requests.exceptions import RequestException
+        with patch('slicer_mcp.slicer_client.requests.get') as mock_get, \
+             patch('slicer_mcp.slicer_client.time.sleep') as mock_sleep:
+            mock_get.side_effect = RequestException("Generic error")
+
+            with pytest.raises(SlicerConnectionError):
+                slicer_client.health_check()
+
+            # Should be called 4 times (initial + 3 retries)
+            # Generic RequestException is converted to SlicerConnectionError which is retried
+            assert mock_get.call_count == 4
+            assert mock_sleep.call_count == 3
+
 
 @pytest.mark.integration
 class TestSlicerIntegration:
