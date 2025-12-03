@@ -16,6 +16,8 @@ from slicer_mcp.constants import (
     DEFAULT_TIMEOUT_SECONDS,
     RETRY_MAX_ATTEMPTS,
     RETRY_BACKOFF_BASE,
+    SLICER_MIN_VERSION,
+    SLICER_TESTED_VERSIONS,
 )
 
 # Type variable for generic return type
@@ -238,6 +240,88 @@ class SlicerClient:
             # Timeout errors are NOT retried - Slicer may be frozen
             # Connection errors ARE retried
             self._handle_request_error("Health check", e, {"timeout": self.timeout})
+
+    def get_slicer_version(self) -> str:
+        """Get the Slicer application version string.
+
+        Returns:
+            Version string (e.g., "5.6.2")
+
+        Raises:
+            SlicerConnectionError: If Slicer is not reachable
+        """
+        python_code = "import slicer; slicer.app.applicationVersion"
+        result = self.exec_python(python_code)
+        # Result comes back quoted, strip quotes and whitespace
+        version_str = result.get("result", "").strip().strip("'\"")
+        logger.info(f"Slicer version: {version_str}")
+        return version_str
+
+    def check_version_compatibility(self) -> Dict[str, Any]:
+        """Check if the connected Slicer version is compatible.
+
+        Queries Slicer for its version and compares against known compatible
+        versions. Returns compatibility information including warnings for
+        untested versions.
+
+        Returns:
+            Dict with keys:
+                - version: The Slicer version string
+                - compatible: True if version >= minimum required
+                - tested: True if version is in the tested versions list
+                - minimum_required: Minimum supported version string
+                - warning: Warning message if version has issues, None otherwise
+
+        Raises:
+            SlicerConnectionError: If Slicer is not reachable
+        """
+        from packaging import version as pkg_version
+
+        current = self.get_slicer_version()
+
+        # Parse versions for comparison
+        # Slicer dev versions like "5.7.0-2024-01-01" aren't PEP 440 compliant
+        # Extract major.minor.patch for comparison
+        def extract_version(ver_str: str) -> str:
+            """Extract semver-like version from Slicer version string."""
+            import re
+            match = re.match(r'^(\d+\.\d+\.\d+)', ver_str)
+            return match.group(1) if match else ver_str
+
+        try:
+            current_parsed = pkg_version.parse(extract_version(current))
+            min_parsed = pkg_version.parse(SLICER_MIN_VERSION)
+            is_compatible = current_parsed >= min_parsed
+        except Exception as e:
+            logger.warning(f"Could not parse version '{current}': {e}")
+            is_compatible = False
+
+        is_tested = current in SLICER_TESTED_VERSIONS
+
+        result = {
+            "version": current,
+            "compatible": is_compatible,
+            "tested": is_tested,
+            "minimum_required": SLICER_MIN_VERSION,
+            "warning": None
+        }
+
+        if not is_compatible:
+            result["warning"] = (
+                f"Slicer {current} is below minimum required version {SLICER_MIN_VERSION}. "
+                f"Some features may not work correctly."
+            )
+            logger.warning(result["warning"])
+        elif not is_tested:
+            result["warning"] = (
+                f"Slicer {current} has not been tested with this bridge. "
+                f"Tested versions: {', '.join(sorted(SLICER_TESTED_VERSIONS))}"
+            )
+            logger.info(result["warning"])
+        else:
+            logger.info(f"Slicer {current} is compatible and tested")
+
+        return result
 
     @with_retry(max_retries=RETRY_MAX_ATTEMPTS, backoff_base=RETRY_BACKOFF_BASE, retryable_exceptions=(SlicerConnectionError,))
     def exec_python(self, code: str) -> Dict[str, Any]:

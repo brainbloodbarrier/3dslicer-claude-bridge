@@ -19,9 +19,27 @@ The 3D Slicer MCP Bridge enables Claude Code to interact with 3D Slicer's medica
 ## Security Features
 
 ### Input Validation
-- **MRML Node IDs**: Validated with strict regex pattern `^[a-zA-Z][a-zA-Z0-9_]*$`
-- **Segment Names**: Validated to allow only alphanumeric, spaces, underscores, hyphens
+- **MRML Node IDs**: Validated with strict regex pattern `^[a-zA-Z][a-zA-Z0-9_]*$` (ASCII only)
+- **Segment Names**: Validated with Unicode-aware pattern `^[\w\s\-]+$` (see Unicode Support below)
 - **Whitespace Normalization**: Segment names are normalized to prevent edge cases
+
+### Unicode Support
+Medical terminology frequently uses international characters. Segment names support:
+
+**Accepted Characters:**
+- Greek letters: α, β, γ, δ, μ, λ, ω (e.g., "α-fetoprotein", "β-amyloid")
+- Accented characters: é, ñ, ü, ö (e.g., "Müller cells", "señal region")
+- Cyrillic: А-Яа-я (e.g., "Мозг region")
+- CJK characters: 中文, 日本語, 한국어
+
+**Rejected Characters (Security):**
+- Emoji: ❤, 🧠, 😀 (not word characters)
+- Shell metacharacters: ; ` $ | & < >
+- Quotes: ' "
+- Brackets: [ ] { } ( )
+- Special symbols: @ # % ^ * = + \ /
+
+**Rationale:** The `\w` regex with Unicode flag matches word characters from any language while blocking characters that could enable code injection. This balances usability for international medical collaboration with security.
 
 ### Code Injection Prevention
 - All user inputs are validated before use in Python code generation
@@ -77,3 +95,4 @@ If you discover a security vulnerability, please report it by:
 |---------|------------------|
 | 0.1.0   | Initial security documentation |
 | 0.2.0   | Added audit log path validation |
+| 0.3.0   | Added Unicode support for medical terminology in segment names |

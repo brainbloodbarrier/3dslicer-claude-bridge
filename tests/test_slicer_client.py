@@ -526,6 +526,129 @@ class TestErrorHandlerEdgeCases:
             assert mock_sleep.call_count == 3
 
 
+# =============================================================================
+# Version Checking Tests (Batch 9: Slicer Version Compatibility)
+# =============================================================================
+
+class TestVersionChecking:
+    """Test Slicer version checking functionality."""
+
+    def test_get_slicer_version_returns_string(self, slicer_client):
+        """Test get_slicer_version returns a version string."""
+        with patch('slicer_mcp.slicer_client.requests.post') as mock_post:
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.text = "'5.6.2'"  # Slicer returns quoted string
+            mock_response.raise_for_status = Mock()
+            mock_post.return_value = mock_response
+
+            version = slicer_client.get_slicer_version()
+
+            assert version == "5.6.2"
+            mock_post.assert_called_once()
+
+    def test_get_slicer_version_strips_quotes(self, slicer_client):
+        """Test version string is cleaned of quotes."""
+        with patch('slicer_mcp.slicer_client.requests.post') as mock_post:
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.text = '"5.4.0"'  # Double-quoted
+            mock_response.raise_for_status = Mock()
+            mock_post.return_value = mock_response
+
+            version = slicer_client.get_slicer_version()
+
+            assert version == "5.4.0"
+
+    def test_check_version_compatibility_compatible_tested(self, slicer_client):
+        """Test compatible and tested version returns correct status."""
+        with patch('slicer_mcp.slicer_client.requests.post') as mock_post:
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.text = "'5.6.2'"
+            mock_response.raise_for_status = Mock()
+            mock_post.return_value = mock_response
+
+            result = slicer_client.check_version_compatibility()
+
+            assert result["version"] == "5.6.2"
+            assert result["compatible"] is True
+            assert result["tested"] is True
+            assert result["warning"] is None
+            assert result["minimum_required"] == "5.0.0"
+
+    def test_check_version_compatibility_compatible_untested(self, slicer_client):
+        """Test compatible but untested version returns warning."""
+        with patch('slicer_mcp.slicer_client.requests.post') as mock_post:
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.text = "'5.8.0'"  # Not in tested versions
+            mock_response.raise_for_status = Mock()
+            mock_post.return_value = mock_response
+
+            result = slicer_client.check_version_compatibility()
+
+            assert result["version"] == "5.8.0"
+            assert result["compatible"] is True
+            assert result["tested"] is False
+            assert result["warning"] is not None
+            assert "not been tested" in result["warning"]
+
+    def test_check_version_compatibility_incompatible(self, slicer_client):
+        """Test incompatible version returns warning."""
+        with patch('slicer_mcp.slicer_client.requests.post') as mock_post:
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.text = "'4.11.0'"  # Below minimum
+            mock_response.raise_for_status = Mock()
+            mock_post.return_value = mock_response
+
+            result = slicer_client.check_version_compatibility()
+
+            assert result["version"] == "4.11.0"
+            assert result["compatible"] is False
+            assert result["tested"] is False
+            assert result["warning"] is not None
+            assert "below minimum" in result["warning"]
+
+    def test_check_version_compatibility_dev_version(self, slicer_client):
+        """Test development version (e.g., 5.7.0-2024-01-01) is handled."""
+        with patch('slicer_mcp.slicer_client.requests.post') as mock_post:
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.text = "'5.7.0-2024-01-01'"
+            mock_response.raise_for_status = Mock()
+            mock_post.return_value = mock_response
+
+            result = slicer_client.check_version_compatibility()
+
+            assert result["version"] == "5.7.0-2024-01-01"
+            assert result["compatible"] is True  # 5.7.0 > 5.0.0
+            assert result["tested"] is False
+            assert result["warning"] is not None
+
+    def test_check_version_compatibility_connection_error(self, slicer_client):
+        """Test version check raises error if Slicer not connected."""
+        with patch('slicer_mcp.slicer_client.requests.post') as mock_post:
+            mock_post.side_effect = ConnectionError("Connection refused")
+
+            with pytest.raises(SlicerConnectionError):
+                slicer_client.check_version_compatibility()
+
+    def test_get_slicer_version_whitespace_handling(self, slicer_client):
+        """Test version string handles whitespace."""
+        with patch('slicer_mcp.slicer_client.requests.post') as mock_post:
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.text = "  '5.6.1'  \n"  # Extra whitespace
+            mock_response.raise_for_status = Mock()
+            mock_post.return_value = mock_response
+
+            version = slicer_client.get_slicer_version()
+
+            assert version == "5.6.1"
+
+
 @pytest.mark.integration
 class TestSlicerIntegration:
     """Integration tests requiring a running Slicer instance."""

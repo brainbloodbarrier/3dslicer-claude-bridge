@@ -46,3 +46,23 @@ MAX_SEGMENT_NAME_LENGTH = 256
 # =============================================================================
 AUDIT_CODE_MAX_LENGTH = 500
 AUDIT_RESULT_MAX_LENGTH = 200
+
+# =============================================================================
+# Slicer Version Compatibility
+# =============================================================================
+SLICER_MIN_VERSION = "5.0.0"
+SLICER_TESTED_VERSIONS = frozenset([
+    "5.0.0",
+    "5.2.0",
+    "5.2.1",
+    "5.4.0",
+    "5.6.0",
+    "5.6.1",
+    "5.6.2",
+])
+
+# =============================================================================
+# Circuit Breaker Configuration
+# =============================================================================
+CIRCUIT_BREAKER_FAILURE_THRESHOLD = 5  # Open circuit after 5 consecutive failures
+CIRCUIT_BREAKER_RECOVERY_TIMEOUT = 30.0  # Wait 30 seconds before testing recovery

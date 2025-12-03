@@ -454,33 +454,118 @@ class TestMalformedJsonHandling:
 
 
 # =============================================================================
-# Unicode Segment Name Tests (Batch 6 Fix 6.3)
+# Unicode Segment Name Tests (Batch 7: Unicode Support for Medical Terminology)
 # =============================================================================
 
 class TestUnicodeSegmentNames:
-    """Test Unicode handling in segment names."""
+    """Test Unicode handling in segment names.
 
-    def test_segment_name_rejects_unicode_accents(self):
-        """Test segment names with Unicode accents are rejected."""
-        with pytest.raises(ValidationError):
-            validate_segment_name("Tumör")  # o with umlaut
+    Medical terminology frequently uses Greek letters (α, β, μ), accented
+    characters (é, ñ, ü), and international alphabets. These should be accepted
+    while still blocking security-sensitive characters like emoji or shell
+    metacharacters.
+    """
 
-    def test_segment_name_rejects_unicode_letters(self):
-        """Test segment names with non-ASCII letters are rejected."""
-        with pytest.raises(ValidationError):
-            validate_segment_name("Cérebro")  # Portuguese for brain
+    # --- Tests for ACCEPTED Unicode (medical terminology) ---
+
+    def test_segment_name_accepts_greek_letters(self):
+        """Test segment names with Greek letters are accepted (medical terms)."""
+        # Greek letters common in medical/scientific terminology
+        assert validate_segment_name("α-fetoprotein") == "α-fetoprotein"
+        assert validate_segment_name("β-amyloid plaque") == "β-amyloid plaque"
+        assert validate_segment_name("μm scale") == "μm scale"
+        assert validate_segment_name("γ-aminobutyric") == "γ-aminobutyric"
+        assert validate_segment_name("δ region") == "δ region"
+
+    def test_segment_name_accepts_accented_characters(self):
+        """Test segment names with accented characters are accepted."""
+        # Common in international medical terminology
+        assert validate_segment_name("Müller cells") == "Müller cells"
+        assert validate_segment_name("señal region") == "señal region"
+        assert validate_segment_name("naïve tissue") == "naïve tissue"
+        assert validate_segment_name("Cérebro") == "Cérebro"
+        assert validate_segment_name("Tumör") == "Tumör"
+
+    def test_segment_name_accepts_cyrillic(self):
+        """Test segment names with Cyrillic characters are accepted."""
+        # For international collaboration
+        assert validate_segment_name("Мозг region") == "Мозг region"
+        assert validate_segment_name("Опухоль") == "Опухоль"
+
+    def test_segment_name_accepts_chinese_characters(self):
+        """Test segment names with Chinese characters are accepted."""
+        # For international medical collaboration
+        assert validate_segment_name("肿瘤") == "肿瘤"
+        assert validate_segment_name("脑部 region") == "脑部 region"
+
+    def test_segment_name_accepts_japanese_characters(self):
+        """Test segment names with Japanese characters are accepted."""
+        assert validate_segment_name("腫瘍") == "腫瘍"
+        assert validate_segment_name("脳 region") == "脳 region"
+
+    def test_segment_name_accepts_mixed_scripts(self):
+        """Test segment names with mixed Unicode scripts are accepted."""
+        assert validate_segment_name("Brain α-region") == "Brain α-region"
+        assert validate_segment_name("Tumor 1 β-type") == "Tumor 1 β-type"
+
+    # --- Tests for REJECTED characters (security) ---
 
     def test_segment_name_rejects_emoji(self):
-        """Test segment names with emoji are rejected."""
+        """Test segment names with emoji are rejected (not word characters)."""
         with pytest.raises(ValidationError):
             validate_segment_name("Heart ❤")
-
-    def test_segment_name_rejects_chinese_characters(self):
-        """Test segment names with Chinese characters are rejected."""
         with pytest.raises(ValidationError):
-            validate_segment_name("肿瘤")  # Chinese for tumor
+            validate_segment_name("Brain 🧠")
+        with pytest.raises(ValidationError):
+            validate_segment_name("😀 Happy Tumor")
+
+    def test_segment_name_rejects_shell_metacharacters(self):
+        """Test segment names with shell metacharacters are rejected."""
+        with pytest.raises(ValidationError):
+            validate_segment_name("test; rm -rf /")
+        with pytest.raises(ValidationError):
+            validate_segment_name("test`whoami`")
+        with pytest.raises(ValidationError):
+            validate_segment_name("test$(cmd)")
+        with pytest.raises(ValidationError):
+            validate_segment_name("test | cat")
+        with pytest.raises(ValidationError):
+            validate_segment_name("test & background")
+
+    def test_segment_name_rejects_quotes(self):
+        """Test segment names with quotes are rejected."""
+        with pytest.raises(ValidationError):
+            validate_segment_name("test'injection")
+        with pytest.raises(ValidationError):
+            validate_segment_name('test"injection')
+
+    def test_segment_name_rejects_brackets(self):
+        """Test segment names with brackets are rejected."""
+        with pytest.raises(ValidationError):
+            validate_segment_name("test[0]")
+        with pytest.raises(ValidationError):
+            validate_segment_name("test{}")
+        with pytest.raises(ValidationError):
+            validate_segment_name("test()")
+
+    def test_segment_name_rejects_special_symbols(self):
+        """Test segment names with special symbols are rejected."""
+        with pytest.raises(ValidationError):
+            validate_segment_name("test@domain")
+        with pytest.raises(ValidationError):
+            validate_segment_name("test#hash")
+        with pytest.raises(ValidationError):
+            validate_segment_name("test%percent")
+        with pytest.raises(ValidationError):
+            validate_segment_name("test^caret")
+        with pytest.raises(ValidationError):
+            validate_segment_name("test*glob")
+
+    # --- Node ID still rejects Unicode (stricter for MRML IDs) ---
 
     def test_node_id_rejects_unicode(self):
-        """Test node IDs with Unicode are rejected."""
+        """Test node IDs with Unicode are rejected (MRML IDs are ASCII-only)."""
         with pytest.raises(ValidationError):
             validate_mrml_node_id("vtkMRMLNödë1")
+        with pytest.raises(ValidationError):
+            validate_mrml_node_id("vtkMRMLαNode1")

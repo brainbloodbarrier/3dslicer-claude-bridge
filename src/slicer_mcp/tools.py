@@ -171,8 +171,11 @@ def _audit_log_execution(
 # Pattern for valid MRML node IDs: starts with letter, alphanumeric + underscore
 MRML_ID_PATTERN = re.compile(r'^[a-zA-Z][a-zA-Z0-9_]*$')
 
-# Pattern for valid segment names: alphanumeric, spaces, underscores, hyphens
-SEGMENT_NAME_PATTERN = re.compile(r'^[a-zA-Z0-9_\- ]+$')
+# Pattern for valid segment names: Unicode word chars, spaces, underscores, hyphens
+# Uses re.UNICODE to support medical terminology with Greek letters (α, β, μ),
+# accented characters (é, ñ, ü), and other international alphabets.
+# Security: Still blocks shell metacharacters (;`$|&), quotes, and control characters.
+SEGMENT_NAME_PATTERN = re.compile(r'^[\w\s\-]+$', re.UNICODE)
 
 
 class ValidationError(Exception):
@@ -255,7 +258,7 @@ def validate_segment_name(segment_name: str) -> str:
 
     if not SEGMENT_NAME_PATTERN.match(normalized):
         raise ValidationError(
-            f"Invalid segment_name format. Must contain only alphanumeric characters, "
+            f"Invalid segment_name format. Must contain only Unicode word characters, "
             f"spaces, underscores, and hyphens. Got: '{normalized[:50]}'",
             "segment_name",
             normalized
