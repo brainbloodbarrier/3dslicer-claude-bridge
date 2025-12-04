@@ -2,6 +2,10 @@
 
 This document provides performance expectations and benchmarking guidance for the 3D Slicer MCP Bridge.
 
+> **Note**: Values in this document are **estimated targets** based on typical hardware.
+> Run `pytest tests/benchmarks/ -v -s` with a live Slicer connection to measure
+> actual performance on your system.
+
 ## Test Environment Requirements
 
 ### Minimum Requirements
@@ -140,8 +144,19 @@ print(f'Image size: {len(result[\"image_base64\"])} bytes')
 ### Running Benchmark Tests
 ```bash
 # Run benchmark test suite (requires live Slicer connection)
-pytest tests/benchmarks/ -v --benchmark-only -m integration
+pytest tests/benchmarks/ -v -s -m integration
+
+# Run with timing output
+pytest tests/benchmarks/ -v -s --durations=0 -m integration
+
+# Run specific benchmark category
+pytest tests/benchmarks/test_performance.py::TestScreenshotBenchmark -v -s
 ```
+
+The benchmark tests will output detailed latency statistics including:
+- Average, median, min, max latencies
+- P95 percentile (95% of requests complete within this time)
+- Standard deviation
 
 ## Performance Monitoring
 
