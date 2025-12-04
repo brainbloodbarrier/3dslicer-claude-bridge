@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import re
+import unicodedata
 import uuid
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
@@ -224,11 +225,15 @@ def validate_segment_name(segment_name: str) -> str:
     """Validate and normalize segment name format to prevent code injection.
 
     Normalization:
+    - Apply NFKC Unicode normalization (prevents homoglyph and zero-width attacks)
     - Strip leading/trailing whitespace
     - Collapse multiple spaces to single space
 
-    Valid format: alphanumeric characters, spaces, underscores, and hyphens.
-    Examples: Tumor, Left Lung, Segment_1, Brain-Stem
+    Valid format: Unicode word characters, spaces, underscores, and hyphens.
+    Examples: Tumor, Left Lung, Segment_1, Brain-Stem, α-fetoprotein, Müller cells
+
+    Security: NFKC normalization converts lookalike characters to canonical forms,
+    removes zero-width characters, and normalizes compatibility characters.
 
     Args:
         segment_name: The segment name to validate
@@ -242,8 +247,29 @@ def validate_segment_name(segment_name: str) -> str:
     if not segment_name:
         raise ValidationError("Segment name cannot be empty", "segment_name", segment_name or "")
 
+    # Apply NFKC Unicode normalization first
+    # - Converts lookalike characters to canonical forms (homoglyph protection)
+    # - Normalizes compatibility characters (fullwidth -> ASCII)
+    normalized = unicodedata.normalize('NFKC', segment_name)
+
+    # Remove zero-width and invisible characters that could be used for attacks
+    # NFKC doesn't remove these, so we filter explicitly
+    INVISIBLE_CHARS = frozenset([
+        '\u200b',  # Zero-width space
+        '\u200c',  # Zero-width non-joiner
+        '\u200d',  # Zero-width joiner
+        '\ufeff',  # BOM / Zero-width no-break space
+        '\u00ad',  # Soft hyphen
+        '\u2060',  # Word joiner
+        '\u2061',  # Function application
+        '\u2062',  # Invisible times
+        '\u2063',  # Invisible separator
+        '\u2064',  # Invisible plus
+    ])
+    normalized = ''.join(c for c in normalized if c not in INVISIBLE_CHARS)
+
     # Normalize whitespace: strip and collapse multiple spaces
-    normalized = ' '.join(segment_name.split())
+    normalized = ' '.join(normalized.split())
 
     # Check if normalization resulted in empty string (was only whitespace)
     if not normalized:

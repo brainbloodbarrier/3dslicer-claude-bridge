@@ -8,6 +8,15 @@ from requests.exceptions import ConnectionError, Timeout
 from slicer_mcp.slicer_client import SlicerClient, SlicerConnectionError, SlicerTimeoutError
 
 
+@pytest.fixture(autouse=True)
+def reset_circuit_breaker_fixture():
+    """Reset circuit breaker before each test to ensure test isolation."""
+    from slicer_mcp.slicer_client import reset_circuit_breaker
+    reset_circuit_breaker()
+    yield
+    reset_circuit_breaker()
+
+
 @pytest.fixture
 def slicer_client():
     """Create a SlicerClient instance for testing."""
@@ -683,3 +692,182 @@ class TestSlicerIntegration:
             assert "result" in result
         except SlicerConnectionError:
             pytest.skip("Slicer not running or WebServer not enabled")
+
+
+# =============================================================================
+# Circuit Breaker Integration Tests
+# =============================================================================
+
+class TestCircuitBreakerIntegration:
+    """Test circuit breaker integration with SlicerClient."""
+
+    def setup_method(self):
+        """Reset circuit breaker before each test."""
+        from slicer_mcp.slicer_client import reset_circuit_breaker
+        reset_circuit_breaker()
+
+    def test_circuit_breaker_opens_after_failures(self):
+        """Circuit breaker should open after consecutive failures."""
+        from slicer_mcp.slicer_client import get_circuit_breaker, reset_circuit_breaker
+        from slicer_mcp.circuit_breaker import CircuitState, CircuitOpenError
+
+        reset_circuit_breaker()
+        breaker = get_circuit_breaker()
+        assert breaker.state == CircuitState.CLOSED
+
+        # Record failures directly (bypasses retry logic for faster test)
+        # The threshold is 5 failures
+        for _ in range(5):
+            breaker.record_failure()
+
+        assert breaker.state == CircuitState.OPEN
+
+    def test_circuit_breaker_rejects_when_open(self):
+        """Requests should be rejected immediately when circuit is open."""
+        from slicer_mcp.slicer_client import get_circuit_breaker, reset_circuit_breaker
+        from slicer_mcp.circuit_breaker import CircuitOpenError, CircuitState
+
+        reset_circuit_breaker()
+        client = SlicerClient(base_url="http://localhost:9999")
+        breaker = get_circuit_breaker()
+
+        # Force circuit open
+        for _ in range(5):
+            breaker.record_failure()
+
+        assert breaker.state == CircuitState.OPEN
+
+        # Next request should be rejected without attempting connection
+        with pytest.raises(CircuitOpenError) as exc_info:
+            client.health_check(check_version=False)
+
+        assert exc_info.value.breaker_name == "slicer"
+
+    def test_health_check_includes_circuit_breaker_state(self):
+        """Health check should include circuit breaker state."""
+        from slicer_mcp.slicer_client import reset_circuit_breaker
+
+        reset_circuit_breaker()
+        client = SlicerClient()
+
+        with patch('slicer_mcp.slicer_client.requests.get') as mock_get:
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.text = "{}"
+            mock_response.raise_for_status = Mock()
+            mock_get.return_value = mock_response
+
+            result = client.health_check(check_version=False)
+
+            assert "circuit_breaker_state" in result
+            assert result["circuit_breaker_state"] == "closed"
+
+    def test_get_circuit_breaker_returns_instance(self):
+        """get_circuit_breaker should return the global instance."""
+        from slicer_mcp.slicer_client import get_circuit_breaker
+        from slicer_mcp.circuit_breaker import CircuitBreaker
+
+        breaker = get_circuit_breaker()
+        assert isinstance(breaker, CircuitBreaker)
+        assert breaker.name == "slicer"
+
+    def test_reset_circuit_breaker_closes_open_circuit(self):
+        """reset_circuit_breaker should close an open circuit."""
+        from slicer_mcp.slicer_client import get_circuit_breaker, reset_circuit_breaker
+        from slicer_mcp.circuit_breaker import CircuitState
+
+        breaker = get_circuit_breaker()
+
+        # Open the circuit
+        for _ in range(5):
+            breaker.record_failure()
+        assert breaker.state == CircuitState.OPEN
+
+        # Reset should close it
+        reset_circuit_breaker()
+        assert breaker.state == CircuitState.CLOSED
+
+
+class TestHealthCheckVersionIntegration:
+    """Test health check version checking integration."""
+
+    def setup_method(self):
+        """Reset circuit breaker before each test."""
+        from slicer_mcp.slicer_client import reset_circuit_breaker
+        reset_circuit_breaker()
+
+    def test_health_check_includes_version_info_on_success(self):
+        """Health check should include version info when successful."""
+        from slicer_mcp.slicer_client import reset_circuit_breaker
+
+        reset_circuit_breaker()
+        client = SlicerClient()
+
+        with patch('slicer_mcp.slicer_client.requests.get') as mock_get, \
+             patch('slicer_mcp.slicer_client.requests.post') as mock_post:
+
+            # Mock health check response
+            mock_health_response = Mock()
+            mock_health_response.status_code = 200
+            mock_health_response.text = "{}"
+            mock_health_response.raise_for_status = Mock()
+
+            # Mock version check response
+            mock_version_response = Mock()
+            mock_version_response.status_code = 200
+            mock_version_response.text = "'5.6.2'"
+            mock_version_response.raise_for_status = Mock()
+
+            mock_get.return_value = mock_health_response
+            mock_post.return_value = mock_version_response
+
+            result = client.health_check(check_version=True)
+
+            assert "slicer_version" in result
+            assert result["slicer_version"] == "5.6.2"
+            assert result["version_compatible"] is True
+
+    def test_health_check_skips_version_on_request(self):
+        """Health check should skip version check when check_version=False."""
+        from slicer_mcp.slicer_client import reset_circuit_breaker
+
+        reset_circuit_breaker()
+        client = SlicerClient()
+
+        with patch('slicer_mcp.slicer_client.requests.get') as mock_get:
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.text = "{}"
+            mock_response.raise_for_status = Mock()
+            mock_get.return_value = mock_response
+
+            result = client.health_check(check_version=False)
+
+            assert "slicer_version" not in result
+
+    def test_health_check_gracefully_handles_version_check_failure(self):
+        """Health check should succeed even if version check fails."""
+        from slicer_mcp.slicer_client import reset_circuit_breaker
+
+        reset_circuit_breaker()
+        client = SlicerClient()
+
+        with patch('slicer_mcp.slicer_client.requests.get') as mock_get, \
+             patch('slicer_mcp.slicer_client.requests.post') as mock_post:
+
+            # Mock health check response (success)
+            mock_health_response = Mock()
+            mock_health_response.status_code = 200
+            mock_health_response.text = "{}"
+            mock_health_response.raise_for_status = Mock()
+            mock_get.return_value = mock_health_response
+
+            # Mock version check response (failure)
+            mock_post.side_effect = Exception("Version check failed")
+
+            result = client.health_check(check_version=True)
+
+            # Health check should still succeed
+            assert result["connected"] is True
+            # Version info should be absent
+            assert "slicer_version" not in result

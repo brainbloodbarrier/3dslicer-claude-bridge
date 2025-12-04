@@ -561,6 +561,38 @@ class TestUnicodeSegmentNames:
         with pytest.raises(ValidationError):
             validate_segment_name("test*glob")
 
+    # --- Tests for Unicode normalization (NFKC) security ---
+
+    def test_segment_name_normalizes_zero_width_characters(self):
+        """Test that zero-width characters are removed via NFKC normalization."""
+        # Zero-width space (U+200B) should be removed
+        # "test\u200Binjection" should become "testinjection"
+        result = validate_segment_name("test\u200Binjection")
+        assert result == "testinjection"
+
+        # Zero-width non-joiner (U+200C) should be removed
+        result = validate_segment_name("test\u200Cvalue")
+        assert result == "testvalue"
+
+    def test_segment_name_normalizes_soft_hyphen(self):
+        """Test that soft hyphens are removed via NFKC normalization."""
+        # Soft hyphen (U+00AD) should be removed
+        result = validate_segment_name("test\u00ADhidden")
+        assert result == "testhidden"
+
+    def test_segment_name_normalizes_compatibility_characters(self):
+        """Test that compatibility characters are normalized."""
+        # Fullwidth Latin letters should be normalized to ASCII
+        # Ａ (U+FF21) -> A, ｂ (U+FF42) -> b
+        result = validate_segment_name("Ｔｅｓｔ")
+        assert result == "Test"
+
+    def test_segment_name_handles_bom(self):
+        """Test that byte order marks are removed."""
+        # BOM (U+FEFF) should be removed
+        result = validate_segment_name("\uFEFFTumor")
+        assert result == "Tumor"
+
     # --- Node ID still rejects Unicode (stricter for MRML IDs) ---
 
     def test_node_id_rejects_unicode(self):

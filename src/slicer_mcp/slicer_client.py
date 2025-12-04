@@ -19,6 +19,15 @@ from slicer_mcp.constants import (
     SLICER_MIN_VERSION,
     SLICER_TESTED_VERSIONS,
 )
+from slicer_mcp.circuit_breaker import (
+    CircuitBreaker,
+    CircuitOpenError,
+)
+from slicer_mcp.metrics import (
+    track_request,
+    record_retry,
+    update_circuit_breaker_state,
+)
 
 # Type variable for generic return type
 T = TypeVar('T')
@@ -62,6 +71,8 @@ def with_retry(
     - Timeout errors: No retry (likely Slicer is frozen)
     - Other errors: No retry
 
+    Also records retry metrics for operational visibility.
+
     Args:
         max_retries: Maximum number of retry attempts (default: 3)
         backoff_base: Base delay in seconds for exponential backoff (default: 1.0)
@@ -85,6 +96,8 @@ def with_retry(
                             f"Retry {attempt + 1}/{max_retries} for {func.__name__} "
                             f"after {sleep_time}s delay. Error: {e}"
                         )
+                        # Record retry metric
+                        record_retry(func.__name__)
                         time.sleep(sleep_time)
                     else:
                         logger.error(
@@ -101,6 +114,10 @@ def with_retry(
 # (module loading is guaranteed to be single-threaded in Python)
 _client_instance: Optional['SlicerClient'] = None
 _client_lock: threading.Lock = threading.Lock()
+
+# Global circuit breaker for Slicer connection protection
+# Opens after 5 consecutive failures, tests recovery after 30s
+_slicer_circuit_breaker = CircuitBreaker(name="slicer")
 
 
 def get_client() -> 'SlicerClient':
@@ -138,6 +155,24 @@ def reset_client() -> None:
     logger.info("Reset singleton SlicerClient instance")
 
 
+def get_circuit_breaker() -> CircuitBreaker:
+    """Get the global Slicer circuit breaker.
+
+    Returns:
+        The CircuitBreaker instance protecting Slicer connections
+    """
+    return _slicer_circuit_breaker
+
+
+def reset_circuit_breaker() -> None:
+    """Reset the Slicer circuit breaker to closed state.
+
+    Useful for testing or manual recovery intervention.
+    """
+    _slicer_circuit_breaker.reset()
+    update_circuit_breaker_state("slicer", "closed")
+
+
 class SlicerClient:
     """HTTP client for 3D Slicer WebServer API.
 
@@ -173,6 +208,8 @@ class SlicerClient:
     def _handle_request_error(self, operation: str, error: Exception, extra_details: dict = None) -> None:
         """Handle HTTP request errors with consistent logging and exception raising.
 
+        Also records failure with the circuit breaker and updates metrics.
+
         Args:
             operation: Description of the failed operation (for logging)
             error: The caught exception
@@ -185,6 +222,11 @@ class SlicerClient:
         details = {"url": self.base_url}
         if extra_details:
             details.update(extra_details)
+
+        # Record failure with circuit breaker (for connection-related errors)
+        if isinstance(error, (Timeout, ConnectionError)):
+            _slicer_circuit_breaker.record_failure()
+            update_circuit_breaker_state("slicer", _slicer_circuit_breaker.state.value)
 
         if isinstance(error, Timeout):
             logger.error(f"{operation} timeout: {error}")
@@ -205,41 +247,88 @@ class SlicerClient:
                 details=details
             )
 
+    def _check_circuit_breaker(self) -> None:
+        """Check if circuit breaker allows the request.
+
+        Raises:
+            CircuitOpenError: If circuit breaker is open
+        """
+        if not _slicer_circuit_breaker.allow_request():
+            raise CircuitOpenError(
+                f"Circuit breaker 'slicer' is OPEN. "
+                f"Slicer connection appears to be failing. "
+                f"Will retry in {_slicer_circuit_breaker.recovery_timeout}s",
+                breaker_name="slicer",
+                recovery_timeout=_slicer_circuit_breaker.recovery_timeout
+            )
+
+    def _record_success(self) -> None:
+        """Record a successful operation with circuit breaker."""
+        _slicer_circuit_breaker.record_success()
+        update_circuit_breaker_state("slicer", "closed")
+
     @with_retry(max_retries=RETRY_MAX_ATTEMPTS, backoff_base=RETRY_BACKOFF_BASE, retryable_exceptions=(SlicerConnectionError,))
-    def health_check(self) -> Dict[str, Any]:
+    def health_check(self, check_version: bool = True) -> Dict[str, Any]:
         """Check connection to Slicer WebServer.
 
+        Args:
+            check_version: If True, also check version compatibility (default: True)
+
         Returns:
-            Dict with connection status and response time
+            Dict with connection status, response time, and optional version info
 
         Raises:
             SlicerConnectionError: If Slicer is not reachable (will retry)
             SlicerTimeoutError: If request times out (no retry - Slicer may be frozen)
+            CircuitOpenError: If circuit breaker is open
         """
-        try:
-            start_time = time.time()
+        # Check circuit breaker first
+        self._check_circuit_breaker()
 
-            response = requests.get(
-                f"{self.base_url}/slicer/mrml",
-                timeout=self.timeout
-            )
+        with track_request("health_check"):
+            try:
+                start_time = time.time()
 
-            elapsed_ms = int((time.time() - start_time) * 1000)
+                response = requests.get(
+                    f"{self.base_url}/slicer/mrml",
+                    timeout=self.timeout
+                )
 
-            response.raise_for_status()
+                elapsed_ms = int((time.time() - start_time) * 1000)
 
-            logger.info(f"Health check successful: {elapsed_ms}ms")
+                response.raise_for_status()
 
-            return {
-                "connected": True,
-                "webserver_url": self.base_url,
-                "response_time_ms": elapsed_ms,
-            }
+                # Record success with circuit breaker
+                self._record_success()
 
-        except (Timeout, ConnectionError, RequestException) as e:
-            # Timeout errors are NOT retried - Slicer may be frozen
-            # Connection errors ARE retried
-            self._handle_request_error("Health check", e, {"timeout": self.timeout})
+                logger.info(f"Health check successful: {elapsed_ms}ms")
+
+                result = {
+                    "connected": True,
+                    "webserver_url": self.base_url,
+                    "response_time_ms": elapsed_ms,
+                    "circuit_breaker_state": _slicer_circuit_breaker.state.value,
+                }
+
+                # Optionally check version compatibility
+                if check_version:
+                    try:
+                        version_info = self.check_version_compatibility()
+                        result["slicer_version"] = version_info["version"]
+                        result["version_compatible"] = version_info["compatible"]
+                        result["version_tested"] = version_info["tested"]
+                        if version_info["warning"]:
+                            result["version_warning"] = version_info["warning"]
+                    except Exception as e:
+                        # Version check is optional, don't fail health check
+                        logger.debug(f"Version check failed (non-critical): {e}")
+
+                return result
+
+            except (Timeout, ConnectionError, RequestException) as e:
+                # Timeout errors are NOT retried - Slicer may be frozen
+                # Connection errors ARE retried
+                self._handle_request_error("Health check", e, {"timeout": self.timeout})
 
     def get_slicer_version(self) -> str:
         """Get the Slicer application version string.
@@ -336,32 +425,38 @@ class SlicerClient:
         Raises:
             SlicerConnectionError: If connection fails (will retry)
             SlicerTimeoutError: If request times out (no retry)
+            CircuitOpenError: If circuit breaker is open
         """
-        try:
-            logger.debug(f"Executing Python code: {code[:100]}...")
+        self._check_circuit_breaker()
 
-            response = requests.post(
-                f"{self.base_url}/slicer/exec",
-                data=code,
-                headers={"Content-Type": "text/plain"},
-                timeout=self.timeout
-            )
+        with track_request("exec_python"):
+            try:
+                logger.debug(f"Executing Python code: {code[:100]}...")
 
-            response.raise_for_status()
+                response = requests.post(
+                    f"{self.base_url}/slicer/exec",
+                    data=code,
+                    headers={"Content-Type": "text/plain"},
+                    timeout=self.timeout
+                )
 
-            result = response.text
+                response.raise_for_status()
 
-            logger.info(f"Python execution successful, result length: {len(result)}")
+                result = response.text
 
-            return {
-                "success": True,
-                "result": result,
-                "stdout": "",
-                "stderr": ""
-            }
+                self._record_success()
 
-        except (Timeout, ConnectionError, RequestException) as e:
-            self._handle_request_error("Python execution", e, {"code_preview": code[:100]})
+                logger.info(f"Python execution successful, result length: {len(result)}")
+
+                return {
+                    "success": True,
+                    "result": result,
+                    "stdout": "",
+                    "stderr": ""
+                }
+
+            except (Timeout, ConnectionError, RequestException) as e:
+                self._handle_request_error("Python execution", e, {"code_preview": code[:100]})
 
     @with_retry(max_retries=RETRY_MAX_ATTEMPTS, backoff_base=RETRY_BACKOFF_BASE, retryable_exceptions=(SlicerConnectionError,))
     def get_screenshot(self, view: str = "Red", scroll_to: Optional[float] = None) -> bytes:
@@ -376,25 +471,31 @@ class SlicerClient:
 
         Raises:
             SlicerConnectionError: If request fails (will retry up to 3 times)
+            CircuitOpenError: If circuit breaker is open
         """
-        try:
-            url = f"{self.base_url}/slicer/slice?view={view}"
-            if scroll_to is not None:
-                url += f"&scrollTo={scroll_to}"
+        self._check_circuit_breaker()
 
-            logger.debug(f"Capturing screenshot: view={view}, scroll_to={scroll_to}")
+        with track_request("get_screenshot"):
+            try:
+                url = f"{self.base_url}/slicer/slice?view={view}"
+                if scroll_to is not None:
+                    url += f"&scrollTo={scroll_to}"
 
-            response = requests.get(url, timeout=self.timeout)
-            response.raise_for_status()
+                logger.debug(f"Capturing screenshot: view={view}, scroll_to={scroll_to}")
 
-            image_bytes = response.content
+                response = requests.get(url, timeout=self.timeout)
+                response.raise_for_status()
 
-            logger.info(f"Screenshot captured: {len(image_bytes)} bytes")
+                image_bytes = response.content
 
-            return image_bytes
+                self._record_success()
 
-        except (ConnectionError, Timeout, RequestException) as e:
-            self._handle_request_error("Screenshot capture", e, {"view": view, "scroll_to": scroll_to})
+                logger.info(f"Screenshot captured: {len(image_bytes)} bytes")
+
+                return image_bytes
+
+            except (ConnectionError, Timeout, RequestException) as e:
+                self._handle_request_error("Screenshot capture", e, {"view": view, "scroll_to": scroll_to})
 
     @with_retry(max_retries=RETRY_MAX_ATTEMPTS, backoff_base=RETRY_BACKOFF_BASE, retryable_exceptions=(SlicerConnectionError,))
     def get_3d_screenshot(self, look_from_axis: Optional[str] = None) -> bytes:
@@ -408,25 +509,31 @@ class SlicerClient:
 
         Raises:
             SlicerConnectionError: If request fails (will retry up to 3 times)
+            CircuitOpenError: If circuit breaker is open
         """
-        try:
-            url = f"{self.base_url}/slicer/threeD"
-            if look_from_axis:
-                url += f"?lookFromAxis={look_from_axis}"
+        self._check_circuit_breaker()
 
-            logger.debug(f"Capturing 3D screenshot: look_from_axis={look_from_axis}")
+        with track_request("get_3d_screenshot"):
+            try:
+                url = f"{self.base_url}/slicer/threeD"
+                if look_from_axis:
+                    url += f"?lookFromAxis={look_from_axis}"
 
-            response = requests.get(url, timeout=self.timeout)
-            response.raise_for_status()
+                logger.debug(f"Capturing 3D screenshot: look_from_axis={look_from_axis}")
 
-            image_bytes = response.content
+                response = requests.get(url, timeout=self.timeout)
+                response.raise_for_status()
 
-            logger.info(f"3D screenshot captured: {len(image_bytes)} bytes")
+                image_bytes = response.content
 
-            return image_bytes
+                self._record_success()
 
-        except (ConnectionError, Timeout, RequestException) as e:
-            self._handle_request_error("3D screenshot capture", e, {"look_from_axis": look_from_axis})
+                logger.info(f"3D screenshot captured: {len(image_bytes)} bytes")
+
+                return image_bytes
+
+            except (ConnectionError, Timeout, RequestException) as e:
+                self._handle_request_error("3D screenshot capture", e, {"look_from_axis": look_from_axis})
 
     @with_retry(max_retries=RETRY_MAX_ATTEMPTS, backoff_base=RETRY_BACKOFF_BASE, retryable_exceptions=(SlicerConnectionError,))
     def get_full_screenshot(self) -> bytes:
@@ -437,24 +544,30 @@ class SlicerClient:
 
         Raises:
             SlicerConnectionError: If request fails (will retry up to 3 times)
+            CircuitOpenError: If circuit breaker is open
         """
-        try:
-            logger.debug("Capturing full window screenshot")
+        self._check_circuit_breaker()
 
-            response = requests.get(
-                f"{self.base_url}/slicer/screenshot",
-                timeout=self.timeout
-            )
-            response.raise_for_status()
+        with track_request("get_full_screenshot"):
+            try:
+                logger.debug("Capturing full window screenshot")
 
-            image_bytes = response.content
+                response = requests.get(
+                    f"{self.base_url}/slicer/screenshot",
+                    timeout=self.timeout
+                )
+                response.raise_for_status()
 
-            logger.info(f"Full screenshot captured: {len(image_bytes)} bytes")
+                image_bytes = response.content
 
-            return image_bytes
+                self._record_success()
 
-        except (ConnectionError, Timeout, RequestException) as e:
-            self._handle_request_error("Full screenshot capture", e)
+                logger.info(f"Full screenshot captured: {len(image_bytes)} bytes")
+
+                return image_bytes
+
+            except (ConnectionError, Timeout, RequestException) as e:
+                self._handle_request_error("Full screenshot capture", e)
 
     def get_scene_nodes(self) -> List[Dict[str, Any]]:
         """Get list of all MRML scene nodes with IDs and names.
