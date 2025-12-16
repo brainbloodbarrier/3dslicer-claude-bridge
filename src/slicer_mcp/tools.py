@@ -6,17 +6,94 @@ import json
 import logging
 import os
 import re
+import unicodedata
 import uuid
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
 
 from slicer_mcp.slicer_client import get_client, SlicerConnectionError
+from slicer_mcp.constants import (
+    VIEW_MAP,
+    VALID_LAYOUTS,
+    VALID_GUI_MODES,
+    MAX_NODE_ID_LENGTH,
+    MAX_SEGMENT_NAME_LENGTH,
+    AUDIT_CODE_MAX_LENGTH,
+    AUDIT_RESULT_MAX_LENGTH,
+)
 
 logger = logging.getLogger("slicer-mcp")
+
+
+# =============================================================================
+# JSON Parsing Helper (Error Handling)
+# =============================================================================
+
+def _parse_json_result(result: str, context: str) -> Any:
+    """Parse JSON result with null/empty handling.
+
+    Args:
+        result: JSON string to parse
+        context: Description for error messages
+
+    Returns:
+        Parsed JSON data
+
+    Raises:
+        SlicerConnectionError: If result is empty, null, or malformed
+    """
+    if not result or result.strip() in ('', 'null', 'None'):
+        raise SlicerConnectionError(
+            f"Empty result from {context}",
+            details={"result": result[:100] if result else "None"}
+        )
+
+    try:
+        return json.loads(result)
+    except json.JSONDecodeError as e:
+        raise SlicerConnectionError(
+            f"Failed to parse {context} result: {str(e)}",
+            details={"result_preview": result[:100] if result else "None"}
+        )
+
 
 # =============================================================================
 # Audit Logging (Security)
 # =============================================================================
+
+# Forbidden directories for audit log (security measure)
+FORBIDDEN_AUDIT_PATHS = frozenset([
+    '/etc', '/usr', '/bin', '/sbin', '/var', '/root', '/lib',
+    '/System', '/Library', '/Applications',  # macOS
+    '/Windows', '/Program Files', '/Program Files (x86)',  # Windows
+])
+
+
+def _validate_audit_log_path(path: str) -> str:
+    """Validate audit log path is safe to write to.
+
+    Args:
+        path: Proposed audit log file path
+
+    Returns:
+        Validated absolute path
+
+    Raises:
+        ValueError: If path is in a forbidden directory
+    """
+    # Expand user home directory and resolve to absolute path
+    abs_path = os.path.abspath(os.path.expanduser(path))
+
+    # Check against forbidden directories
+    for forbidden in FORBIDDEN_AUDIT_PATHS:
+        if abs_path.lower().startswith(forbidden.lower()):
+            raise ValueError(
+                f"Audit log path '{path}' is in forbidden directory '{forbidden}'. "
+                f"Use a path in your home directory or project directory."
+            )
+
+    return abs_path
+
 
 # Dedicated audit logger for Python code execution
 audit_logger = logging.getLogger("slicer-mcp.audit")
@@ -24,13 +101,18 @@ audit_logger = logging.getLogger("slicer-mcp.audit")
 # Configure audit logging based on environment
 _audit_file = os.environ.get("SLICER_AUDIT_LOG")
 if _audit_file:
-    _audit_handler = logging.FileHandler(_audit_file)
-    _audit_handler.setFormatter(logging.Formatter('%(message)s'))
-    audit_logger.addHandler(_audit_handler)
-    audit_logger.setLevel(logging.INFO)
+    try:
+        validated_path = _validate_audit_log_path(_audit_file)
+        _audit_handler = logging.FileHandler(validated_path)
+        _audit_handler.setFormatter(logging.Formatter('%(message)s'))
+        audit_logger.addHandler(_audit_handler)
+        audit_logger.setLevel(logging.INFO)
+        logger.info(f"Audit logging enabled: {validated_path}")
+    except ValueError as e:
+        logger.warning(f"Invalid audit log path, audit logging disabled: {e}")
 
 # Maximum code length to log in full (larger code is truncated with hash)
-AUDIT_CODE_MAX_LENGTH = 500
+# Note: AUDIT_CODE_MAX_LENGTH is imported from constants
 
 
 def _audit_log_execution(
@@ -72,8 +154,8 @@ def _audit_log_execution(
     if success and result:
         # Log result preview (truncated if needed)
         result_str = str(result.get("result", ""))
-        if len(result_str) > 200:
-            result_str = result_str[:200] + "..."
+        if len(result_str) > AUDIT_RESULT_MAX_LENGTH:
+            result_str = result_str[:AUDIT_RESULT_MAX_LENGTH] + "..."
         audit_entry["result_preview"] = result_str
         audit_entry["has_stdout"] = bool(result.get("stdout"))
         audit_entry["has_stderr"] = bool(result.get("stderr"))
@@ -90,8 +172,11 @@ def _audit_log_execution(
 # Pattern for valid MRML node IDs: starts with letter, alphanumeric + underscore
 MRML_ID_PATTERN = re.compile(r'^[a-zA-Z][a-zA-Z0-9_]*$')
 
-# Pattern for valid segment names: alphanumeric, spaces, underscores, hyphens
-SEGMENT_NAME_PATTERN = re.compile(r'^[a-zA-Z0-9_\- ]+$')
+# Pattern for valid segment names: Unicode word chars, spaces, underscores, hyphens
+# Uses re.UNICODE to support medical terminology with Greek letters (α, β, μ),
+# accented characters (é, ñ, ü), and other international alphabets.
+# Security: Still blocks shell metacharacters (;`$|&), quotes, and control characters.
+SEGMENT_NAME_PATTERN = re.compile(r'^[\w\s\-]+$', re.UNICODE)
 
 
 class ValidationError(Exception):
@@ -122,8 +207,8 @@ def validate_mrml_node_id(node_id: str) -> str:
     if not node_id:
         raise ValidationError("Node ID cannot be empty", "node_id", node_id or "")
 
-    if len(node_id) > 256:
-        raise ValidationError("Node ID exceeds maximum length (256)", "node_id", node_id[:50] + "...")
+    if len(node_id) > MAX_NODE_ID_LENGTH:
+        raise ValidationError(f"Node ID exceeds maximum length ({MAX_NODE_ID_LENGTH})", "node_id", node_id[:50] + "...")
 
     if not MRML_ID_PATTERN.match(node_id):
         raise ValidationError(
@@ -137,16 +222,24 @@ def validate_mrml_node_id(node_id: str) -> str:
 
 
 def validate_segment_name(segment_name: str) -> str:
-    """Validate segment name format to prevent code injection.
+    """Validate and normalize segment name format to prevent code injection.
 
-    Valid format: alphanumeric characters, spaces, underscores, and hyphens.
-    Examples: Tumor, Left Lung, Segment_1, Brain-Stem
+    Normalization:
+    - Apply NFKC Unicode normalization (prevents homoglyph and zero-width attacks)
+    - Strip leading/trailing whitespace
+    - Collapse multiple spaces to single space
+
+    Valid format: Unicode word characters, spaces, underscores, and hyphens.
+    Examples: Tumor, Left Lung, Segment_1, Brain-Stem, α-fetoprotein, Müller cells
+
+    Security: NFKC normalization converts lookalike characters to canonical forms,
+    removes zero-width characters, and normalizes compatibility characters.
 
     Args:
         segment_name: The segment name to validate
 
     Returns:
-        The validated segment_name (unchanged if valid)
+        The validated and normalized segment_name
 
     Raises:
         ValidationError: If segment_name format is invalid
@@ -154,18 +247,50 @@ def validate_segment_name(segment_name: str) -> str:
     if not segment_name:
         raise ValidationError("Segment name cannot be empty", "segment_name", segment_name or "")
 
-    if len(segment_name) > 256:
-        raise ValidationError("Segment name exceeds maximum length (256)", "segment_name", segment_name[:50] + "...")
+    # Apply NFKC Unicode normalization first
+    # - Converts lookalike characters to canonical forms (homoglyph protection)
+    # - Normalizes compatibility characters (fullwidth -> ASCII)
+    normalized = unicodedata.normalize('NFKC', segment_name)
 
-    if not SEGMENT_NAME_PATTERN.match(segment_name):
+    # Remove zero-width and invisible characters that could be used for attacks
+    # NFKC doesn't remove these, so we filter explicitly
+    INVISIBLE_CHARS = frozenset([
+        '\u200b',  # Zero-width space
+        '\u200c',  # Zero-width non-joiner
+        '\u200d',  # Zero-width joiner
+        '\ufeff',  # BOM / Zero-width no-break space
+        '\u00ad',  # Soft hyphen
+        '\u2060',  # Word joiner
+        '\u2061',  # Function application
+        '\u2062',  # Invisible times
+        '\u2063',  # Invisible separator
+        '\u2064',  # Invisible plus
+    ])
+    normalized = ''.join(c for c in normalized if c not in INVISIBLE_CHARS)
+
+    # Normalize whitespace: strip and collapse multiple spaces
+    normalized = ' '.join(normalized.split())
+
+    # Check if normalization resulted in empty string (was only whitespace)
+    if not normalized:
+        raise ValidationError("Segment name cannot be only whitespace", "segment_name", segment_name)
+
+    if len(normalized) > MAX_SEGMENT_NAME_LENGTH:
         raise ValidationError(
-            f"Invalid segment_name format. Must contain only alphanumeric characters, "
-            f"spaces, underscores, and hyphens. Got: '{segment_name[:50]}'",
+            f"Segment name exceeds maximum length ({MAX_SEGMENT_NAME_LENGTH})",
             "segment_name",
-            segment_name
+            normalized[:50] + "..."
         )
 
-    return segment_name
+    if not SEGMENT_NAME_PATTERN.match(normalized):
+        raise ValidationError(
+            f"Invalid segment_name format. Must contain only Unicode word characters, "
+            f"spaces, underscores, and hyphens. Got: '{normalized[:50]}'",
+            "segment_name",
+            normalized
+        )
+
+    return normalized
 
 
 def capture_screenshot(
@@ -187,19 +312,11 @@ def capture_screenshot(
         ValueError: If view_type is invalid
         SlicerConnectionError: If Slicer is not reachable
     """
-    # Map view types to Slicer view names
-    view_map = {
-        "axial": "Red",
-        "sagittal": "Yellow",
-        "coronal": "Green",
-        "3d": "3d",
-        "full": "full"
-    }
-
-    if view_type not in view_map:
+    # Map view types to Slicer view names (using centralized VIEW_MAP)
+    if view_type not in VIEW_MAP:
         raise ValueError(
             f"Invalid view_type '{view_type}'. "
-            f"Must be one of: {', '.join(view_map.keys())}"
+            f"Must be one of: {', '.join(VIEW_MAP.keys())}"
         )
 
     client = get_client()
@@ -212,7 +329,7 @@ def capture_screenshot(
             image_bytes = client.get_3d_screenshot(look_from_axis)
         else:
             # 2D slice views (axial, sagittal, coronal)
-            slicer_view = view_map[view_type]
+            slicer_view = VIEW_MAP[view_type]
             image_bytes = client.get_screenshot(slicer_view, scroll_position)
 
         # Encode to base64
@@ -325,22 +442,32 @@ def measure_volume(node_id: str, segment_name: Optional[str] = None) -> Dict[str
 
     client = get_client()
 
+    # Use json.dumps for safe string escaping (defense-in-depth)
+    # Even though validation exists, this prevents code injection if validation is ever bypassed
+    safe_node_id = json.dumps(node_id)
+    safe_segment_name = json.dumps(segment_name) if segment_name else None
+
     # Build Python code to calculate volumes using SegmentStatistics
     if segment_name:
         # Measure specific segment
         python_code = f"""
 import slicer
+import json
 from SegmentStatistics import SegmentStatisticsLogic
 
-segmentationNode = slicer.mrmlScene.GetNodeByID('{node_id}')
+# Use JSON-escaped values for safety
+node_id = {safe_node_id}
+segment_name = {safe_segment_name}
+
+segmentationNode = slicer.mrmlScene.GetNodeByID(node_id)
 if not segmentationNode:
-    raise ValueError('Node not found: {node_id}')
+    raise ValueError('Node not found: ' + node_id)
 
 # Get segment
 segmentation = segmentationNode.GetSegmentation()
-segment = segmentation.GetSegment('{segment_name}')
+segment = segmentation.GetSegment(segment_name)
 if not segment:
-    raise ValueError('Segment not found: {segment_name}')
+    raise ValueError('Segment not found: ' + segment_name)
 
 # Calculate statistics
 statsLogic = SegmentStatisticsLogic()
@@ -349,36 +476,38 @@ statsLogic.computeStatistics()
 stats = statsLogic.getStatistics()
 
 # Get volume in cc (cubic cm = ml)
-volume_cc = stats['{segment_name}', 'SegmentStatistics.volume_cc']
+volume_cc = stats[segment_name, 'SegmentStatistics.volume_cc']
 volume_mm3 = volume_cc * 1000  # Convert cc to mm3
 
 result = {{
-    'node_id': '{node_id}',
+    'node_id': node_id,
     'node_name': segmentationNode.GetName(),
     'total_volume_mm3': volume_mm3,
     'total_volume_ml': volume_cc,
     'segments': [
         {{
-            'name': '{segment_name}',
+            'name': segment_name,
             'volume_mm3': volume_mm3,
             'volume_ml': volume_cc
         }}
     ]
 }}
 
-import json
 json.dumps(result)
 """
     else:
         # Measure all segments
         python_code = f"""
 import slicer
-from SegmentStatistics import SegmentStatisticsLogic
 import json
+from SegmentStatistics import SegmentStatisticsLogic
 
-segmentationNode = slicer.mrmlScene.GetNodeByID('{node_id}')
+# Use JSON-escaped value for safety
+node_id = {safe_node_id}
+
+segmentationNode = slicer.mrmlScene.GetNodeByID(node_id)
 if not segmentationNode:
-    raise ValueError('Node not found: {node_id}')
+    raise ValueError('Node not found: ' + node_id)
 
 # Calculate statistics
 statsLogic = SegmentStatisticsLogic()
@@ -410,7 +539,7 @@ for i in range(segmentation.GetNumberOfSegments()):
     total_volume_ml += volume_cc
 
 result = {{
-    'node_id': '{node_id}',
+    'node_id': node_id,
     'node_name': segmentationNode.GetName(),
     'total_volume_mm3': total_volume_mm3,
     'total_volume_ml': total_volume_ml,
@@ -423,9 +552,8 @@ json.dumps(result)
     try:
         exec_result = client.exec_python(python_code)
 
-        # Parse JSON result
-        import json
-        volume_data = json.loads(exec_result["result"])
+        # Parse JSON result using helper
+        volume_data = _parse_json_result(exec_result.get("result", ""), "volume measurement")
 
         logger.info(f"Volume measured for node {node_id}")
 
@@ -434,12 +562,6 @@ json.dumps(result)
     except SlicerConnectionError as e:
         logger.error(f"Volume measurement failed: {e.message}")
         raise
-    except (json.JSONDecodeError, KeyError) as e:
-        logger.error(f"Volume measurement result parsing failed: {e}")
-        raise SlicerConnectionError(
-            f"Failed to parse volume measurement result: {str(e)}",
-            details={"node_id": node_id, "segment_name": segment_name}
-        )
 
 
 # Fallback list of common sample datasets (used when dynamic discovery fails)
@@ -524,8 +646,9 @@ json.dumps(result)
 
     try:
         exec_result = client.exec_python(python_code)
-        import json
-        sample_data = json.loads(exec_result["result"])
+
+        # Parse JSON result using helper
+        sample_data = _parse_json_result(exec_result.get("result", ""), "sample data list")
 
         logger.info(f"Sample data list retrieved: {sample_data['total_count']} datasets ({sample_data['source']})")
 
@@ -608,8 +731,8 @@ json.dumps(result)
 """
         exec_result = client.exec_python(python_code)
 
-        import json
-        node_info = json.loads(exec_result["result"])
+        # Parse JSON result using helper
+        node_info = _parse_json_result(exec_result.get("result", ""), "loaded node info")
 
         result.update(node_info)
 
@@ -636,19 +759,16 @@ def set_layout(layout: str, gui_mode: str = "full") -> Dict[str, Any]:
         ValueError: If layout or gui_mode is invalid
         SlicerConnectionError: If Slicer is not reachable
     """
-    valid_layouts = ["FourUp", "OneUp3D", "OneUpRedSlice", "Conventional", "SideBySide"]
-    valid_gui_modes = ["full", "viewers"]
-
-    if layout not in valid_layouts:
+    if layout not in VALID_LAYOUTS:
         raise ValueError(
             f"Invalid layout '{layout}'. "
-            f"Must be one of: {', '.join(valid_layouts)}"
+            f"Must be one of: {', '.join(VALID_LAYOUTS)}"
         )
 
-    if gui_mode not in valid_gui_modes:
+    if gui_mode not in VALID_GUI_MODES:
         raise ValueError(
             f"Invalid gui_mode '{gui_mode}'. "
-            f"Must be one of: {', '.join(valid_gui_modes)}"
+            f"Must be one of: {', '.join(VALID_GUI_MODES)}"
         )
 
     client = get_client()

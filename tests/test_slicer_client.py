@@ -8,6 +8,15 @@ from requests.exceptions import ConnectionError, Timeout
 from slicer_mcp.slicer_client import SlicerClient, SlicerConnectionError, SlicerTimeoutError
 
 
+@pytest.fixture(autouse=True)
+def reset_circuit_breaker_fixture():
+    """Reset circuit breaker before each test to ensure test isolation."""
+    from slicer_mcp.slicer_client import reset_circuit_breaker
+    reset_circuit_breaker()
+    yield
+    reset_circuit_breaker()
+
+
 @pytest.fixture
 def slicer_client():
     """Create a SlicerClient instance for testing."""
@@ -304,8 +313,350 @@ class TestSetLayout:
             assert call_args.kwargs["params"]["viewersLayout"] == "OneUp3D"
 
 
+# =============================================================================
+# Thread Safety Tests (Batch 1 Fix 1.1)
+# =============================================================================
+
+class TestSingletonThreadSafety:
+    """Test thread-safe singleton pattern for SlicerClient."""
+
+    def test_concurrent_get_client_returns_same_instance(self):
+        """Test multiple threads calling get_client() get the same instance."""
+        import threading
+        from slicer_mcp.slicer_client import get_client, reset_client
+
+        # Reset to ensure clean state
+        reset_client()
+
+        instances = []
+        errors = []
+        barrier = threading.Barrier(10)  # Ensure all threads start together
+
+        def get_instance():
+            try:
+                barrier.wait()  # Synchronize thread start
+                client = get_client()
+                instances.append(id(client))
+            except Exception as e:
+                errors.append(e)
+
+        # Spawn 10 threads to get the client simultaneously
+        threads = [threading.Thread(target=get_instance) for _ in range(10)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        # Verify no errors occurred
+        assert not errors, f"Errors occurred: {errors}"
+
+        # Verify all threads got the same instance (all IDs should be identical)
+        assert len(set(instances)) == 1, f"Got {len(set(instances))} different instances"
+
+    def test_singleton_reset_allows_new_instance(self):
+        """Test reset_client() allows creation of a new singleton."""
+        from slicer_mcp.slicer_client import get_client, reset_client
+
+        client1 = get_client()
+        reset_client()
+        client2 = get_client()
+
+        # Should be different instances after reset
+        assert id(client1) != id(client2)
+
+
+# =============================================================================
+# Retry Decorator Tests (Batch 1 Fix 1.2)
+# =============================================================================
+
+class TestScreenshotRetry:
+    """Test retry decorator on screenshot methods."""
+
+    def test_get_screenshot_retries_on_connection_error(self, slicer_client):
+        """Test get_screenshot retries on SlicerConnectionError."""
+        with patch('slicer_mcp.slicer_client.requests.get') as mock_get, \
+             patch('slicer_mcp.slicer_client.time.sleep') as mock_sleep:
+            # First 3 calls fail with ConnectionError, 4th succeeds
+            mock_success = Mock()
+            mock_success.status_code = 200
+            mock_success.content = b'\x89PNG\r\n\x1a\n...'
+            mock_success.raise_for_status = Mock()
+
+            mock_get.side_effect = [
+                ConnectionError("Connection refused"),
+                ConnectionError("Connection refused"),
+                ConnectionError("Connection refused"),
+                mock_success,
+            ]
+
+            result = slicer_client.get_screenshot()
+
+            assert result.startswith(b'\x89PNG')
+            # Should have called 4 times (initial + 3 retries = 4 attempts)
+            assert mock_get.call_count == 4
+            # Should have slept 3 times (between retries)
+            assert mock_sleep.call_count == 3
+
+    def test_get_3d_screenshot_retries_on_connection_error(self, slicer_client):
+        """Test get_3d_screenshot retries on SlicerConnectionError."""
+        with patch('slicer_mcp.slicer_client.requests.get') as mock_get, \
+             patch('slicer_mcp.slicer_client.time.sleep') as mock_sleep:
+            mock_success = Mock()
+            mock_success.status_code = 200
+            mock_success.content = b'\x89PNG\r\n\x1a\n...'
+            mock_success.raise_for_status = Mock()
+
+            # Fail twice, then succeed
+            mock_get.side_effect = [
+                ConnectionError("Connection refused"),
+                ConnectionError("Connection refused"),
+                mock_success,
+            ]
+
+            result = slicer_client.get_3d_screenshot()
+
+            assert result.startswith(b'\x89PNG')
+            assert mock_get.call_count == 3
+
+    def test_get_full_screenshot_retries_on_connection_error(self, slicer_client):
+        """Test get_full_screenshot retries on SlicerConnectionError."""
+        with patch('slicer_mcp.slicer_client.requests.get') as mock_get, \
+             patch('slicer_mcp.slicer_client.time.sleep') as mock_sleep:
+            mock_success = Mock()
+            mock_success.status_code = 200
+            mock_success.content = b'\x89PNG\r\n\x1a\n...'
+            mock_success.raise_for_status = Mock()
+
+            # Fail once, then succeed
+            mock_get.side_effect = [
+                ConnectionError("Connection refused"),
+                mock_success,
+            ]
+
+            result = slicer_client.get_full_screenshot()
+
+            assert result.startswith(b'\x89PNG')
+            assert mock_get.call_count == 2
+
+    def test_get_screenshot_exhausts_retries(self, slicer_client):
+        """Test get_screenshot fails after exhausting all retries."""
+        with patch('slicer_mcp.slicer_client.requests.get') as mock_get, \
+             patch('slicer_mcp.slicer_client.time.sleep') as mock_sleep:
+            # All calls fail
+            mock_get.side_effect = ConnectionError("Connection refused")
+
+            with pytest.raises(SlicerConnectionError):
+                slicer_client.get_screenshot()
+
+            # Should have tried 4 times total (initial + 3 retries)
+            assert mock_get.call_count == 4
+
+
 # Integration Tests (require running Slicer instance)
 # ====================================================
+
+# =============================================================================
+# Retry Exhaustion Tests (Batch 6 Fix 6.1)
+# =============================================================================
+
+class TestRetryExhaustion:
+    """Test retry behavior when all attempts fail."""
+
+    def test_health_check_exhausts_all_retries(self, slicer_client):
+        """Test health check fails after exhausting all retries."""
+        with patch('slicer_mcp.slicer_client.requests.get') as mock_get, \
+             patch('slicer_mcp.slicer_client.time.sleep') as mock_sleep:
+            mock_get.side_effect = ConnectionError("Connection refused")
+
+            with pytest.raises(SlicerConnectionError):
+                slicer_client.health_check()
+
+            # Should have been called 4 times (initial + 3 retries)
+            assert mock_get.call_count == 4
+            # Should have slept 3 times with exponential backoff
+            assert mock_sleep.call_count == 3
+
+    def test_exec_python_exhausts_all_retries(self, slicer_client):
+        """Test exec_python fails after exhausting all retries."""
+        with patch('slicer_mcp.slicer_client.requests.post') as mock_post, \
+             patch('slicer_mcp.slicer_client.time.sleep') as mock_sleep:
+            mock_post.side_effect = ConnectionError("Connection refused")
+
+            with pytest.raises(SlicerConnectionError):
+                slicer_client.exec_python("print('test')")
+
+            assert mock_post.call_count == 4
+
+    def test_retry_exponential_backoff_timing(self, slicer_client):
+        """Test exponential backoff delays are correct."""
+        with patch('slicer_mcp.slicer_client.requests.get') as mock_get, \
+             patch('slicer_mcp.slicer_client.time.sleep') as mock_sleep:
+            mock_get.side_effect = ConnectionError("Connection refused")
+
+            with pytest.raises(SlicerConnectionError):
+                slicer_client.health_check()
+
+            # Verify backoff delays: 1s, 2s, 4s (exponential)
+            sleep_calls = [call[0][0] for call in mock_sleep.call_args_list]
+            assert sleep_calls == [1.0, 2.0, 4.0]
+
+
+# =============================================================================
+# Error Handler Edge Cases (Batch 6 Fix 6.4)
+# =============================================================================
+
+class TestErrorHandlerEdgeCases:
+    """Test edge cases in error handling."""
+
+    def test_timeout_not_retried(self, slicer_client):
+        """Test that Timeout errors are NOT retried (Slicer may be frozen)."""
+        with patch('slicer_mcp.slicer_client.requests.get') as mock_get:
+            mock_get.side_effect = Timeout("Request timeout")
+
+            with pytest.raises(SlicerTimeoutError):
+                slicer_client.health_check()
+
+            # Should only be called once - no retries for timeout
+            assert mock_get.call_count == 1
+
+    def test_generic_request_exception_retried(self, slicer_client):
+        """Test that generic RequestException is converted to SlicerConnectionError and retried."""
+        from requests.exceptions import RequestException
+        with patch('slicer_mcp.slicer_client.requests.get') as mock_get, \
+             patch('slicer_mcp.slicer_client.time.sleep') as mock_sleep:
+            mock_get.side_effect = RequestException("Generic error")
+
+            with pytest.raises(SlicerConnectionError):
+                slicer_client.health_check()
+
+            # Should be called 4 times (initial + 3 retries)
+            # Generic RequestException is converted to SlicerConnectionError which is retried
+            assert mock_get.call_count == 4
+            assert mock_sleep.call_count == 3
+
+
+# =============================================================================
+# Version Checking Tests (Batch 9: Slicer Version Compatibility)
+# =============================================================================
+
+class TestVersionChecking:
+    """Test Slicer version checking functionality."""
+
+    def test_get_slicer_version_returns_string(self, slicer_client):
+        """Test get_slicer_version returns a version string."""
+        with patch('slicer_mcp.slicer_client.requests.post') as mock_post:
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.text = "'5.6.2'"  # Slicer returns quoted string
+            mock_response.raise_for_status = Mock()
+            mock_post.return_value = mock_response
+
+            version = slicer_client.get_slicer_version()
+
+            assert version == "5.6.2"
+            mock_post.assert_called_once()
+
+    def test_get_slicer_version_strips_quotes(self, slicer_client):
+        """Test version string is cleaned of quotes."""
+        with patch('slicer_mcp.slicer_client.requests.post') as mock_post:
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.text = '"5.4.0"'  # Double-quoted
+            mock_response.raise_for_status = Mock()
+            mock_post.return_value = mock_response
+
+            version = slicer_client.get_slicer_version()
+
+            assert version == "5.4.0"
+
+    def test_check_version_compatibility_compatible_tested(self, slicer_client):
+        """Test compatible and tested version returns correct status."""
+        with patch('slicer_mcp.slicer_client.requests.post') as mock_post:
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.text = "'5.6.2'"
+            mock_response.raise_for_status = Mock()
+            mock_post.return_value = mock_response
+
+            result = slicer_client.check_version_compatibility()
+
+            assert result["version"] == "5.6.2"
+            assert result["compatible"] is True
+            assert result["tested"] is True
+            assert result["warning"] is None
+            assert result["minimum_required"] == "5.0.0"
+
+    def test_check_version_compatibility_compatible_untested(self, slicer_client):
+        """Test compatible but untested version returns warning."""
+        with patch('slicer_mcp.slicer_client.requests.post') as mock_post:
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.text = "'5.8.0'"  # Not in tested versions
+            mock_response.raise_for_status = Mock()
+            mock_post.return_value = mock_response
+
+            result = slicer_client.check_version_compatibility()
+
+            assert result["version"] == "5.8.0"
+            assert result["compatible"] is True
+            assert result["tested"] is False
+            assert result["warning"] is not None
+            assert "not been tested" in result["warning"]
+
+    def test_check_version_compatibility_incompatible(self, slicer_client):
+        """Test incompatible version returns warning."""
+        with patch('slicer_mcp.slicer_client.requests.post') as mock_post:
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.text = "'4.11.0'"  # Below minimum
+            mock_response.raise_for_status = Mock()
+            mock_post.return_value = mock_response
+
+            result = slicer_client.check_version_compatibility()
+
+            assert result["version"] == "4.11.0"
+            assert result["compatible"] is False
+            assert result["tested"] is False
+            assert result["warning"] is not None
+            assert "below minimum" in result["warning"]
+
+    def test_check_version_compatibility_dev_version(self, slicer_client):
+        """Test development version (e.g., 5.7.0-2024-01-01) is handled."""
+        with patch('slicer_mcp.slicer_client.requests.post') as mock_post:
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.text = "'5.7.0-2024-01-01'"
+            mock_response.raise_for_status = Mock()
+            mock_post.return_value = mock_response
+
+            result = slicer_client.check_version_compatibility()
+
+            assert result["version"] == "5.7.0-2024-01-01"
+            assert result["compatible"] is True  # 5.7.0 > 5.0.0
+            assert result["tested"] is False
+            assert result["warning"] is not None
+
+    def test_check_version_compatibility_connection_error(self, slicer_client):
+        """Test version check raises error if Slicer not connected."""
+        with patch('slicer_mcp.slicer_client.requests.post') as mock_post:
+            mock_post.side_effect = ConnectionError("Connection refused")
+
+            with pytest.raises(SlicerConnectionError):
+                slicer_client.check_version_compatibility()
+
+    def test_get_slicer_version_whitespace_handling(self, slicer_client):
+        """Test version string handles whitespace."""
+        with patch('slicer_mcp.slicer_client.requests.post') as mock_post:
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.text = "  '5.6.1'  \n"  # Extra whitespace
+            mock_response.raise_for_status = Mock()
+            mock_post.return_value = mock_response
+
+            version = slicer_client.get_slicer_version()
+
+            assert version == "5.6.1"
+
 
 @pytest.mark.integration
 class TestSlicerIntegration:
@@ -341,3 +692,182 @@ class TestSlicerIntegration:
             assert "result" in result
         except SlicerConnectionError:
             pytest.skip("Slicer not running or WebServer not enabled")
+
+
+# =============================================================================
+# Circuit Breaker Integration Tests
+# =============================================================================
+
+class TestCircuitBreakerIntegration:
+    """Test circuit breaker integration with SlicerClient."""
+
+    def setup_method(self):
+        """Reset circuit breaker before each test."""
+        from slicer_mcp.slicer_client import reset_circuit_breaker
+        reset_circuit_breaker()
+
+    def test_circuit_breaker_opens_after_failures(self):
+        """Circuit breaker should open after consecutive failures."""
+        from slicer_mcp.slicer_client import get_circuit_breaker, reset_circuit_breaker
+        from slicer_mcp.circuit_breaker import CircuitState, CircuitOpenError
+
+        reset_circuit_breaker()
+        breaker = get_circuit_breaker()
+        assert breaker.state == CircuitState.CLOSED
+
+        # Record failures directly (bypasses retry logic for faster test)
+        # The threshold is 5 failures
+        for _ in range(5):
+            breaker.record_failure()
+
+        assert breaker.state == CircuitState.OPEN
+
+    def test_circuit_breaker_rejects_when_open(self):
+        """Requests should be rejected immediately when circuit is open."""
+        from slicer_mcp.slicer_client import get_circuit_breaker, reset_circuit_breaker
+        from slicer_mcp.circuit_breaker import CircuitOpenError, CircuitState
+
+        reset_circuit_breaker()
+        client = SlicerClient(base_url="http://localhost:9999")
+        breaker = get_circuit_breaker()
+
+        # Force circuit open
+        for _ in range(5):
+            breaker.record_failure()
+
+        assert breaker.state == CircuitState.OPEN
+
+        # Next request should be rejected without attempting connection
+        with pytest.raises(CircuitOpenError) as exc_info:
+            client.health_check(check_version=False)
+
+        assert exc_info.value.breaker_name == "slicer"
+
+    def test_health_check_includes_circuit_breaker_state(self):
+        """Health check should include circuit breaker state."""
+        from slicer_mcp.slicer_client import reset_circuit_breaker
+
+        reset_circuit_breaker()
+        client = SlicerClient()
+
+        with patch('slicer_mcp.slicer_client.requests.get') as mock_get:
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.text = "{}"
+            mock_response.raise_for_status = Mock()
+            mock_get.return_value = mock_response
+
+            result = client.health_check(check_version=False)
+
+            assert "circuit_breaker_state" in result
+            assert result["circuit_breaker_state"] == "closed"
+
+    def test_get_circuit_breaker_returns_instance(self):
+        """get_circuit_breaker should return the global instance."""
+        from slicer_mcp.slicer_client import get_circuit_breaker
+        from slicer_mcp.circuit_breaker import CircuitBreaker
+
+        breaker = get_circuit_breaker()
+        assert isinstance(breaker, CircuitBreaker)
+        assert breaker.name == "slicer"
+
+    def test_reset_circuit_breaker_closes_open_circuit(self):
+        """reset_circuit_breaker should close an open circuit."""
+        from slicer_mcp.slicer_client import get_circuit_breaker, reset_circuit_breaker
+        from slicer_mcp.circuit_breaker import CircuitState
+
+        breaker = get_circuit_breaker()
+
+        # Open the circuit
+        for _ in range(5):
+            breaker.record_failure()
+        assert breaker.state == CircuitState.OPEN
+
+        # Reset should close it
+        reset_circuit_breaker()
+        assert breaker.state == CircuitState.CLOSED
+
+
+class TestHealthCheckVersionIntegration:
+    """Test health check version checking integration."""
+
+    def setup_method(self):
+        """Reset circuit breaker before each test."""
+        from slicer_mcp.slicer_client import reset_circuit_breaker
+        reset_circuit_breaker()
+
+    def test_health_check_includes_version_info_on_success(self):
+        """Health check should include version info when successful."""
+        from slicer_mcp.slicer_client import reset_circuit_breaker
+
+        reset_circuit_breaker()
+        client = SlicerClient()
+
+        with patch('slicer_mcp.slicer_client.requests.get') as mock_get, \
+             patch('slicer_mcp.slicer_client.requests.post') as mock_post:
+
+            # Mock health check response
+            mock_health_response = Mock()
+            mock_health_response.status_code = 200
+            mock_health_response.text = "{}"
+            mock_health_response.raise_for_status = Mock()
+
+            # Mock version check response
+            mock_version_response = Mock()
+            mock_version_response.status_code = 200
+            mock_version_response.text = "'5.6.2'"
+            mock_version_response.raise_for_status = Mock()
+
+            mock_get.return_value = mock_health_response
+            mock_post.return_value = mock_version_response
+
+            result = client.health_check(check_version=True)
+
+            assert "slicer_version" in result
+            assert result["slicer_version"] == "5.6.2"
+            assert result["version_compatible"] is True
+
+    def test_health_check_skips_version_on_request(self):
+        """Health check should skip version check when check_version=False."""
+        from slicer_mcp.slicer_client import reset_circuit_breaker
+
+        reset_circuit_breaker()
+        client = SlicerClient()
+
+        with patch('slicer_mcp.slicer_client.requests.get') as mock_get:
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.text = "{}"
+            mock_response.raise_for_status = Mock()
+            mock_get.return_value = mock_response
+
+            result = client.health_check(check_version=False)
+
+            assert "slicer_version" not in result
+
+    def test_health_check_gracefully_handles_version_check_failure(self):
+        """Health check should succeed even if version check fails."""
+        from slicer_mcp.slicer_client import reset_circuit_breaker
+
+        reset_circuit_breaker()
+        client = SlicerClient()
+
+        with patch('slicer_mcp.slicer_client.requests.get') as mock_get, \
+             patch('slicer_mcp.slicer_client.requests.post') as mock_post:
+
+            # Mock health check response (success)
+            mock_health_response = Mock()
+            mock_health_response.status_code = 200
+            mock_health_response.text = "{}"
+            mock_health_response.raise_for_status = Mock()
+            mock_get.return_value = mock_health_response
+
+            # Mock version check response (failure)
+            mock_post.side_effect = Exception("Version check failed")
+
+            result = client.health_check(check_version=True)
+
+            # Health check should still succeed
+            assert result["connected"] is True
+            # Version info should be absent
+            assert "slicer_version" not in result
