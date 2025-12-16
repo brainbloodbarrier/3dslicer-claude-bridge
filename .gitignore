@@ -49,3 +49,10 @@ Thumbs.db
 
 # Local config
 *.local.*
+
+# Local data files (not for distribution)
+Exame_*/
+*.nrrd
+*.nii
+*.nii.gz
+*.dcm

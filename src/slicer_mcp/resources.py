@@ -2,7 +2,7 @@
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any
 
 from slicer_mcp.slicer_client import get_client, SlicerClient, SlicerConnectionError
@@ -27,7 +27,7 @@ def get_scene_resource() -> str:
         # Build scene resource
         scene_data = {
             "scene_id": "vtkMRMLScene",
-            "modified_time": datetime.utcnow().isoformat() + "Z",
+            "modified_time": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             "node_count": len(nodes),
             "nodes": nodes,
             "connections": []  # Future: add node connections if needed
@@ -195,7 +195,7 @@ json.dumps(result)
             "response_time_ms": health["response_time_ms"],
             "scene_loaded": slicer_info["scene_loaded"],
             "python_available": slicer_info["python_available"],
-            "last_check": datetime.utcnow().isoformat() + "Z"
+            "last_check": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         }
 
         logger.info(f"Status resource retrieved: connected={status_data['connected']}")
@@ -213,7 +213,7 @@ json.dumps(result)
             "response_time_ms": None,
             "scene_loaded": False,
             "python_available": False,
-            "last_check": datetime.utcnow().isoformat() + "Z",
+            "last_check": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             "error": e.message
         }
 
