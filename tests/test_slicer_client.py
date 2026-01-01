@@ -871,3 +871,156 @@ class TestHealthCheckVersionIntegration:
             assert result["connected"] is True
             # Version info should be absent
             assert "slicer_version" not in result
+
+
+# =============================================================================
+# Retry Tests for get_scene_nodes, load_sample_data, set_layout (Bug Fix 3)
+# =============================================================================
+
+class TestGetSceneNodesRetry:
+    """Test retry behavior for get_scene_nodes method."""
+
+    def test_get_scene_nodes_retries_on_connection_error(self, slicer_client):
+        """Test get_scene_nodes retries on SlicerConnectionError."""
+        with patch('slicer_mcp.slicer_client.requests.get') as mock_get, \
+             patch('slicer_mcp.slicer_client.time.sleep') as mock_sleep:
+            # Mock successful responses for names and ids
+            mock_success_names = Mock()
+            mock_success_names.status_code = 200
+            mock_success_names.text = json.dumps(["Node1"])
+            mock_success_names.raise_for_status = Mock()
+
+            mock_success_ids = Mock()
+            mock_success_ids.status_code = 200
+            mock_success_ids.text = json.dumps(["vtkMRMLNode1"])
+            mock_success_ids.raise_for_status = Mock()
+
+            # First 2 calls fail, then succeed (need 2 successful responses)
+            mock_get.side_effect = [
+                ConnectionError("Connection refused"),
+                ConnectionError("Connection refused"),
+                mock_success_names,
+                mock_success_ids,
+            ]
+
+            result = slicer_client.get_scene_nodes()
+
+            assert len(result) == 1
+            assert mock_get.call_count == 4
+            assert mock_sleep.call_count == 2
+
+    def test_get_scene_nodes_checks_circuit_breaker(self, slicer_client):
+        """Test get_scene_nodes respects circuit breaker state."""
+        from slicer_mcp.slicer_client import get_circuit_breaker, reset_circuit_breaker
+        from slicer_mcp.circuit_breaker import CircuitOpenError
+
+        reset_circuit_breaker()
+        breaker = get_circuit_breaker()
+
+        # Force circuit open
+        for _ in range(5):
+            breaker.record_failure()
+
+        with pytest.raises(CircuitOpenError):
+            slicer_client.get_scene_nodes()
+
+
+class TestLoadSampleDataRetry:
+    """Test retry behavior for load_sample_data method."""
+
+    def test_load_sample_data_retries_on_connection_error(self, slicer_client):
+        """Test load_sample_data retries on SlicerConnectionError."""
+        with patch('slicer_mcp.slicer_client.requests.get') as mock_get, \
+             patch('slicer_mcp.slicer_client.time.sleep') as mock_sleep:
+            mock_success = Mock()
+            mock_success.status_code = 200
+            mock_success.raise_for_status = Mock()
+
+            # Fail twice, then succeed
+            mock_get.side_effect = [
+                ConnectionError("Connection refused"),
+                ConnectionError("Connection refused"),
+                mock_success,
+            ]
+
+            result = slicer_client.load_sample_data("MRHead")
+
+            assert result["success"] is True
+            assert mock_get.call_count == 3
+            assert mock_sleep.call_count == 2
+
+    def test_load_sample_data_exhausts_retries(self, slicer_client):
+        """Test load_sample_data fails after exhausting retries."""
+        with patch('slicer_mcp.slicer_client.requests.get') as mock_get, \
+             patch('slicer_mcp.slicer_client.time.sleep') as mock_sleep:
+            mock_get.side_effect = ConnectionError("Connection refused")
+
+            with pytest.raises(SlicerConnectionError):
+                slicer_client.load_sample_data("MRHead")
+
+            assert mock_get.call_count == 4  # initial + 3 retries
+
+    def test_load_sample_data_checks_circuit_breaker(self, slicer_client):
+        """Test load_sample_data respects circuit breaker state."""
+        from slicer_mcp.slicer_client import get_circuit_breaker, reset_circuit_breaker
+        from slicer_mcp.circuit_breaker import CircuitOpenError
+
+        reset_circuit_breaker()
+        breaker = get_circuit_breaker()
+
+        # Force circuit open
+        for _ in range(5):
+            breaker.record_failure()
+
+        with pytest.raises(CircuitOpenError):
+            slicer_client.load_sample_data("MRHead")
+
+
+class TestSetLayoutRetry:
+    """Test retry behavior for set_layout method."""
+
+    def test_set_layout_retries_on_connection_error(self, slicer_client):
+        """Test set_layout retries on SlicerConnectionError."""
+        with patch('slicer_mcp.slicer_client.requests.get') as mock_get, \
+             patch('slicer_mcp.slicer_client.time.sleep') as mock_sleep:
+            mock_success = Mock()
+            mock_success.status_code = 200
+            mock_success.raise_for_status = Mock()
+
+            # Fail once, then succeed
+            mock_get.side_effect = [
+                ConnectionError("Connection refused"),
+                mock_success,
+            ]
+
+            result = slicer_client.set_layout("FourUp")
+
+            assert result["success"] is True
+            assert mock_get.call_count == 2
+            assert mock_sleep.call_count == 1
+
+    def test_set_layout_exhausts_retries(self, slicer_client):
+        """Test set_layout fails after exhausting retries."""
+        with patch('slicer_mcp.slicer_client.requests.get') as mock_get, \
+             patch('slicer_mcp.slicer_client.time.sleep') as mock_sleep:
+            mock_get.side_effect = ConnectionError("Connection refused")
+
+            with pytest.raises(SlicerConnectionError):
+                slicer_client.set_layout("FourUp")
+
+            assert mock_get.call_count == 4  # initial + 3 retries
+
+    def test_set_layout_checks_circuit_breaker(self, slicer_client):
+        """Test set_layout respects circuit breaker state."""
+        from slicer_mcp.slicer_client import get_circuit_breaker, reset_circuit_breaker
+        from slicer_mcp.circuit_breaker import CircuitOpenError
+
+        reset_circuit_breaker()
+        breaker = get_circuit_breaker()
+
+        # Force circuit open
+        for _ in range(5):
+            breaker.record_failure()
+
+        with pytest.raises(CircuitOpenError):
+            slicer_client.set_layout("FourUp")

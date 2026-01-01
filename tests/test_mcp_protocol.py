@@ -364,3 +364,142 @@ class TestResourceResponseFormat:
             assert "node_count" in result
             assert "nodes" in result
             assert "modified_time" in result
+
+
+# =============================================================================
+# Server Tool Error Handling Tests (Bug Fix 1)
+# =============================================================================
+
+class TestServerToolErrorHandling:
+    """Test that server tool wrappers handle errors correctly."""
+
+    def test_capture_screenshot_handles_connection_error(self):
+        """Test capture_screenshot returns error dict on connection failure."""
+        from slicer_mcp.server import capture_screenshot
+        from slicer_mcp.slicer_client import SlicerConnectionError
+
+        with patch('slicer_mcp.tools.capture_screenshot') as mock_tool:
+            mock_tool.side_effect = SlicerConnectionError("Connection failed")
+
+            result = capture_screenshot(view_type="axial")
+
+            assert result["success"] is False
+            assert result["error_type"] == "connection"
+            assert "error" in result
+
+    def test_capture_screenshot_handles_timeout_error(self):
+        """Test capture_screenshot returns error dict on timeout."""
+        from slicer_mcp.server import capture_screenshot
+        from slicer_mcp.slicer_client import SlicerTimeoutError
+
+        with patch('slicer_mcp.tools.capture_screenshot') as mock_tool:
+            mock_tool.side_effect = SlicerTimeoutError("Timeout occurred")
+
+            result = capture_screenshot(view_type="axial")
+
+            assert result["success"] is False
+            assert result["error_type"] == "timeout"
+
+    def test_capture_screenshot_handles_circuit_open_error(self):
+        """Test capture_screenshot returns error dict when circuit is open."""
+        from slicer_mcp.server import capture_screenshot
+        from slicer_mcp.circuit_breaker import CircuitOpenError
+
+        with patch('slicer_mcp.tools.capture_screenshot') as mock_tool:
+            mock_tool.side_effect = CircuitOpenError("Circuit open", "slicer", 30)
+
+            result = capture_screenshot(view_type="axial")
+
+            assert result["success"] is False
+            assert result["error_type"] == "circuit_open"
+
+    def test_list_scene_nodes_handles_error(self):
+        """Test list_scene_nodes returns error dict on failure."""
+        from slicer_mcp.server import list_scene_nodes
+        from slicer_mcp.slicer_client import SlicerConnectionError
+
+        with patch('slicer_mcp.tools.list_scene_nodes') as mock_tool:
+            mock_tool.side_effect = SlicerConnectionError("Connection failed")
+
+            result = list_scene_nodes()
+
+            assert result["success"] is False
+            assert result["error_type"] == "connection"
+
+    def test_execute_python_handles_error(self):
+        """Test execute_python returns error dict on failure."""
+        from slicer_mcp.server import execute_python
+        from slicer_mcp.slicer_client import SlicerConnectionError
+
+        with patch('slicer_mcp.tools.execute_python') as mock_tool:
+            mock_tool.side_effect = SlicerConnectionError("Connection failed")
+
+            result = execute_python(code="print('hello')")
+
+            assert result["success"] is False
+            assert result["error_type"] == "connection"
+
+    def test_measure_volume_handles_error(self):
+        """Test measure_volume returns error dict on failure."""
+        from slicer_mcp.server import measure_volume
+        from slicer_mcp.slicer_client import SlicerConnectionError
+
+        with patch('slicer_mcp.tools.measure_volume') as mock_tool:
+            mock_tool.side_effect = SlicerConnectionError("Connection failed")
+
+            result = measure_volume(node_id="vtkMRMLSegmentationNode1")
+
+            assert result["success"] is False
+            assert result["error_type"] == "connection"
+
+    def test_list_sample_data_handles_error(self):
+        """Test list_sample_data returns error dict on failure."""
+        from slicer_mcp.server import list_sample_data
+        from slicer_mcp.slicer_client import SlicerConnectionError
+
+        with patch('slicer_mcp.tools.list_sample_data') as mock_tool:
+            mock_tool.side_effect = SlicerConnectionError("Connection failed")
+
+            result = list_sample_data()
+
+            assert result["success"] is False
+            assert result["error_type"] == "connection"
+
+    def test_load_sample_data_handles_error(self):
+        """Test load_sample_data returns error dict on failure."""
+        from slicer_mcp.server import load_sample_data
+        from slicer_mcp.slicer_client import SlicerConnectionError
+
+        with patch('slicer_mcp.tools.load_sample_data') as mock_tool:
+            mock_tool.side_effect = SlicerConnectionError("Connection failed")
+
+            result = load_sample_data(dataset_name="MRHead")
+
+            assert result["success"] is False
+            assert result["error_type"] == "connection"
+
+    def test_set_layout_handles_error(self):
+        """Test set_layout returns error dict on failure."""
+        from slicer_mcp.server import set_layout
+        from slicer_mcp.slicer_client import SlicerConnectionError
+
+        with patch('slicer_mcp.tools.set_layout') as mock_tool:
+            mock_tool.side_effect = SlicerConnectionError("Connection failed")
+
+            result = set_layout(layout="FourUp")
+
+            assert result["success"] is False
+            assert result["error_type"] == "connection"
+
+    def test_handle_tool_error_unexpected_exception(self):
+        """Test _handle_tool_error handles unexpected exceptions."""
+        from slicer_mcp.server import capture_screenshot
+
+        with patch('slicer_mcp.tools.capture_screenshot') as mock_tool:
+            mock_tool.side_effect = RuntimeError("Unexpected error")
+
+            result = capture_screenshot(view_type="axial")
+
+            assert result["success"] is False
+            assert result["error_type"] == "unexpected"
+            assert "Unexpected error" in result["error"]
