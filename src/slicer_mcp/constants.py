@@ -44,8 +44,8 @@ MAX_SEGMENT_NAME_LENGTH = 256
 # =============================================================================
 # Audit Logging
 # =============================================================================
-AUDIT_CODE_MAX_LENGTH = 500
-AUDIT_RESULT_MAX_LENGTH = 200
+AUDIT_CODE_MAX_LENGTH = 2000  # Increased from 500 to capture meaningful code snippets
+AUDIT_RESULT_MAX_LENGTH = 500  # Increased from 200 for better debugging context
 
 # =============================================================================
 # Slicer Version Compatibility

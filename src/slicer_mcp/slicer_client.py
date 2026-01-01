@@ -569,6 +569,7 @@ class SlicerClient:
             except (ConnectionError, Timeout, RequestException) as e:
                 self._handle_request_error("Full screenshot capture", e)
 
+    @with_retry(max_retries=RETRY_MAX_ATTEMPTS, backoff_base=RETRY_BACKOFF_BASE, retryable_exceptions=(SlicerConnectionError,))
     def get_scene_nodes(self) -> List[Dict[str, Any]]:
         """Get list of all MRML scene nodes with IDs and names.
 
@@ -576,46 +577,52 @@ class SlicerClient:
             List of node dictionaries with id, name, type
 
         Raises:
-            SlicerConnectionError: If request fails
+            SlicerConnectionError: If request fails (will retry)
+            CircuitOpenError: If circuit breaker is open
         """
-        try:
-            logger.debug("Fetching scene nodes")
+        self._check_circuit_breaker()
 
-            # Get node names
-            names_response = requests.get(
-                f"{self.base_url}/slicer/mrml/names",
-                timeout=self.timeout
-            )
-            names_response.raise_for_status()
+        with track_request("get_scene_nodes"):
+            try:
+                logger.debug("Fetching scene nodes")
 
-            # Get node IDs
-            ids_response = requests.get(
-                f"{self.base_url}/slicer/mrml/ids",
-                timeout=self.timeout
-            )
-            ids_response.raise_for_status()
+                # Get node names
+                names_response = requests.get(
+                    f"{self.base_url}/slicer/mrml/names",
+                    timeout=self.timeout
+                )
+                names_response.raise_for_status()
 
-            # Parse responses - Slicer returns JSON arrays
-            names = json.loads(names_response.text)
-            ids = json.loads(ids_response.text)
+                # Get node IDs
+                ids_response = requests.get(
+                    f"{self.base_url}/slicer/mrml/ids",
+                    timeout=self.timeout
+                )
+                ids_response.raise_for_status()
 
-            # Combine into node list
-            nodes = []
-            for node_id, node_name in zip(ids, names):
-                # Extract node type from ID (e.g., vtkMRMLScalarVolumeNode1 -> vtkMRMLScalarVolumeNode)
-                node_type = ''.join(c for c in node_id if not c.isdigit())
-                nodes.append({
-                    "id": node_id,
-                    "name": node_name,
-                    "type": node_type
-                })
+                # Parse responses - Slicer returns JSON arrays
+                names = json.loads(names_response.text)
+                ids = json.loads(ids_response.text)
 
-            logger.info(f"Fetched {len(nodes)} scene nodes")
+                # Combine into node list
+                nodes = []
+                for node_id, node_name in zip(ids, names):
+                    # Extract node type from ID (e.g., vtkMRMLScalarVolumeNode1 -> vtkMRMLScalarVolumeNode)
+                    node_type = ''.join(c for c in node_id if not c.isdigit())
+                    nodes.append({
+                        "id": node_id,
+                        "name": node_name,
+                        "type": node_type
+                    })
 
-            return nodes
+                logger.info(f"Fetched {len(nodes)} scene nodes")
 
-        except (ConnectionError, Timeout, RequestException) as e:
-            self._handle_request_error("Scene nodes fetch", e)
+                self._record_success()
+
+                return nodes
+
+            except (ConnectionError, Timeout, RequestException) as e:
+                self._handle_request_error("Scene nodes fetch", e)
 
     def get_node_properties(self, node_id: str) -> Dict[str, Any]:
         """Get properties of a specific MRML node.
@@ -656,6 +663,7 @@ class SlicerClient:
         except (ConnectionError, Timeout, RequestException) as e:
             self._handle_request_error("Node properties fetch", e, {"node_id": node_id})
 
+    @with_retry(max_retries=RETRY_MAX_ATTEMPTS, backoff_base=RETRY_BACKOFF_BASE, retryable_exceptions=(SlicerConnectionError,))
     def load_sample_data(self, name: str) -> Dict[str, Any]:
         """Load a sample dataset into Slicer.
 
@@ -666,33 +674,40 @@ class SlicerClient:
             Dict with success status and message
 
         Raises:
-            SlicerConnectionError: If request fails
+            SlicerConnectionError: If request fails (will retry)
+            CircuitOpenError: If circuit breaker is open
         """
-        try:
-            logger.debug(f"Loading sample data: {name}")
+        self._check_circuit_breaker()
 
-            response = requests.get(
-                f"{self.base_url}/slicer/sampledata",
-                params={"name": name},
-                timeout=self.timeout
-            )
-            response.raise_for_status()
+        with track_request("load_sample_data"):
+            try:
+                logger.debug(f"Loading sample data: {name}")
 
-            logger.info(f"Sample data '{name}' loaded successfully")
+                response = requests.get(
+                    f"{self.base_url}/slicer/sampledata",
+                    params={"name": name},
+                    timeout=self.timeout
+                )
+                response.raise_for_status()
 
-            return {
-                "success": True,
-                "dataset_name": name,
-                "message": f"Sample data '{name}' loaded successfully"
-            }
+                logger.info(f"Sample data '{name}' loaded successfully")
 
-        except (ConnectionError, Timeout, RequestException) as e:
-            extra_details = {
-                "dataset_name": name,
-                "suggestion": "Check dataset name is valid (MRHead, CTChest, CTACardio, DTIBrain, MRBrainTumor1, MRBrainTumor2)"
-            }
-            self._handle_request_error(f"Sample data load '{name}'", e, extra_details)
+                self._record_success()
 
+                return {
+                    "success": True,
+                    "dataset_name": name,
+                    "message": f"Sample data '{name}' loaded successfully"
+                }
+
+            except (ConnectionError, Timeout, RequestException) as e:
+                extra_details = {
+                    "dataset_name": name,
+                    "suggestion": "Check dataset name is valid (MRHead, CTChest, CTACardio, DTIBrain, MRBrainTumor1, MRBrainTumor2)"
+                }
+                self._handle_request_error(f"Sample data load '{name}'", e, extra_details)
+
+    @with_retry(max_retries=RETRY_MAX_ATTEMPTS, backoff_base=RETRY_BACKOFF_BASE, retryable_exceptions=(SlicerConnectionError,))
     def set_layout(self, layout: str, gui_mode: str = "full") -> Dict[str, Any]:
         """Set Slicer viewer layout and GUI mode.
 
@@ -704,34 +719,40 @@ class SlicerClient:
             Dict with success status and message
 
         Raises:
-            SlicerConnectionError: If request fails
+            SlicerConnectionError: If request fails (will retry)
+            CircuitOpenError: If circuit breaker is open
         """
-        try:
-            logger.debug(f"Setting layout: {layout}, gui_mode: {gui_mode}")
+        self._check_circuit_breaker()
 
-            response = requests.get(
-                f"{self.base_url}/slicer/gui",
-                params={
-                    "contents": gui_mode,
-                    "viewersLayout": layout
-                },
-                timeout=self.timeout
-            )
-            response.raise_for_status()
+        with track_request("set_layout"):
+            try:
+                logger.debug(f"Setting layout: {layout}, gui_mode: {gui_mode}")
 
-            logger.info(f"Layout changed to {layout} with {gui_mode} GUI mode")
+                response = requests.get(
+                    f"{self.base_url}/slicer/gui",
+                    params={
+                        "contents": gui_mode,
+                        "viewersLayout": layout
+                    },
+                    timeout=self.timeout
+                )
+                response.raise_for_status()
 
-            return {
-                "success": True,
-                "layout": layout,
-                "gui_mode": gui_mode,
-                "message": f"Layout changed to {layout}"
-            }
+                logger.info(f"Layout changed to {layout} with {gui_mode} GUI mode")
 
-        except (ConnectionError, Timeout, RequestException) as e:
-            extra_details = {
-                "layout": layout,
-                "gui_mode": gui_mode,
-                "suggestion": "Check layout name is valid (FourUp, OneUp3D, OneUpRedSlice, Conventional, SideBySide)"
-            }
-            self._handle_request_error("Layout change", e, extra_details)
+                self._record_success()
+
+                return {
+                    "success": True,
+                    "layout": layout,
+                    "gui_mode": gui_mode,
+                    "message": f"Layout changed to {layout}"
+                }
+
+            except (ConnectionError, Timeout, RequestException) as e:
+                extra_details = {
+                    "layout": layout,
+                    "gui_mode": gui_mode,
+                    "suggestion": "Check layout name is valid (FourUp, OneUp3D, OneUpRedSlice, Conventional, SideBySide)"
+                }
+                self._handle_request_error("Layout change", e, extra_details)

@@ -8,6 +8,8 @@ from mcp.server.fastmcp import FastMCP
 
 # Import tools and resources
 from slicer_mcp import tools, resources
+from slicer_mcp.slicer_client import SlicerConnectionError, SlicerTimeoutError
+from slicer_mcp.circuit_breaker import CircuitOpenError
 
 # Configure logging to stderr (stdout reserved for MCP protocol)
 logging.basicConfig(
@@ -26,6 +28,30 @@ logger.info("Initializing MCP Slicer Bridge server")
 # Register Tools
 # ==============
 
+def _handle_tool_error(error: Exception, tool_name: str) -> dict:
+    """Handle tool errors and return standardized error response.
+
+    Args:
+        error: The caught exception
+        tool_name: Name of the tool that failed
+
+    Returns:
+        Dict with error information
+    """
+    if isinstance(error, CircuitOpenError):
+        logger.warning(f"Tool {tool_name}: Circuit breaker open - {error}")
+        return {"success": False, "error": str(error), "error_type": "circuit_open"}
+    elif isinstance(error, SlicerTimeoutError):
+        logger.error(f"Tool {tool_name}: Timeout - {error.message}")
+        return {"success": False, "error": error.message, "error_type": "timeout", "details": error.details}
+    elif isinstance(error, SlicerConnectionError):
+        logger.error(f"Tool {tool_name}: Connection error - {error.message}")
+        return {"success": False, "error": error.message, "error_type": "connection", "details": error.details}
+    else:
+        logger.error(f"Tool {tool_name}: Unexpected error - {error}", exc_info=True)
+        return {"success": False, "error": str(error), "error_type": "unexpected"}
+
+
 @mcp.tool()
 def capture_screenshot(
     view_type: str,
@@ -42,7 +68,10 @@ def capture_screenshot(
     Returns:
         Dict with success status, base64-encoded PNG image, view type, and metadata
     """
-    return tools.capture_screenshot(view_type, scroll_position, look_from_axis)
+    try:
+        return tools.capture_screenshot(view_type, scroll_position, look_from_axis)
+    except Exception as e:
+        return _handle_tool_error(e, "capture_screenshot")
 
 
 @mcp.tool()
@@ -52,7 +81,10 @@ def list_scene_nodes() -> dict:
     Returns:
         Dict with nodes list (id, name, type) and total count
     """
-    return tools.list_scene_nodes()
+    try:
+        return tools.list_scene_nodes()
+    except Exception as e:
+        return _handle_tool_error(e, "list_scene_nodes")
 
 
 @mcp.tool()
@@ -68,7 +100,10 @@ def execute_python(code: str) -> dict:
     Returns:
         Dict with success status, result, stdout, and stderr
     """
-    return tools.execute_python(code)
+    try:
+        return tools.execute_python(code)
+    except Exception as e:
+        return _handle_tool_error(e, "execute_python")
 
 
 @mcp.tool()
@@ -82,7 +117,10 @@ def measure_volume(node_id: str, segment_name: Optional[str] = None) -> dict:
     Returns:
         Dict with node_id, node_name, total_volume_mm3, total_volume_ml, and per-segment breakdown
     """
-    return tools.measure_volume(node_id, segment_name)
+    try:
+        return tools.measure_volume(node_id, segment_name)
+    except Exception as e:
+        return _handle_tool_error(e, "measure_volume")
 
 
 @mcp.tool()
@@ -95,7 +133,10 @@ def list_sample_data() -> dict:
     Returns:
         Dict with datasets list (name, category, description), total_count, and source (dynamic/fallback)
     """
-    return tools.list_sample_data()
+    try:
+        return tools.list_sample_data()
+    except Exception as e:
+        return _handle_tool_error(e, "list_sample_data")
 
 
 @mcp.tool()
@@ -110,7 +151,10 @@ def load_sample_data(dataset_name: str) -> dict:
     Returns:
         Dict with success status, dataset_name, loaded_node_id, loaded_node_name, and message
     """
-    return tools.load_sample_data(dataset_name)
+    try:
+        return tools.load_sample_data(dataset_name)
+    except Exception as e:
+        return _handle_tool_error(e, "load_sample_data")
 
 
 @mcp.tool()
@@ -124,7 +168,10 @@ def set_layout(layout: str, gui_mode: str = "full") -> dict:
     Returns:
         Dict with success status, layout, gui_mode, and message
     """
-    return tools.set_layout(layout, gui_mode)
+    try:
+        return tools.set_layout(layout, gui_mode)
+    except Exception as e:
+        return _handle_tool_error(e, "set_layout")
 
 
 # Register Resources
