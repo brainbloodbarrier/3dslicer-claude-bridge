@@ -3,9 +3,9 @@
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Dict, Any
 
-from slicer_mcp.slicer_client import get_client, SlicerClient, SlicerConnectionError
+from slicer_mcp.slicer_client import SlicerConnectionError, get_client
+from slicer_mcp.tools import _parse_json_result
 
 logger = logging.getLogger("slicer-mcp")
 
@@ -30,7 +30,7 @@ def get_scene_resource() -> str:
             "modified_time": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             "node_count": len(nodes),
             "nodes": nodes,
-            "connections": []  # Future: add node connections if needed
+            "connections": [],  # Future: add node connections if needed
         }
 
         logger.info(f"Scene resource retrieved: {len(nodes)} nodes")
@@ -113,22 +113,8 @@ print(json.dumps(result))
     try:
         exec_result = client.exec_python(python_code)
 
-        # Parse JSON result with error handling
-        result = exec_result.get("result", "")
-        if not result or result.strip() in ('', 'null', 'None'):
-            raise SlicerConnectionError(
-                "Empty result from volumes resource",
-                details={"result": result[:100] if result else "None"}
-            )
-
-        try:
-            volumes_data = json.loads(result)
-        except json.JSONDecodeError as e:
-            logger.error(f"Volumes resource parsing failed: {e}")
-            raise SlicerConnectionError(
-                f"Failed to parse volumes resource: {str(e)}",
-                details={"result_preview": result[:100] if result else "None"}
-            )
+        # Parse JSON result using shared helper
+        volumes_data = _parse_json_result(exec_result.get("result", ""), "volumes resource")
 
         logger.info(f"Volumes resource retrieved: {volumes_data['total_count']} volumes")
 
@@ -170,22 +156,8 @@ print(json.dumps(result))
 
         exec_result = client.exec_python(python_code)
 
-        # Parse JSON result with error handling
-        result = exec_result.get("result", "")
-        if not result or result.strip() in ('', 'null', 'None'):
-            raise SlicerConnectionError(
-                "Empty result from status resource",
-                details={"result": result[:100] if result else "None"}
-            )
-
-        try:
-            slicer_info = json.loads(result)
-        except json.JSONDecodeError as e:
-            logger.error(f"Status resource parsing failed: {e}")
-            raise SlicerConnectionError(
-                f"Failed to parse status resource: {str(e)}",
-                details={"result_preview": result[:100] if result else "None"}
-            )
+        # Parse JSON result using shared helper
+        slicer_info = _parse_json_result(exec_result.get("result", ""), "status resource")
 
         # Combine health check and Slicer info
         status_data = {
@@ -195,7 +167,7 @@ print(json.dumps(result))
             "response_time_ms": health["response_time_ms"],
             "scene_loaded": slicer_info["scene_loaded"],
             "python_available": slicer_info["python_available"],
-            "last_check": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+            "last_check": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         }
 
         logger.info(f"Status resource retrieved: connected={status_data['connected']}")
@@ -214,7 +186,7 @@ print(json.dumps(result))
             "scene_loaded": False,
             "python_available": False,
             "last_check": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-            "error": e.message
+            "error": e.message,
         }
 
         return json.dumps(status_data, indent=2)
