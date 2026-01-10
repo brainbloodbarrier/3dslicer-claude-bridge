@@ -2,20 +2,19 @@
 
 import logging
 import sys
-from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
 
 # Import tools and resources
-from slicer_mcp import tools, resources
-from slicer_mcp.slicer_client import SlicerConnectionError, SlicerTimeoutError
+from slicer_mcp import resources, tools
 from slicer_mcp.circuit_breaker import CircuitOpenError
+from slicer_mcp.slicer_client import SlicerConnectionError, SlicerTimeoutError
 
 # Configure logging to stderr (stdout reserved for MCP protocol)
 logging.basicConfig(
     level=logging.INFO,
     format='{"timestamp":"%(asctime)s","level":"%(levelname)s","message":"%(message)s"}',
-    stream=sys.stderr
+    stream=sys.stderr,
 )
 logger = logging.getLogger("slicer-mcp")
 
@@ -27,6 +26,7 @@ logger.info("Initializing MCP Slicer Bridge server")
 
 # Register Tools
 # ==============
+
 
 def _handle_tool_error(error: Exception, tool_name: str) -> dict:
     """Handle tool errors and return standardized error response.
@@ -43,10 +43,20 @@ def _handle_tool_error(error: Exception, tool_name: str) -> dict:
         return {"success": False, "error": str(error), "error_type": "circuit_open"}
     elif isinstance(error, SlicerTimeoutError):
         logger.error(f"Tool {tool_name}: Timeout - {error.message}")
-        return {"success": False, "error": error.message, "error_type": "timeout", "details": error.details}
+        return {
+            "success": False,
+            "error": error.message,
+            "error_type": "timeout",
+            "details": error.details,
+        }
     elif isinstance(error, SlicerConnectionError):
         logger.error(f"Tool {tool_name}: Connection error - {error.message}")
-        return {"success": False, "error": error.message, "error_type": "connection", "details": error.details}
+        return {
+            "success": False,
+            "error": error.message,
+            "error_type": "connection",
+            "details": error.details,
+        }
     else:
         logger.error(f"Tool {tool_name}: Unexpected error - {error}", exc_info=True)
         return {"success": False, "error": str(error), "error_type": "unexpected"}
@@ -54,9 +64,7 @@ def _handle_tool_error(error: Exception, tool_name: str) -> dict:
 
 @mcp.tool()
 def capture_screenshot(
-    view_type: str,
-    scroll_position: Optional[float] = None,
-    look_from_axis: Optional[str] = None
+    view_type: str, scroll_position: float | None = None, look_from_axis: str | None = None
 ) -> dict:
     """Capture a screenshot from a specific 3D Slicer viewport and return as base64 PNG.
 
@@ -107,7 +115,7 @@ def execute_python(code: str) -> dict:
 
 
 @mcp.tool()
-def measure_volume(node_id: str, segment_name: Optional[str] = None) -> dict:
+def measure_volume(node_id: str, segment_name: str | None = None) -> dict:
     """Calculate the volume of a segmentation node or specific segment in cubic millimeters.
 
     Args:
@@ -174,8 +182,102 @@ def set_layout(layout: str, gui_mode: str = "full") -> dict:
         return _handle_tool_error(e, "set_layout")
 
 
+@mcp.tool()
+def import_dicom(folder_path: str) -> dict:
+    """Import DICOM files from a folder into Slicer's DICOM database.
+
+    Args:
+        folder_path: Path to folder containing DICOM files (can be nested)
+
+    Returns:
+        Dict with success status, patients_count, studies_count, series_count, and new_patients count
+    """
+    try:
+        return tools.import_dicom(folder_path)
+    except Exception as e:
+        return _handle_tool_error(e, "import_dicom")
+
+
+@mcp.tool()
+def list_dicom_studies() -> dict:
+    """List all studies in the DICOM database with patient and study metadata.
+
+    Returns:
+        Dict with studies list (patient_id, patient_name, study_uid, study_date, modalities, series_count) and total_count
+    """
+    try:
+        return tools.list_dicom_studies()
+    except Exception as e:
+        return _handle_tool_error(e, "list_dicom_studies")
+
+
+@mcp.tool()
+def list_dicom_series(study_uid: str) -> dict:
+    """List all series within a DICOM study.
+
+    Args:
+        study_uid: DICOM Study UID (from list_dicom_studies)
+
+    Returns:
+        Dict with series list (series_uid, series_number, series_description, modality, file_count) and total_count
+    """
+    try:
+        return tools.list_dicom_series(study_uid)
+    except Exception as e:
+        return _handle_tool_error(e, "list_dicom_series")
+
+
+@mcp.tool()
+def load_dicom_series(series_uid: str) -> dict:
+    """Load a DICOM series as a volume into the scene.
+
+    Args:
+        series_uid: DICOM Series UID (from list_dicom_series)
+
+    Returns:
+        Dict with success status, node_id, node_name, dimensions, spacing, origin, and scalar_range
+    """
+    try:
+        return tools.load_dicom_series(series_uid)
+    except Exception as e:
+        return _handle_tool_error(e, "load_dicom_series")
+
+
+@mcp.tool()
+def run_brain_extraction(input_node_id: str, method: str = "hd-bet", device: str = "auto") -> dict:
+    """Extract brain from MRI/CT scan (skull stripping).
+
+    LONG OPERATION: This tool may take 20 seconds to 5 minutes depending on method and hardware.
+
+    Removes skull and non-brain tissue from brain imaging using AI or atlas-based methods.
+
+    Expected durations:
+    - hd-bet with GPU: ~20-30 seconds
+    - hd-bet with CPU: ~3-5 minutes
+    - swiss (atlas-based): ~2-3 minutes
+
+    Args:
+        input_node_id: MRML node ID of input brain MRI or CT volume
+        method: Extraction method - "hd-bet" (AI, faster with GPU) or "swiss" (atlas-based, CPU only)
+        device: For hd-bet only - "auto" (detect GPU), "cpu" (force CPU), or GPU index ("0", "1", etc.)
+
+    Returns:
+        Dict with:
+        - output_volume_id: MRML node ID of extracted brain volume
+        - output_segmentation_id: MRML node ID of brain mask segmentation
+        - brain_volume_ml: Calculated brain volume in milliliters
+        - processing_time_seconds: Actual processing time
+        - long_operation: Metadata about this being a long operation
+    """
+    try:
+        return tools.run_brain_extraction(input_node_id, method, device)
+    except Exception as e:
+        return _handle_tool_error(e, "run_brain_extraction")
+
+
 # Register Resources
 # ==================
+
 
 @mcp.resource("slicer://scene")
 def get_scene() -> str:
@@ -210,10 +312,13 @@ def get_status() -> str:
 # Main Entry Point
 # ================
 
+
 def main():
     """Run the MCP Slicer Bridge server with stdio transport."""
     logger.info("Starting MCP Slicer Bridge server")
-    logger.info("Registered 7 tools: capture_screenshot, list_scene_nodes, execute_python, measure_volume, list_sample_data, load_sample_data, set_layout")
+    logger.info(
+        "Registered 12 tools: capture_screenshot, list_scene_nodes, execute_python, measure_volume, list_sample_data, load_sample_data, set_layout, import_dicom, list_dicom_studies, list_dicom_series, load_dicom_series, run_brain_extraction"
+    )
     logger.info("Registered 3 resources: slicer://scene, slicer://volumes, slicer://status")
 
     try:
