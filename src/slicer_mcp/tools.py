@@ -814,7 +814,8 @@ def _get_valid_datasets() -> list[str]:
     try:
         sample_data = list_sample_data()
         return [d["name"] for d in sample_data["datasets"]]
-    except Exception:
+    except (SlicerConnectionError, json.JSONDecodeError, KeyError, TypeError) as e:
+        logger.warning(f"Dynamic dataset discovery failed, using fallback: {e}")
         return FALLBACK_SAMPLE_DATASETS
 
 

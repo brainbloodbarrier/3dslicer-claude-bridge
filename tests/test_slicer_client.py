@@ -1113,3 +1113,145 @@ class TestSetLayoutRetry:
 
         with pytest.raises(CircuitOpenError):
             slicer_client.set_layout("FourUp")
+
+
+# =============================================================================
+# JSON Error Handling Tests
+# =============================================================================
+
+
+class TestGetSceneNodesJsonHandling:
+    """Test JSON error handling in get_scene_nodes method."""
+
+    def test_get_scene_nodes_malformed_json_names(self, slicer_client):
+        """get_scene_nodes should raise SlicerConnectionError on malformed JSON for names."""
+        with patch("slicer_mcp.slicer_client.requests.get") as mock_get:
+            # First response (names) returns invalid JSON
+            mock_names_response = Mock()
+            mock_names_response.status_code = 200
+            mock_names_response.text = "not valid json {"
+            mock_names_response.raise_for_status = Mock()
+
+            mock_get.return_value = mock_names_response
+
+            with pytest.raises(SlicerConnectionError) as exc_info:
+                slicer_client.get_scene_nodes()
+
+            assert "parse" in str(exc_info.value).lower()
+
+    def test_get_scene_nodes_malformed_json_ids(self, slicer_client):
+        """get_scene_nodes should raise SlicerConnectionError on malformed JSON for IDs."""
+        with (
+            patch("slicer_mcp.slicer_client.requests.get") as mock_get,
+            patch("slicer_mcp.slicer_client.time.sleep"),  # Skip retry delays
+        ):
+            # Create responses - need enough for retries (initial + 3 retries = 4 attempts)
+            # Each attempt makes 2 requests (names then IDs)
+            def create_response_pair():
+                mock_names = Mock()
+                mock_names.status_code = 200
+                mock_names.text = '["Node1", "Node2"]'
+                mock_names.raise_for_status = Mock()
+
+                mock_ids = Mock()
+                mock_ids.status_code = 200
+                mock_ids.text = "invalid json"  # This causes the error
+                mock_ids.raise_for_status = Mock()
+
+                return [mock_names, mock_ids]
+
+            # Provide responses for all retry attempts
+            all_responses = []
+            for _ in range(4):  # 4 attempts
+                all_responses.extend(create_response_pair())
+            mock_get.side_effect = all_responses
+
+            with pytest.raises(SlicerConnectionError) as exc_info:
+                slicer_client.get_scene_nodes()
+
+            assert "parse" in str(exc_info.value).lower()
+
+    def test_get_scene_nodes_valid_json(self, slicer_client):
+        """get_scene_nodes should successfully parse valid JSON responses."""
+        with patch("slicer_mcp.slicer_client.requests.get") as mock_get:
+            mock_names_response = Mock()
+            mock_names_response.status_code = 200
+            mock_names_response.text = '["Volume1", "Segment1"]'
+            mock_names_response.raise_for_status = Mock()
+
+            mock_ids_response = Mock()
+            mock_ids_response.status_code = 200
+            mock_ids_response.text = '["vtkMRMLScalarVolumeNode1", "vtkMRMLSegmentationNode1"]'
+            mock_ids_response.raise_for_status = Mock()
+
+            mock_get.side_effect = [mock_names_response, mock_ids_response]
+
+            result = slicer_client.get_scene_nodes()
+
+            assert len(result) == 2
+            assert result[0]["id"] == "vtkMRMLScalarVolumeNode1"
+            assert result[0]["name"] == "Volume1"
+            assert result[1]["id"] == "vtkMRMLSegmentationNode1"
+
+
+# =============================================================================
+# get_node_properties Retry Behavior Tests
+# =============================================================================
+
+
+class TestGetNodePropertiesRetry:
+    """Test retry behavior for get_node_properties method."""
+
+    def test_get_node_properties_retries_on_connection_error(self, slicer_client):
+        """get_node_properties should retry on ConnectionError."""
+        with (
+            patch("slicer_mcp.slicer_client.requests.get") as mock_get,
+            patch("slicer_mcp.slicer_client.time.sleep") as mock_sleep,
+        ):
+            mock_success = Mock()
+            mock_success.status_code = 200
+            # get_node_properties parses key=value pairs, not JSON
+            mock_success.text = "name=TestNode\ntype=vtkMRMLScalarVolumeNode"
+            mock_success.raise_for_status = Mock()
+
+            # Fail twice, then succeed
+            mock_get.side_effect = [
+                ConnectionError("Connection refused"),
+                ConnectionError("Connection refused"),
+                mock_success,
+            ]
+
+            result = slicer_client.get_node_properties("vtkMRMLScalarVolumeNode1")
+
+            assert result["name"] == "TestNode"
+            assert mock_get.call_count == 3
+            assert mock_sleep.call_count == 2  # Sleep between retries
+
+    def test_get_node_properties_exhausts_retries(self, slicer_client):
+        """get_node_properties should fail after exhausting retries."""
+        with (
+            patch("slicer_mcp.slicer_client.requests.get") as mock_get,
+            patch("slicer_mcp.slicer_client.time.sleep") as mock_sleep,
+        ):
+            mock_get.side_effect = ConnectionError("Connection refused")
+
+            with pytest.raises(SlicerConnectionError):
+                slicer_client.get_node_properties("vtkMRMLScalarVolumeNode1")
+
+            # Initial call + 3 retries = 4 total
+            assert mock_get.call_count == 4
+
+    def test_get_node_properties_checks_circuit_breaker(self, slicer_client):
+        """get_node_properties should respect circuit breaker state."""
+        from slicer_mcp.circuit_breaker import CircuitOpenError
+        from slicer_mcp.slicer_client import get_circuit_breaker, reset_circuit_breaker
+
+        reset_circuit_breaker()
+        breaker = get_circuit_breaker()
+
+        # Force circuit open by recording failures
+        for _ in range(5):
+            breaker.record_failure()
+
+        with pytest.raises(CircuitOpenError):
+            slicer_client.get_node_properties("vtkMRMLScalarVolumeNode1")

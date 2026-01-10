@@ -7,7 +7,9 @@ import pytest
 
 from slicer_mcp.tools import (
     ValidationError,
+    _build_segment_statistics_code,
     _validate_audit_log_path,
+    execute_python,
     measure_volume,
     validate_mrml_node_id,
     validate_segment_name,
@@ -812,3 +814,103 @@ class TestBrainExtractionLongOperation:
             assert "long_operation" in result
             assert result["long_operation"]["type"] == "brain_extraction"
             assert result["long_operation"]["method"] == "swiss"
+
+
+# =============================================================================
+# Execute Python Code Length Validation Tests
+# =============================================================================
+
+
+class TestExecutePythonCodeLengthValidation:
+    """Test MAX_PYTHON_CODE_LENGTH validation in execute_python."""
+
+    def test_execute_python_accepts_code_at_max_length(self):
+        """execute_python should accept code exactly at MAX_PYTHON_CODE_LENGTH."""
+        from slicer_mcp.constants import MAX_PYTHON_CODE_LENGTH
+
+        # Create code exactly at the limit
+        code = "x" * MAX_PYTHON_CODE_LENGTH
+
+        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+            mock_client = Mock()
+            mock_client.exec_python.return_value = {"success": True, "result": "ok"}
+            mock_get_client.return_value = mock_client
+
+            # Should not raise - code is at the limit, not over
+            result = execute_python(code)
+            assert result["success"] is True
+
+    def test_execute_python_rejects_code_exceeding_max_length(self):
+        """execute_python should reject code exceeding MAX_PYTHON_CODE_LENGTH."""
+        from slicer_mcp.constants import MAX_PYTHON_CODE_LENGTH
+
+        # Create code over the limit
+        oversized_code = "x" * (MAX_PYTHON_CODE_LENGTH + 1)
+
+        with pytest.raises(ValidationError) as exc_info:
+            execute_python(oversized_code)
+
+        assert "maximum length" in str(exc_info.value)
+        assert exc_info.value.field == "code"
+
+    def test_execute_python_error_includes_code_size(self):
+        """ValidationError should include the actual code size."""
+        from slicer_mcp.constants import MAX_PYTHON_CODE_LENGTH
+
+        oversized_code = "x" * (MAX_PYTHON_CODE_LENGTH + 500)
+
+        with pytest.raises(ValidationError) as exc_info:
+            execute_python(oversized_code)
+
+        # Error should mention the code size
+        assert f"{MAX_PYTHON_CODE_LENGTH + 500} bytes" in str(exc_info.value.value)
+
+
+# =============================================================================
+# Segment Statistics Code Generation Tests
+# =============================================================================
+
+
+class TestBuildSegmentStatisticsCode:
+    """Test _build_segment_statistics_code helper generates valid Python."""
+
+    def test_build_segment_statistics_code_contains_imports(self):
+        """Generated code should import SegmentStatistics module."""
+        code = _build_segment_statistics_code("testNode")
+
+        assert "from SegmentStatistics import SegmentStatisticsLogic" in code
+
+    def test_build_segment_statistics_code_uses_provided_variable(self):
+        """Generated code should use the provided segmentation node variable."""
+        code = _build_segment_statistics_code("mySegNode")
+
+        # The variable should be used in GetID() call
+        assert "mySegNode.GetID()" in code
+
+    def test_build_segment_statistics_code_calculates_volume(self):
+        """Generated code should calculate brain_vol_cc."""
+        code = _build_segment_statistics_code("segNode")
+
+        # Should initialize volume variable
+        assert "brain_vol_cc = 0.0" in code
+        # Should compute statistics
+        assert "computeStatistics()" in code
+        # Should look for volume_cc in results
+        assert "volume_cc" in code
+
+    def test_build_segment_statistics_code_handles_errors(self):
+        """Generated code should handle exceptions gracefully."""
+        code = _build_segment_statistics_code("segNode")
+
+        # Should have try/except block
+        assert "try:" in code
+        assert "except Exception as e:" in code
+        # Should print warning instead of crashing
+        assert "Volume calculation warning" in code
+
+    def test_build_segment_statistics_code_different_variable_names(self):
+        """Generated code should work with various variable names."""
+        # Test with different variable names used in the codebase
+        for var_name in ["brainSeg", "segmentation", "seg_node"]:
+            code = _build_segment_statistics_code(var_name)
+            assert f"{var_name}.GetID()" in code

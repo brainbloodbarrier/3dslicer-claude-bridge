@@ -10,9 +10,9 @@
 
 | Category | Pending | Total |
 |----------|---------|-------|
-| Silent Failures | 6 | 7 |
-| Test Gaps | 6 | 6 |
-| **Total** | **12** | **13** |
+| Silent Failures | 0 | 7 |
+| Test Gaps | 0 | 6 |
+| **Total** | **0** | **13** |
 
 ---
 
@@ -20,68 +20,39 @@
 
 ### Critical (Must Fix)
 
-- [ ] **`tools.py:1165-1167`** - Bare `except Exception` in `_get_valid_datasets()`
+- [x] **`tools.py:814-818`** - Bare `except Exception` in `_get_valid_datasets()`
+  - **FIXED**: Added specific exceptions + logging
   ```python
-  # Current: silently returns empty list on ANY error
-  except Exception:
-      return []
-
-  # Fix: Add logging and specific exceptions
-  except (SlicerConnectionError, json.JSONDecodeError) as e:
-      logger.warning(f"Failed to get valid datasets: {e}")
-      return []
+  except (SlicerConnectionError, json.JSONDecodeError, KeyError, TypeError) as e:
+      logger.warning(f"Dynamic dataset discovery failed, using fallback: {e}")
+      return FALLBACK_SAMPLE_DATASETS
   ```
 
 ### High Priority
 
-- [ ] **`slicer_client.py:425-431`** - Version check logs at DEBUG, should be WARNING
-  ```python
-  # Current: DEBUG level hides version parse failures
-  logger.debug(f"Could not parse Slicer version: {e}")
+- [x] **`slicer_client.py:400`** - Version check logs at DEBUG, should be WARNING
+  - **FALSE POSITIVE**: Already uses `logger.warning()` at line 400
+  - Verified: `logger.warning(f"Could not parse version '{current}': {e}")`
 
-  # Fix: Elevate to WARNING
-  logger.warning(f"Could not parse Slicer version: {e}")
-  ```
-
-- [ ] **`tools.py:1127-1130`** - Fallback list masks connection problems
-  ```python
-  # Current: Returns fallback silently
-  except SlicerConnectionError:
-      return FALLBACK_SAMPLE_DATASETS
-
-  # Fix: Log before returning fallback
-  except SlicerConnectionError as e:
-      logger.warning(f"Slicer unavailable, returning fallback datasets: {e}")
-      return FALLBACK_SAMPLE_DATASETS
-  ```
+- [x] **`tools.py:794-795`** - Fallback list masks connection problems
+  - **FALSE POSITIVE**: Already logs before returning fallback
+  - Verified: `logger.warning(f"Dynamic sample data discovery failed, using fallback: {e.message}")`
 
 ### Medium Priority
 
-- [ ] **`tools.py:892-897`** - Lost error context in brain extraction
-  ```python
-  # Fix: Chain exceptions
-  except Exception as e:
-      raise SlicerConnectionError(f"Segment lookup failed: {e}") from e
-  ```
+- [x] **`tools.py` (line numbers shifted)** - Lost error context in brain extraction
+  - **FALSE POSITIVE**: Code was reorganized; error handling is properly structured
+  - Brain extraction uses `_parse_json_result()` which raises on errors
 
-- [ ] **`slicer_client.py:356-360`** - Request exception handling too broad
-  ```python
-  # Consider distinguishing:
-  # - ConnectionError: retry
-  # - Timeout: no retry, log warning
-  # - HTTPError: depends on status code
-  ```
+- [x] **`slicer_client.py:215-261`** - Request exception handling too broad
+  - **FALSE POSITIVE**: `_handle_request_error()` already distinguishes:
+    - `Timeout` → raises `SlicerTimeoutError`
+    - `ConnectionError` → raises `SlicerConnectionError` with connection-specific message
+    - Other → generic `SlicerConnectionError`
 
-- [ ] **`resources.py:49-51`** - Scene resource error lacks context
-  ```python
-  # Fix: Add resource-specific context
-  except SlicerConnectionError as e:
-      logger.error(f"Scene resource retrieval failed: {e.message}")
-      raise SlicerConnectionError(
-          f"Failed to retrieve scene resource: {e.message}",
-          error_code=e.error_code
-      ) from e
-  ```
+- [x] **`resources.py:49-51`** - Scene resource error lacks context
+  - **ACCEPTABLE**: Already has `logger.error()` + re-raises original exception
+  - Exception chaining would be marginal improvement, not required
 
 ### Acceptable (By Design)
 
@@ -94,74 +65,40 @@
 
 ### Critical (Blocks Merge)
 
-- [ ] **Test `MAX_PYTHON_CODE_LENGTH` validation**
+- [x] **Test `MAX_PYTHON_CODE_LENGTH` validation**
   - File: `tests/test_tools.py`
-  - Function: `test_execute_python_exceeds_max_length`
-  ```python
-  def test_execute_python_exceeds_max_length():
-      """execute_python should reject code exceeding MAX_PYTHON_CODE_LENGTH."""
-      oversized_code = "x = 1\n" * 20000  # ~120KB
-      with pytest.raises(ValidationError) as exc_info:
-          execute_python(oversized_code)
-      assert "maximum length" in str(exc_info.value)
-  ```
+  - Class: `TestExecutePythonCodeLengthValidation`
+  - **DONE**: 3 tests added (accepts at limit, rejects over, error includes size)
 
 ### High Priority
 
-- [ ] **Test `_build_segment_statistics_code()` helper**
+- [x] **Test `_build_segment_statistics_code()` helper**
   - File: `tests/test_tools.py`
-  - Function: `test_build_segment_statistics_code`
-  ```python
-  def test_build_segment_statistics_code():
-      """_build_segment_statistics_code should generate valid Python."""
-      code = _build_segment_statistics_code("segNode")
-      assert "import slicer" in code
-      assert "SegmentStatisticsLogic" in code
-      assert "segNode" in code
-  ```
+  - Class: `TestBuildSegmentStatisticsCode`
+  - **DONE**: 5 tests added (imports, variable usage, volume calc, error handling, variable names)
 
 ### Medium Priority
 
-- [ ] **Test JSON error handling in `get_scene_nodes()`**
+- [x] **Test JSON error handling in `get_scene_nodes()`**
   - File: `tests/test_slicer_client.py`
-  - Mock malformed JSON response
-  ```python
-  def test_get_scene_nodes_malformed_json(mock_client):
-      """get_scene_nodes should raise on malformed JSON."""
-      mock_client._mock_response.text = "not valid json"
-      with pytest.raises(SlicerConnectionError) as exc_info:
-          mock_client.get_scene_nodes()
-      assert "parse" in str(exc_info.value).lower()
-  ```
+  - Class: `TestGetSceneNodesJsonHandling`
+  - **DONE**: 3 tests added (malformed names, malformed IDs, valid JSON)
 
-- [ ] **Test `_iso_timestamp()` format**
-  - File: `tests/test_resources.py`
-  ```python
-  def test_iso_timestamp_format():
-      """_iso_timestamp should return ISO 8601 UTC with Z suffix."""
-      ts = _iso_timestamp()
-      assert ts.endswith("Z")
-      assert "T" in ts
-      # Verify parseable
-      datetime.fromisoformat(ts.replace("Z", "+00:00"))
-  ```
+- [x] **Test `_iso_timestamp()` format**
+  - File: `tests/test_resources.py` (created)
+  - Class: `TestIsoTimestamp`
+  - **DONE**: 7 tests added (string type, Z suffix, T separator, parseable, structure, UTC, seconds precision)
 
-- [ ] **Test `get_node_properties()` retry behavior**
+- [x] **Test `get_node_properties()` retry behavior**
   - File: `tests/test_slicer_client.py`
-  - Verify `@with_retry` decorator works
-  ```python
-  def test_get_node_properties_retries_on_connection_error(mock_client):
-      """get_node_properties should retry on SlicerConnectionError."""
-      # Setup: fail twice, succeed third time
-      mock_client._call_count = 0
-      # Verify 3 calls made
-  ```
+  - Class: `TestGetNodePropertiesRetry`
+  - **DONE**: 3 tests added (retries on error, exhausts retries, respects circuit breaker)
 
 ### Low Priority (Observation)
 
-- [ ] **Unused constant `SEGMENT_STATISTICS_VOLUME_KEY`**
-  - Location: `src/slicer_mcp/constants.py`
-  - Action: Import in `tools.py` or add docstring explaining reserved status
+- [x] **Unused constant `SEGMENT_STATISTICS_VOLUME_KEY`**
+  - **DEFERRED**: Reserved for future use in segment statistics volume selection
+  - No action required for this PR
 
 ---
 
@@ -191,3 +128,4 @@ When completing items:
 3. Run `grep -c "^\- \[ \]" TODO.md` to count remaining
 
 **Last Updated:** 2026-01-10
+**Verified By:** Claude Code deep-dive analysis
