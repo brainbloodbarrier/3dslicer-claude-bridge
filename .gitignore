@@ -43,6 +43,12 @@ htmlcov/
 # UV
 .uv/
 
+# Ruff cache
+.ruff_cache/
+
+# MCP local config
+.mcp.json
+
 # OS
 .DS_Store
 Thumbs.db
