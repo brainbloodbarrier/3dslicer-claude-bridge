@@ -22,9 +22,10 @@ Usage:
 import logging
 import threading
 import time
+from collections.abc import Callable
 from enum import Enum
 from functools import wraps
-from typing import Callable, TypeVar
+from typing import TypeVar
 
 from slicer_mcp.constants import (
     CIRCUIT_BREAKER_FAILURE_THRESHOLD,
@@ -34,13 +35,14 @@ from slicer_mcp.constants import (
 logger = logging.getLogger("slicer-mcp")
 
 # Type variable for generic return type
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 class CircuitState(Enum):
     """Circuit breaker states."""
-    CLOSED = "closed"      # Normal operation, requests pass through
-    OPEN = "open"          # Failing fast, requests rejected
+
+    CLOSED = "closed"  # Normal operation, requests pass through
+    OPEN = "open"  # Failing fast, requests rejected
     HALF_OPEN = "half_open"  # Testing recovery, allowing one request
 
 
@@ -187,14 +189,23 @@ class CircuitBreaker:
             logger.info(f"CircuitBreaker '{self.name}' manually reset")
 
 
-def with_circuit_breaker(breaker: CircuitBreaker) -> Callable[[Callable[..., T]], Callable[..., T]]:
+def with_circuit_breaker(
+    breaker: CircuitBreaker,
+    failure_exceptions: tuple[type[Exception], ...] = (ConnectionError,),
+) -> Callable[[Callable[..., T]], Callable[..., T]]:
     """Decorator to wrap a function with circuit breaker protection.
 
     If the circuit is open, raises CircuitOpenError immediately without calling
     the wrapped function. Records successes and failures to manage circuit state.
 
+    Only exceptions specified in failure_exceptions will trip the circuit.
+    Other exceptions (validation errors, timeouts, etc.) pass through without
+    affecting circuit state.
+
     Args:
         breaker: CircuitBreaker instance to use
+        failure_exceptions: Tuple of exception types that should trip the circuit.
+            Defaults to (ConnectionError,). Only these exceptions count as failures.
 
     Returns:
         Decorator function
@@ -202,10 +213,11 @@ def with_circuit_breaker(breaker: CircuitBreaker) -> Callable[[Callable[..., T]]
     Example:
         breaker = CircuitBreaker(name="api", failure_threshold=5)
 
-        @with_circuit_breaker(breaker)
+        @with_circuit_breaker(breaker, failure_exceptions=(ConnectionError, IOError))
         def call_api():
             return requests.get("http://api.example.com")
     """
+
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
         @wraps(func)
         def wrapper(*args, **kwargs) -> T:
@@ -214,16 +226,19 @@ def with_circuit_breaker(breaker: CircuitBreaker) -> Callable[[Callable[..., T]]
                     f"Circuit breaker '{breaker.name}' is OPEN. "
                     f"Service unavailable, will retry in {breaker.recovery_timeout}s",
                     breaker_name=breaker.name,
-                    recovery_timeout=breaker.recovery_timeout
+                    recovery_timeout=breaker.recovery_timeout,
                 )
 
             try:
                 result = func(*args, **kwargs)
                 breaker.record_success()
                 return result
-            except Exception as e:
+            except failure_exceptions:
+                # Only connection-related exceptions trip the circuit
                 breaker.record_failure()
                 raise
+            # Other exceptions pass through without affecting circuit state
 
         return wrapper
+
     return decorator

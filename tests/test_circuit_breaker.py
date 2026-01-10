@@ -1,13 +1,13 @@
 """Tests for circuit breaker pattern implementation."""
 
-import pytest
 import time
-from unittest.mock import patch
+
+import pytest
 
 from slicer_mcp.circuit_breaker import (
     CircuitBreaker,
-    CircuitState,
     CircuitOpenError,
+    CircuitState,
     with_circuit_breaker,
 )
 
@@ -179,17 +179,30 @@ class TestCircuitBreakerDecorator:
         assert cb.failure_count == 0  # Reset after success
 
     def test_decorator_records_failure(self):
-        """Decorator should record failure when function raises."""
+        """Decorator should record failure when function raises a failure exception."""
         cb = CircuitBreaker(name="test", failure_threshold=3)
 
-        @with_circuit_breaker(cb)
+        @with_circuit_breaker(cb, failure_exceptions=(ConnectionError,))
         def failing_function():
-            raise ValueError("test error")
+            raise ConnectionError("test error")
+
+        with pytest.raises(ConnectionError):
+            failing_function()
+
+        assert cb.failure_count == 1
+
+    def test_decorator_ignores_non_failure_exceptions(self):
+        """Decorator should not trip circuit for non-failure exceptions."""
+        cb = CircuitBreaker(name="test", failure_threshold=3)
+
+        @with_circuit_breaker(cb, failure_exceptions=(ConnectionError,))
+        def failing_function():
+            raise ValueError("validation error")
 
         with pytest.raises(ValueError):
             failing_function()
 
-        assert cb.failure_count == 1
+        assert cb.failure_count == 0  # ValueError shouldn't trip the circuit
 
     def test_decorator_raises_circuit_open_error(self):
         """Decorator should raise CircuitOpenError when circuit is OPEN."""
@@ -222,17 +235,17 @@ class TestCircuitBreakerDecorator:
         """Decorator should open circuit after failure threshold reached."""
         cb = CircuitBreaker(name="test", failure_threshold=2)
 
-        @with_circuit_breaker(cb)
+        @with_circuit_breaker(cb, failure_exceptions=(ConnectionError,))
         def failing_function():
-            raise RuntimeError("failure")
+            raise ConnectionError("failure")
 
         # First failure
-        with pytest.raises(RuntimeError):
+        with pytest.raises(ConnectionError):
             failing_function()
         assert cb.state == CircuitState.CLOSED
 
         # Second failure - opens circuit
-        with pytest.raises(RuntimeError):
+        with pytest.raises(ConnectionError):
             failing_function()
         assert cb.state == CircuitState.OPEN
 
@@ -303,9 +316,7 @@ class TestCircuitOpenError:
     def test_error_contains_breaker_info(self):
         """Error should contain breaker name and recovery timeout."""
         error = CircuitOpenError(
-            message="Circuit is open",
-            breaker_name="test_breaker",
-            recovery_timeout=30.0
+            message="Circuit is open", breaker_name="test_breaker", recovery_timeout=30.0
         )
 
         assert error.breaker_name == "test_breaker"

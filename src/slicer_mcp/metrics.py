@@ -23,8 +23,8 @@ Metrics exported:
 import logging
 import os
 import time
+from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Generator
 
 logger = logging.getLogger("slicer-mcp")
 
@@ -39,7 +39,7 @@ class NullMetric:
     This allows code to call metric methods without checking if metrics are enabled.
     """
 
-    def labels(self, *args, **kwargs) -> 'NullMetric':
+    def labels(self, *args, **kwargs) -> "NullMetric":
         """Return self for chaining."""
         return self
 
@@ -63,33 +63,25 @@ class NullMetric:
 # Initialize metrics based on environment
 if METRICS_ENABLED:
     try:
-        from prometheus_client import Counter, Histogram, Gauge
+        from prometheus_client import Counter, Gauge, Histogram
 
         logger.info("Metrics collection enabled (prometheus_client)")
 
         REQUEST_DURATION = Histogram(
-            'slicer_request_duration_seconds',
-            'Request duration in seconds',
-            ['operation'],
-            buckets=(0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0)
+            "slicer_request_duration_seconds",
+            "Request duration in seconds",
+            ["operation"],
+            buckets=(0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0),
         )
 
-        REQUEST_TOTAL = Counter(
-            'slicer_request_total',
-            'Total requests',
-            ['operation', 'status']
-        )
+        REQUEST_TOTAL = Counter("slicer_request_total", "Total requests", ["operation", "status"])
 
-        RETRY_TOTAL = Counter(
-            'slicer_retry_total',
-            'Total retry attempts',
-            ['operation']
-        )
+        RETRY_TOTAL = Counter("slicer_retry_total", "Total retry attempts", ["operation"])
 
         CIRCUIT_BREAKER_STATE = Gauge(
-            'slicer_circuit_breaker_state',
-            'Circuit breaker state (0=closed, 1=half-open, 2=open)',
-            ['breaker_name']
+            "slicer_circuit_breaker_state",
+            "Circuit breaker state (0=closed, 1=half-open, 2=open)",
+            ["breaker_name"],
         )
 
         # Map circuit states to numeric values for Gauge
@@ -171,9 +163,7 @@ def update_circuit_breaker_state(breaker_name: str, state: str) -> None:
         state: Current state ("closed", "half_open", "open")
     """
     if state in CIRCUIT_STATE_VALUES:
-        CIRCUIT_BREAKER_STATE.labels(breaker_name=breaker_name).set(
-            CIRCUIT_STATE_VALUES[state]
-        )
+        CIRCUIT_BREAKER_STATE.labels(breaker_name=breaker_name).set(CIRCUIT_STATE_VALUES[state])
 
 
 def is_metrics_enabled() -> bool:
