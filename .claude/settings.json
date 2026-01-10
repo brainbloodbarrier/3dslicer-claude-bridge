@@ -1,0 +1,46 @@
+{
+  "$schema": "https://raw.githubusercontent.com/anthropics/claude-code/main/schemas/settings.json",
+  "permissions": {
+    "defaultMode": "default",
+    "allow": [
+      "Bash(uv run:*)",
+      "Bash(git:*)",
+      "Bash(pytest:*)",
+      "Read(**/src/**)",
+      "Read(**/tests/**)",
+      "Read(**/ref/**)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '📋 Project: NC_Slicer-Claude-Bridge | Run /todo for pending items | Run /bootstrap-env if missing plugins'"
+          }
+        ]
+      }
+    ]
+  },
+  "recommendedPlugins": {
+    "core": [
+      "context7",
+      "feature-dev",
+      "code-review",
+      "commit-commands",
+      "pr-review-toolkit"
+    ],
+    "python": [
+      "pyright-lsp"
+    ],
+    "integrations": [
+      "greptile"
+    ],
+    "styles": [
+      "explanatory-output-style",
+      "learning-output-style"
+    ]
+  }
+}
