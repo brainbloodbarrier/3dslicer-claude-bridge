@@ -69,9 +69,13 @@ def capture_screenshot(
     """Capture a screenshot from a specific 3D Slicer viewport and return as base64 PNG.
 
     Args:
-        view_type: Viewport type - "axial" (Red slice), "sagittal" (Yellow slice), "coronal" (Green slice), "3d" (3D view), "full" (complete window)
+        view_type: Viewport type - "axial" (Red slice),
+            "sagittal" (Yellow slice), "coronal" (Green slice),
+            "3d" (3D view), "full" (complete window)
         scroll_position: Slice position from 0.0 to 1.0 (only for axial/sagittal/coronal views)
-        look_from_axis: Camera axis for 3D view - "left", "right", "anterior", "posterior", "superior", "inferior" (only for 3d view)
+        look_from_axis: Camera axis for 3D view - "left", "right",
+            "anterior", "posterior", "superior", "inferior"
+            (only for 3d view)
 
     Returns:
         Dict with success status, base64-encoded PNG image, view type, and metadata
@@ -139,7 +143,8 @@ def list_sample_data() -> dict:
     Falls back to a known list if dynamic discovery fails.
 
     Returns:
-        Dict with datasets list (name, category, description), total_count, and source (dynamic/fallback)
+        Dict with datasets list (name, category, description),
+            total_count, and source (dynamic/fallback)
     """
     try:
         return tools.list_sample_data()
@@ -170,8 +175,13 @@ def set_layout(layout: str, gui_mode: str = "full") -> dict:
     """Set the viewer layout and GUI mode in 3D Slicer.
 
     Args:
-        layout: Layout name - "FourUp" (standard 4-panel), "OneUp3D" (single 3D view), "OneUpRedSlice" (single axial), "Conventional" (traditional radiology), "SideBySide" (comparison view)
-        gui_mode: GUI display mode - "full" (complete GUI) or "viewers" (viewers only, minimal chrome)
+        layout: Layout name - "FourUp" (standard 4-panel),
+            "OneUp3D" (single 3D view),
+            "OneUpRedSlice" (single axial),
+            "Conventional" (traditional radiology),
+            "SideBySide" (comparison view)
+        gui_mode: GUI display mode - "full" (complete GUI)
+            or "viewers" (viewers only, minimal chrome)
 
     Returns:
         Dict with success status, layout, gui_mode, and message
@@ -190,7 +200,8 @@ def import_dicom(folder_path: str) -> dict:
         folder_path: Path to folder containing DICOM files (can be nested)
 
     Returns:
-        Dict with success status, patients_count, studies_count, series_count, and new_patients count
+        Dict with success status, patients_count, studies_count,
+            series_count, and new_patients count
     """
     try:
         return tools.import_dicom(folder_path)
@@ -203,7 +214,8 @@ def list_dicom_studies() -> dict:
     """List all studies in the DICOM database with patient and study metadata.
 
     Returns:
-        Dict with studies list (patient_id, patient_name, study_uid, study_date, modalities, series_count) and total_count
+        Dict with studies list (patient_id, patient_name, study_uid,
+            study_date, modalities, series_count) and total_count
     """
     try:
         return tools.list_dicom_studies()
@@ -219,7 +231,8 @@ def list_dicom_series(study_uid: str) -> dict:
         study_uid: DICOM Study UID (from list_dicom_studies)
 
     Returns:
-        Dict with series list (series_uid, series_number, series_description, modality, file_count) and total_count
+        Dict with series list (series_uid, series_number,
+            series_description, modality, file_count) and total_count
     """
     try:
         return tools.list_dicom_series(study_uid)
@@ -258,8 +271,10 @@ def run_brain_extraction(input_node_id: str, method: str = "hd-bet", device: str
 
     Args:
         input_node_id: MRML node ID of input brain MRI or CT volume
-        method: Extraction method - "hd-bet" (AI, faster with GPU) or "swiss" (atlas-based, CPU only)
-        device: For hd-bet only - "auto" (detect GPU), "cpu" (force CPU), or GPU index ("0", "1", etc.)
+        method: Extraction method - "hd-bet" (AI, faster with GPU)
+            or "swiss" (atlas-based, CPU only)
+        device: For hd-bet only - "auto" (detect GPU),
+            "cpu" (force CPU), or GPU index ("0", "1", etc.)
 
     Returns:
         Dict with:
@@ -294,7 +309,8 @@ def get_volumes() -> str:
     """Get all loaded imaging volumes with metadata including dimensions, spacing, and file paths.
 
     Returns:
-        JSON string with volumes list (id, name, type, dimensions, spacing, origin, scalar_range, file_path) and total_count
+        JSON string with volumes list (id, name, type, dimensions,
+            spacing, origin, scalar_range, file_path) and total_count
     """
     return resources.get_volumes_resource()
 
@@ -304,7 +320,9 @@ def get_status() -> str:
     """Get health status and connection information for 3D Slicer.
 
     Returns:
-        JSON string with connected status, slicer_version, webserver_url, response_time_ms, scene_loaded, python_available, and last_check timestamp
+        JSON string with connected status, slicer_version,
+            webserver_url, response_time_ms, scene_loaded,
+            python_available, and last_check timestamp
     """
     return resources.get_status_resource()
 
@@ -317,7 +335,10 @@ def main():
     """Run the MCP Slicer Bridge server with stdio transport."""
     logger.info("Starting MCP Slicer Bridge server")
     logger.info(
-        "Registered 12 tools: capture_screenshot, list_scene_nodes, execute_python, measure_volume, list_sample_data, load_sample_data, set_layout, import_dicom, list_dicom_studies, list_dicom_series, load_dicom_series, run_brain_extraction"
+        "Registered 12 tools: capture_screenshot, list_scene_nodes, "
+        "execute_python, measure_volume, list_sample_data, load_sample_data, "
+        "set_layout, import_dicom, list_dicom_studies, list_dicom_series, "
+        "load_dicom_series, run_brain_extraction"
     )
     logger.info("Registered 3 resources: slicer://scene, slicer://volumes, slicer://status")
 

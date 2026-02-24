@@ -1,13 +1,13 @@
 """HTTP client for 3D Slicer WebServer API."""
 
 import json
-import re
 import logging
+import re
 import threading
 import time
 from collections.abc import Callable
 from functools import wraps
-from typing import Any, NoReturn, Optional, TypeVar
+from typing import Any, NoReturn, TypeVar
 
 import requests
 from requests.exceptions import ConnectionError, RequestException, Timeout
@@ -106,6 +106,7 @@ def with_retry(
 
             # Should never reach here - all paths should either return or raise
             raise RuntimeError(f"Retry logic error in {func.__name__}")
+
         return wrapper
 
     return decorator
@@ -114,7 +115,7 @@ def with_retry(
 # Singleton instance management
 # Lock initialized at module load time to avoid race conditions
 # (module loading is guaranteed to be single-threaded in Python)
-_client_instance: Optional["SlicerClient"] = None
+_client_instance: "SlicerClient | None" = None
 _client_lock: threading.Lock = threading.Lock()
 
 # Global circuit breaker for Slicer connection protection
@@ -199,7 +200,21 @@ class SlicerClient:
         if base_url is None:
             base_url = os.environ.get("SLICER_URL", DEFAULT_SLICER_URL)
         if timeout is None:
-            timeout = int(os.environ.get("SLICER_TIMEOUT", str(DEFAULT_TIMEOUT_SECONDS)))
+            timeout_str = os.environ.get("SLICER_TIMEOUT", str(DEFAULT_TIMEOUT_SECONDS))
+            try:
+                timeout = int(timeout_str)
+                if timeout <= 0:
+                    logger.warning(
+                        f"SLICER_TIMEOUT must be positive, got {timeout}. "
+                        f"Using default: {DEFAULT_TIMEOUT_SECONDS}s"
+                    )
+                    timeout = DEFAULT_TIMEOUT_SECONDS
+            except ValueError:
+                logger.warning(
+                    f"Invalid SLICER_TIMEOUT value: '{timeout_str}'. "
+                    f"Using default: {DEFAULT_TIMEOUT_SECONDS}s"
+                )
+                timeout = DEFAULT_TIMEOUT_SECONDS
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         # Note: We use direct requests.get/post instead of Session to avoid
@@ -536,7 +551,8 @@ class SlicerClient:
         """Capture screenshot from 3D view.
 
         Args:
-            look_from_axis: Camera axis - left, right, anterior, posterior, superior, inferior (optional)
+            look_from_axis: Camera axis - left, right, anterior,
+                posterior, superior, inferior (optional)
 
         Returns:
             PNG image as bytes
@@ -649,8 +665,9 @@ class SlicerClient:
                 # Combine into node list
                 nodes = []
                 for node_id, node_name in zip(ids, names):
-                    # Extract node type from ID (e.g., vtkMRMLScalarVolumeNode1 -> vtkMRMLScalarVolumeNode)
-                    node_type = re.sub(r'\d+$', '', node_id)
+                    # Extract node type from ID
+                    # (e.g., vtkMRMLScalarVolumeNode1 -> vtkMRMLScalarVolumeNode)
+                    node_type = re.sub(r"\d+$", "", node_id)
                     nodes.append({"id": node_id, "name": node_name, "type": node_type})
 
                 logger.info(f"Fetched {len(nodes)} scene nodes")
@@ -756,7 +773,10 @@ class SlicerClient:
             except (ConnectionError, Timeout, RequestException) as e:
                 extra_details = {
                     "dataset_name": name,
-                    "suggestion": "Check dataset name is valid (MRHead, CTChest, CTACardio, DTIBrain, MRBrainTumor1, MRBrainTumor2)",
+                    "suggestion": (
+                        "Check dataset name is valid (MRHead, CTChest,"
+                        " CTACardio, DTIBrain, MRBrainTumor1, MRBrainTumor2)"
+                    ),
                 }
                 self._handle_request_error(f"Sample data load '{name}'", e, extra_details)
 
@@ -807,6 +827,9 @@ class SlicerClient:
                 extra_details = {
                     "layout": layout,
                     "gui_mode": gui_mode,
-                    "suggestion": "Check layout name is valid (FourUp, OneUp3D, OneUpRedSlice, Conventional, SideBySide)",
+                    "suggestion": (
+                        "Check layout name is valid (FourUp, OneUp3D,"
+                        " OneUpRedSlice, Conventional, SideBySide)"
+                    ),
                 }
                 self._handle_request_error("Layout change", e, extra_details)

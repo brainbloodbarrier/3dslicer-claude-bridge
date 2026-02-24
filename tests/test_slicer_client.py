@@ -9,16 +9,6 @@ from requests.exceptions import ConnectionError, Timeout
 from slicer_mcp.slicer_client import SlicerClient, SlicerConnectionError, SlicerTimeoutError
 
 
-@pytest.fixture(autouse=True)
-def reset_circuit_breaker_fixture():
-    """Reset circuit breaker before each test to ensure test isolation."""
-    from slicer_mcp.slicer_client import reset_circuit_breaker
-
-    reset_circuit_breaker()
-    yield
-    reset_circuit_breaker()
-
-
 @pytest.fixture
 def slicer_client():
     """Create a SlicerClient instance for testing."""
@@ -64,6 +54,24 @@ class TestSlicerClientInit:
         client = SlicerClient(base_url="http://explicit:1234", timeout=45)
         assert client.base_url == "http://explicit:1234"
         assert client.timeout == 45
+
+    def test_invalid_timeout_env_falls_back_to_default(self):
+        """Non-numeric SLICER_TIMEOUT should fall back to default."""
+        with patch.dict("os.environ", {"SLICER_TIMEOUT": "not_a_number"}):
+            client = SlicerClient()
+            assert client.timeout == 30  # DEFAULT_TIMEOUT_SECONDS
+
+    def test_negative_timeout_env_falls_back_to_default(self):
+        """Negative SLICER_TIMEOUT should fall back to default."""
+        with patch.dict("os.environ", {"SLICER_TIMEOUT": "-5"}):
+            client = SlicerClient()
+            assert client.timeout == 30  # DEFAULT_TIMEOUT_SECONDS
+
+    def test_zero_timeout_env_falls_back_to_default(self):
+        """Zero SLICER_TIMEOUT should fall back to default."""
+        with patch.dict("os.environ", {"SLICER_TIMEOUT": "0"}):
+            client = SlicerClient()
+            assert client.timeout == 30  # DEFAULT_TIMEOUT_SECONDS
 
 
 class TestHealthCheck:
@@ -298,7 +306,6 @@ class TestGetSceneNodes:
 
             assert result == []
 
-
     def test_get_scene_nodes_preserves_digits_in_type_name(self, slicer_client):
         """Node type extraction should only strip trailing digits."""
         mock_names_response = Mock()
@@ -474,7 +481,7 @@ class TestScreenshotRetry:
         """Test get_3d_screenshot retries on SlicerConnectionError."""
         with (
             patch("slicer_mcp.slicer_client.requests.get") as mock_get,
-            patch("slicer_mcp.slicer_client.time.sleep") as mock_sleep,
+            patch("slicer_mcp.slicer_client.time.sleep") as _mock_sleep,
         ):
             mock_success = Mock()
             mock_success.status_code = 200
@@ -497,7 +504,7 @@ class TestScreenshotRetry:
         """Test get_full_screenshot retries on SlicerConnectionError."""
         with (
             patch("slicer_mcp.slicer_client.requests.get") as mock_get,
-            patch("slicer_mcp.slicer_client.time.sleep") as mock_sleep,
+            patch("slicer_mcp.slicer_client.time.sleep") as _mock_sleep,
         ):
             mock_success = Mock()
             mock_success.status_code = 200
@@ -519,7 +526,7 @@ class TestScreenshotRetry:
         """Test get_screenshot fails after exhausting all retries."""
         with (
             patch("slicer_mcp.slicer_client.requests.get") as mock_get,
-            patch("slicer_mcp.slicer_client.time.sleep") as mock_sleep,
+            patch("slicer_mcp.slicer_client.time.sleep") as _mock_sleep,
         ):
             # All calls fail
             mock_get.side_effect = ConnectionError("Connection refused")
@@ -1055,7 +1062,7 @@ class TestLoadSampleDataRetry:
         """Test load_sample_data fails after exhausting retries."""
         with (
             patch("slicer_mcp.slicer_client.requests.get") as mock_get,
-            patch("slicer_mcp.slicer_client.time.sleep") as mock_sleep,
+            patch("slicer_mcp.slicer_client.time.sleep") as _mock_sleep,
         ):
             mock_get.side_effect = ConnectionError("Connection refused")
 
@@ -1109,7 +1116,7 @@ class TestSetLayoutRetry:
         """Test set_layout fails after exhausting retries."""
         with (
             patch("slicer_mcp.slicer_client.requests.get") as mock_get,
-            patch("slicer_mcp.slicer_client.time.sleep") as mock_sleep,
+            patch("slicer_mcp.slicer_client.time.sleep") as _mock_sleep,
         ):
             mock_get.side_effect = ConnectionError("Connection refused")
 
@@ -1250,7 +1257,7 @@ class TestGetNodePropertiesRetry:
         """get_node_properties should fail after exhausting retries."""
         with (
             patch("slicer_mcp.slicer_client.requests.get") as mock_get,
-            patch("slicer_mcp.slicer_client.time.sleep") as mock_sleep,
+            patch("slicer_mcp.slicer_client.time.sleep") as _mock_sleep,
         ):
             mock_get.side_effect = ConnectionError("Connection refused")
 

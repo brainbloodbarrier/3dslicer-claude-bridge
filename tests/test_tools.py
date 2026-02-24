@@ -5,6 +5,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
+from slicer_mcp.slicer_client import SlicerConnectionError
 from slicer_mcp.tools import (
     ValidationError,
     _build_segment_statistics_code,
@@ -186,7 +187,13 @@ class TestMeasureVolumeValidation:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
-                "result": '{"node_id": "vtkMRMLSegmentationNode1", "node_name": "Test", "total_volume_mm3": 1000, "total_volume_ml": 1.0, "segments": []}',
+                "result": (
+                    '{"node_id": "vtkMRMLSegmentationNode1",'
+                    ' "node_name": "Test",'
+                    ' "total_volume_mm3": 1000,'
+                    ' "total_volume_ml": 1.0,'
+                    ' "segments": []}'
+                ),
             }
             mock_get_client.return_value = mock_client
 
@@ -211,7 +218,13 @@ class TestMeasureVolumeCodeGeneration:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
-                "result": '{"node_id": "vtkMRMLSegmentationNode1", "node_name": "Test", "total_volume_mm3": 1000, "total_volume_ml": 1.0, "segments": []}',
+                "result": (
+                    '{"node_id": "vtkMRMLSegmentationNode1",'
+                    ' "node_name": "Test",'
+                    ' "total_volume_mm3": 1000,'
+                    ' "total_volume_ml": 1.0,'
+                    ' "segments": []}'
+                ),
             }
             mock_get_client.return_value = mock_client
 
@@ -234,7 +247,14 @@ class TestMeasureVolumeCodeGeneration:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
-                "result": '{"node_id": "vtkMRMLSegmentationNode1", "node_name": "Test", "total_volume_mm3": 1000, "total_volume_ml": 1.0, "segments": [{"name": "Tumor", "volume_mm3": 1000, "volume_ml": 1.0}]}',
+                "result": (
+                    '{"node_id": "vtkMRMLSegmentationNode1",'
+                    ' "node_name": "Test",'
+                    ' "total_volume_mm3": 1000,'
+                    ' "total_volume_ml": 1.0,'
+                    ' "segments": [{"name": "Tumor",'
+                    ' "volume_mm3": 1000, "volume_ml": 1.0}]}'
+                ),
             }
             mock_get_client.return_value = mock_client
 
@@ -254,7 +274,13 @@ class TestMeasureVolumeCodeGeneration:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
-                "result": '{"node_id": "vtkMRMLSegmentationNode1", "node_name": "Test", "total_volume_mm3": 1000, "total_volume_ml": 1.0, "segments": []}',
+                "result": (
+                    '{"node_id": "vtkMRMLSegmentationNode1",'
+                    ' "node_name": "Test",'
+                    ' "total_volume_mm3": 1000,'
+                    ' "total_volume_ml": 1.0,'
+                    ' "segments": []}'
+                ),
             }
             mock_get_client.return_value = mock_client
 
@@ -273,7 +299,14 @@ class TestMeasureVolumeCodeGeneration:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
-                "result": '{"node_id": "vtkMRMLSegmentationNode1", "node_name": "Test", "total_volume_mm3": 1000, "total_volume_ml": 1.0, "segments": [{"name": "Brain", "volume_mm3": 1000, "volume_ml": 1.0}]}',
+                "result": (
+                    '{"node_id": "vtkMRMLSegmentationNode1",'
+                    ' "node_name": "Test",'
+                    ' "total_volume_mm3": 1000,'
+                    ' "total_volume_ml": 1.0,'
+                    ' "segments": [{"name": "Brain",'
+                    ' "volume_mm3": 1000, "volume_ml": 1.0}]}'
+                ),
             }
             mock_get_client.return_value = mock_client
 
@@ -386,11 +419,8 @@ class TestAuditLogPathValidation:
         assert os.path.isabs(result)
         assert result.endswith("audit.log")
 
-
     def test_symlink_to_forbidden_directory_rejected(self, tmp_path):
         """Test that symlink pointing to forbidden directory is rejected."""
-        import os
-
         # Create a symlink pointing to /etc
         symlink_path = tmp_path / "innocent.log"
         symlink_path.symlink_to("/etc/audit.log")
@@ -674,7 +704,6 @@ class TestDICOMValidation:
 
         assert "not a directory" in str(exc_info.value)
 
-
     def test_validate_folder_path_symlink_resolved(self, tmp_path):
         """Test that symlinks are resolved to real path."""
         from slicer_mcp.tools import validate_folder_path
@@ -687,7 +716,8 @@ class TestDICOMValidation:
 
         # Should resolve the symlink and return the real path
         result = validate_folder_path(str(symlink_dir))
-        assert result == str(real_dir)
+        # Use os.path.realpath on expected too (macOS /var -> /private/var)
+        assert result == os.path.realpath(str(real_dir))
 
     def test_validate_dicom_uid_valid(self):
         """Test valid DICOM UIDs."""
@@ -814,7 +844,11 @@ class TestBrainExtractionLongOperation:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
-                "result": '{"success": true, "brain_volume_ml": 123.4, "processing_time_seconds": 12.3}',
+                "result": (
+                    '{"success": true,'
+                    ' "brain_volume_ml": 123.4,'
+                    ' "processing_time_seconds": 12.3}'
+                ),
             }
             mock_get_client.return_value = mock_client
 
@@ -833,7 +867,11 @@ class TestBrainExtractionLongOperation:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
-                "result": '{"success": true, "brain_volume_ml": 123.4, "processing_time_seconds": 12.3}',
+                "result": (
+                    '{"success": true,'
+                    ' "brain_volume_ml": 123.4,'
+                    ' "processing_time_seconds": 12.3}'
+                ),
             }
             mock_get_client.return_value = mock_client
 
@@ -986,3 +1024,161 @@ class TestCaptureScreenshotValidation:
         with pytest.raises(ValueError) as exc_info:
             capture_screenshot("invalid_view")
         assert "Invalid view_type" in str(exc_info.value)
+
+
+class TestCaptureScreenshotTool:
+    """Test capture_screenshot tool success paths."""
+
+    def test_axial_view(self):
+        """Axial view screenshot should return success with base64 image."""
+        from slicer_mcp.tools import capture_screenshot
+
+        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+            mock_client = Mock()
+            mock_client.get_screenshot.return_value = b"\x89PNG\r\n\x1a\n"
+            mock_get_client.return_value = mock_client
+            result = capture_screenshot("axial")
+            assert result["success"] is True
+            assert result["view_type"] == "axial"
+            assert "image_base64" in result
+
+    def test_3d_view(self):
+        """3D view screenshot should return success with look_from_axis."""
+        from slicer_mcp.tools import capture_screenshot
+
+        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+            mock_client = Mock()
+            mock_client.get_3d_screenshot.return_value = b"\x89PNG\r\n\x1a\n"
+            mock_get_client.return_value = mock_client
+            result = capture_screenshot("3d", look_from_axis="anterior")
+            assert result["success"] is True
+            assert result["look_from_axis"] == "anterior"
+
+    def test_full_view(self):
+        """Full layout screenshot should return success."""
+        from slicer_mcp.tools import capture_screenshot
+
+        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+            mock_client = Mock()
+            mock_client.get_full_screenshot.return_value = b"\x89PNG\r\n\x1a\n"
+            mock_get_client.return_value = mock_client
+            result = capture_screenshot("full")
+            assert result["success"] is True
+
+    def test_with_scroll_position(self):
+        """Screenshot with scroll_position should include it in result."""
+        from slicer_mcp.tools import capture_screenshot
+
+        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+            mock_client = Mock()
+            mock_client.get_screenshot.return_value = b"\x89PNG\r\n\x1a\n"
+            mock_get_client.return_value = mock_client
+            result = capture_screenshot("sagittal", scroll_position=0.5)
+            assert result["scroll_position"] == 0.5
+
+    def test_connection_error_propagates(self):
+        """SlicerConnectionError should propagate from capture_screenshot."""
+        from slicer_mcp.tools import capture_screenshot
+
+        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+            mock_client = Mock()
+            mock_client.get_screenshot.side_effect = SlicerConnectionError("fail")
+            mock_get_client.return_value = mock_client
+            with pytest.raises(SlicerConnectionError):
+                capture_screenshot("axial")
+
+
+class TestSetLayoutTool:
+    """Test set_layout tool."""
+
+    def test_valid_layout(self):
+        """Valid layout name should return success."""
+        from slicer_mcp.tools import set_layout
+
+        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+            mock_client = Mock()
+            mock_client.set_layout.return_value = {"success": True}
+            mock_get_client.return_value = mock_client
+            result = set_layout("FourUp")
+            assert result["success"] is True
+
+    def test_invalid_layout(self):
+        """Invalid layout name should raise ValueError."""
+        from slicer_mcp.tools import set_layout
+
+        with pytest.raises(ValueError) as exc_info:
+            set_layout("InvalidLayout")
+        assert "Invalid layout" in str(exc_info.value)
+
+    def test_invalid_gui_mode(self):
+        """Invalid gui_mode should raise ValueError."""
+        from slicer_mcp.tools import set_layout
+
+        with pytest.raises(ValueError) as exc_info:
+            set_layout("FourUp", gui_mode="invalid")
+        assert "Invalid gui_mode" in str(exc_info.value)
+
+
+class TestDICOMTools:
+    """Test DICOM tool functions."""
+
+    def test_list_dicom_studies(self):
+        """list_dicom_studies should return parsed JSON result."""
+        from slicer_mcp.tools import list_dicom_studies
+
+        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+            mock_client = Mock()
+            mock_client.exec_python.return_value = {
+                "success": True,
+                "result": '{"studies": [], "total_count": 0}',
+            }
+            mock_get_client.return_value = mock_client
+            result = list_dicom_studies()
+            assert result["total_count"] == 0
+
+    def test_list_dicom_series(self):
+        """list_dicom_series should return parsed JSON result."""
+        from slicer_mcp.tools import list_dicom_series
+
+        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+            mock_client = Mock()
+            mock_client.exec_python.return_value = {
+                "success": True,
+                "result": '{"series": [], "total_count": 0}',
+            }
+            mock_get_client.return_value = mock_client
+            result = list_dicom_series("1.2.840.113619")
+            assert result["total_count"] == 0
+
+    def test_load_dicom_series(self):
+        """load_dicom_series should return parsed JSON result."""
+        from slicer_mcp.tools import load_dicom_series
+
+        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+            mock_client = Mock()
+            mock_client.exec_python.return_value = {
+                "success": True,
+                "result": (
+                    '{"success": true, "node_id":'
+                    ' "vtkMRMLScalarVolumeNode1", "node_name": "CT_Series"}'
+                ),
+            }
+            mock_get_client.return_value = mock_client
+            result = load_dicom_series("1.2.840.113619")
+            assert result["success"] is True
+
+    def test_import_dicom(self, tmp_path):
+        """import_dicom should return parsed JSON result."""
+        from slicer_mcp.tools import import_dicom
+
+        dicom_dir = tmp_path / "dicoms"
+        dicom_dir.mkdir()
+        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+            mock_client = Mock()
+            mock_client.exec_python.return_value = {
+                "success": True,
+                "result": '{"success": true, "patients_count": 1, "series_count": 3}',
+            }
+            mock_get_client.return_value = mock_client
+            result = import_dicom(str(dicom_dir))
+            assert result["success"] is True

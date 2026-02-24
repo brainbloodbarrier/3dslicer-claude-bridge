@@ -1,8 +1,18 @@
 """Unit tests for MCP resource implementations."""
 
+import json
 from datetime import datetime
+from unittest.mock import Mock, patch
 
-from slicer_mcp.resources import _iso_timestamp
+import pytest
+
+from slicer_mcp.resources import (
+    _iso_timestamp,
+    get_scene_resource,
+    get_status_resource,
+    get_volumes_resource,
+)
+from slicer_mcp.slicer_client import SlicerConnectionError
 
 
 class TestIsoTimestamp:
@@ -70,3 +80,94 @@ class TestIsoTimestamp:
 
         # Should NOT contain a decimal point (no sub-second precision)
         assert "." not in ts, f"Expected no decimal point in timestamp, got: {ts}"
+
+
+class TestGetSceneResource:
+    """Test get_scene_resource function."""
+
+    def test_returns_json_with_nodes(self):
+        """get_scene_resource should return JSON with node count and nodes."""
+        with patch("slicer_mcp.resources.get_client") as mock_get_client:
+            mock_client = Mock()
+            mock_client.get_scene_nodes.return_value = [
+                {
+                    "id": "vtkMRMLScalarVolumeNode1",
+                    "name": "MRHead",
+                    "type": "vtkMRMLScalarVolumeNode",
+                }
+            ]
+            mock_get_client.return_value = mock_client
+            result = json.loads(get_scene_resource())
+            assert result["node_count"] == 1
+            assert result["nodes"][0]["name"] == "MRHead"
+
+    def test_connection_error_raises(self):
+        """get_scene_resource should propagate SlicerConnectionError."""
+        with patch("slicer_mcp.resources.get_client") as mock_get_client:
+            mock_client = Mock()
+            mock_client.get_scene_nodes.side_effect = SlicerConnectionError("fail")
+            mock_get_client.return_value = mock_client
+            with pytest.raises(SlicerConnectionError):
+                get_scene_resource()
+
+
+class TestGetVolumesResource:
+    """Test get_volumes_resource function."""
+
+    def test_returns_json_with_volumes(self):
+        """get_volumes_resource should return JSON with volume data."""
+        with patch("slicer_mcp.resources.get_client") as mock_get_client:
+            mock_client = Mock()
+            mock_client.exec_python.return_value = {
+                "success": True,
+                "result": '{"volumes": [], "total_count": 0}',
+            }
+            mock_get_client.return_value = mock_client
+            result = json.loads(get_volumes_resource())
+            assert result["total_count"] == 0
+
+    def test_connection_error_raises(self):
+        """get_volumes_resource should propagate SlicerConnectionError."""
+        with patch("slicer_mcp.resources.get_client") as mock_get_client:
+            mock_client = Mock()
+            mock_client.exec_python.side_effect = SlicerConnectionError("fail")
+            mock_get_client.return_value = mock_client
+            with pytest.raises(SlicerConnectionError):
+                get_volumes_resource()
+
+
+class TestGetStatusResource:
+    """Test get_status_resource function."""
+
+    def test_connected_status(self):
+        """get_status_resource should return connected status with Slicer info."""
+        with patch("slicer_mcp.resources.get_client") as mock_get_client:
+            mock_client = Mock()
+            mock_client.health_check.return_value = {
+                "connected": True,
+                "webserver_url": "http://localhost:2016",
+                "response_time_ms": 10,
+            }
+            mock_client.exec_python.return_value = {
+                "success": True,
+                "result": (
+                    '{"slicer_version": "5.6.2",'
+                    ' "scene_loaded": true,'
+                    ' "python_available": true}'
+                ),
+            }
+            mock_get_client.return_value = mock_client
+            result = json.loads(get_status_resource())
+            assert result["connected"] is True
+            assert result["slicer_version"] == "5.6.2"
+
+    def test_disconnected_status(self):
+        """get_status_resource should return disconnected status on connection error."""
+        with patch("slicer_mcp.resources.get_client") as mock_get_client:
+            mock_client = Mock()
+            mock_client.base_url = "http://localhost:2016"
+            mock_client.health_check.side_effect = SlicerConnectionError("fail")
+            mock_get_client.return_value = mock_client
+            result = json.loads(get_status_resource())
+            assert result["connected"] is False
+            assert result["error"] == "fail"

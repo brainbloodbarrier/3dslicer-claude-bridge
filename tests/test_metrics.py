@@ -167,7 +167,7 @@ class TestMetricsWithPrometheusClient:
     def test_real_metrics_when_enabled(self):
         """Test real Prometheus metrics when enabled."""
         try:
-            from prometheus_client import REGISTRY
+            import prometheus_client  # noqa: F401
 
             # If we get here, prometheus_client is installed
             from slicer_mcp.metrics import METRICS_ENABLED, REQUEST_DURATION

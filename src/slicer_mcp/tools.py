@@ -104,7 +104,9 @@ def _validate_audit_log_path(path: str) -> str:
     # Check against forbidden directories (compare both original and resolved paths)
     for forbidden in FORBIDDEN_AUDIT_PATHS:
         resolved_forbidden = os.path.realpath(forbidden)
-        if abs_path.lower().startswith(forbidden.lower()) or abs_path.lower().startswith(resolved_forbidden.lower()):
+        if abs_path.lower().startswith(forbidden.lower()) or abs_path.lower().startswith(
+            resolved_forbidden.lower()
+        ):
             raise ValueError(
                 f"Audit log path '{path}' is in forbidden directory '{forbidden}'. "
                 f"Use a path in your home directory or project directory."
@@ -362,8 +364,8 @@ def validate_folder_path(path: str) -> str:
                 f"Path contains forbidden component: '{part}'", "folder_path", path
             )
 
-    # Resolve to absolute path
-    abs_path = os.path.abspath(os.path.expanduser(path))
+    # Resolve to absolute path (realpath resolves symlinks)
+    abs_path = os.path.realpath(os.path.expanduser(path))
 
     # Check path exists and is directory
     if not os.path.exists(abs_path):
@@ -402,7 +404,8 @@ def validate_dicom_uid(uid: str, field_name: str = "uid") -> str:
 
     if not DICOM_UID_COMPILED.match(uid):
         raise ValidationError(
-            f"Invalid DICOM {field_name} format. Must contain only digits and dots. Got: '{uid[:30]}'",
+            f"Invalid DICOM {field_name} format. "
+            f"Must contain only digits and dots. Got: '{uid[:30]}'",
             field_name,
             uid,
         )
@@ -418,7 +421,8 @@ def capture_screenshot(
     Args:
         view_type: Viewport type to capture - "axial", "sagittal", "coronal", "3d", "full"
         scroll_position: Slice position from 0.0 to 1.0 (only for 2D views)
-        look_from_axis: Camera axis for 3D view - "left", "right", "anterior", "posterior", "superior", "inferior"
+        look_from_axis: Camera axis for 3D view - "left", "right",
+            "anterior", "posterior", "superior", "inferior"
 
     Returns:
         Dict with success status, base64-encoded PNG image, and metadata
@@ -763,7 +767,10 @@ try:
                 if name and name[0].isupper():
                     sampleNames.append(name)
 
-        registeredSources = [{'name': name, 'category': 'BuiltIn', 'description': ''} for name in sampleNames]
+        registeredSources = [
+            {'name': name, 'category': 'BuiltIn', 'description': ''}
+            for name in sampleNames
+        ]
 
     result = {
         'datasets': registeredSources,
@@ -778,7 +785,8 @@ except Exception as e:
             {'name': 'CTChest', 'category': 'BuiltIn', 'description': 'CT chest scan'},
             {'name': 'CTACardio', 'category': 'BuiltIn', 'description': 'CTA cardiac scan'},
             {'name': 'DTIBrain', 'category': 'BuiltIn', 'description': 'DTI brain scan'},
-            {'name': 'MRBrainTumor1', 'category': 'BuiltIn', 'description': 'MR brain tumor case 1'},
+            {'name': 'MRBrainTumor1', 'category': 'BuiltIn',
+             'description': 'MR brain tumor case 1'},
             {'name': 'MRBrainTumor2', 'category': 'BuiltIn', 'description': 'MR brain tumor case 2'}
         ],
         'total_count': 6,
@@ -796,7 +804,8 @@ print(json.dumps(result))
         sample_data = _parse_json_result(exec_result.get("result", ""), "sample data list")
 
         logger.info(
-            f"Sample data list retrieved: {sample_data['total_count']} datasets ({sample_data['source']})"
+            f"Sample data list retrieved: {sample_data['total_count']} "
+            f"datasets ({sample_data['source']})"
         )
 
         return sample_data
@@ -1478,7 +1487,8 @@ def run_brain_extraction(
     # Validate method
     if method not in VALID_BRAIN_EXTRACTION_METHODS:
         raise ValidationError(
-            f"Invalid method '{method}'. Must be one of: {', '.join(VALID_BRAIN_EXTRACTION_METHODS)}",
+            f"Invalid method '{method}'. "
+            f"Must be one of: {', '.join(VALID_BRAIN_EXTRACTION_METHODS)}",
             "method",
             method,
         )
