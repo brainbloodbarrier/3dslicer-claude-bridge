@@ -540,8 +540,8 @@ class TestRetryExhaustion:
             # Should have slept 3 times with exponential backoff
             assert mock_sleep.call_count == 3
 
-    def test_exec_python_exhausts_all_retries(self, slicer_client):
-        """Test exec_python fails after exhausting all retries."""
+    def test_exec_python_does_not_retry(self, slicer_client):
+        """Test exec_python does NOT retry on connection error (non-idempotent)."""
         with (
             patch("slicer_mcp.slicer_client.requests.post") as mock_post,
             patch("slicer_mcp.slicer_client.time.sleep") as mock_sleep,
@@ -551,7 +551,8 @@ class TestRetryExhaustion:
             with pytest.raises(SlicerConnectionError):
                 slicer_client.exec_python("print('test')")
 
-            assert mock_post.call_count == 4
+            assert mock_post.call_count == 1
+            assert mock_sleep.call_count == 0
 
     def test_retry_exponential_backoff_timing(self, slicer_client):
         """Test exponential backoff delays are correct."""
