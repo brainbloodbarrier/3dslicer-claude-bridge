@@ -100,9 +100,10 @@ def _validate_audit_log_path(path: str) -> str:
     # Expand user home directory and resolve to absolute path
     abs_path = os.path.realpath(os.path.expanduser(path))
 
-    # Check against forbidden directories
+    # Check against forbidden directories (compare both original and resolved paths)
     for forbidden in FORBIDDEN_AUDIT_PATHS:
-        if abs_path.lower().startswith(forbidden.lower()):
+        resolved_forbidden = os.path.realpath(forbidden)
+        if abs_path.lower().startswith(forbidden.lower()) or abs_path.lower().startswith(resolved_forbidden.lower()):
             raise ValueError(
                 f"Audit log path '{path}' is in forbidden directory '{forbidden}'. "
                 f"Use a path in your home directory or project directory."

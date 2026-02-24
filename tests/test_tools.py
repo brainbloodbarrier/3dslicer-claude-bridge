@@ -369,7 +369,7 @@ class TestAuditLogPathValidation:
     def test_valid_path_absolute(self):
         """Test valid absolute path is accepted."""
         result = _validate_audit_log_path("/tmp/audit.log")
-        assert result == "/tmp/audit.log"
+        assert result == os.path.realpath("/tmp/audit.log")
 
     def test_path_expansion_tilde(self):
         """Test ~ is properly expanded to home directory."""
