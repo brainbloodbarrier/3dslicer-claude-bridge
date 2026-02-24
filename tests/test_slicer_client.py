@@ -299,6 +299,24 @@ class TestGetSceneNodes:
             assert result == []
 
 
+    def test_get_scene_nodes_preserves_digits_in_type_name(self, slicer_client):
+        """Node type extraction should only strip trailing digits."""
+        mock_names_response = Mock()
+        mock_names_response.text = '["3D View"]'
+        mock_names_response.raise_for_status = Mock()
+
+        mock_ids_response = Mock()
+        mock_ids_response.text = '["vtkMRML3DViewNode1"]'
+        mock_ids_response.raise_for_status = Mock()
+
+        with patch("slicer_mcp.slicer_client.requests.get") as mock_get:
+            mock_get.side_effect = [mock_names_response, mock_ids_response]
+
+            nodes = slicer_client.get_scene_nodes()
+
+            assert nodes[0]["type"] == "vtkMRML3DViewNode"
+
+
 class TestLoadSampleData:
     """Test load_sample_data method."""
 

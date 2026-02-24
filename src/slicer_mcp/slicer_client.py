@@ -1,8 +1,8 @@
 """HTTP client for 3D Slicer WebServer API."""
 
 import json
+import re
 import logging
-import sys
 import threading
 import time
 from collections.abc import Callable
@@ -33,12 +33,7 @@ from slicer_mcp.metrics import (
 # Type variable for generic return type
 T = TypeVar("T")
 
-# Configure logging to stderr (stdout reserved for MCP)
-logging.basicConfig(
-    level=logging.INFO,
-    format='{"timestamp":"%(asctime)s","level":"%(levelname)s","message":"%(message)s"}',
-    stream=sys.stderr,
-)
+# Logging configured in server.py (stdout reserved for MCP protocol)
 logger = logging.getLogger("slicer-mcp")
 
 
@@ -86,7 +81,7 @@ def with_retry(
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
         @wraps(func)
         def wrapper(*args, **kwargs) -> T:
-            last_exception = None
+            last_exception: Exception | None = None
             for attempt in range(max_retries + 1):
                 try:
                     return func(*args, **kwargs)
@@ -106,8 +101,11 @@ def with_retry(
                             f"All {max_retries} retries exhausted for {func.__name__}. "
                             f"Final error: {e}"
                         )
-            raise last_exception
+            if last_exception is not None:
+                raise last_exception
 
+            # Should never reach here - all paths should either return or raise
+            raise RuntimeError(f"Retry logic error in {func.__name__}")
         return wrapper
 
     return decorator
@@ -427,13 +425,12 @@ class SlicerClient:
 
         return result
 
-    @with_retry(
-        max_retries=RETRY_MAX_ATTEMPTS,
-        backoff_base=RETRY_BACKOFF_BASE,
-        retryable_exceptions=(SlicerConnectionError,),
-    )
     def exec_python(self, code: str, timeout: int | None = None) -> dict[str, Any]:
         """Execute Python code in Slicer's Python environment.
+
+        NOT retried on connection errors because Python execution is not idempotent.
+        If Slicer received and executed the code but the HTTP response was lost,
+        retrying would execute the code again (data mutations, imports, etc.).
 
         Args:
             code: Python code to execute
@@ -441,10 +438,12 @@ class SlicerClient:
                      default timeout. Use for long-running operations like brain extraction.
 
         Returns:
-            Dict with success status and result/output
+            Dict with success status. The Slicer /exec endpoint returns all output
+            (print statements, expression results) as a single text blob in the
+            "result" field.
 
         Raises:
-            SlicerConnectionError: If connection fails (will retry)
+            SlicerConnectionError: If connection fails (no retry)
             SlicerTimeoutError: If request times out (no retry)
             CircuitOpenError: If circuit breaker is open
         """
@@ -474,7 +473,7 @@ class SlicerClient:
 
                 logger.info(f"Python execution successful, result length: {len(result)}")
 
-                return {"success": True, "result": result, "stdout": "", "stderr": ""}
+                return {"success": True, "result": result}
 
             except (Timeout, ConnectionError, RequestException) as e:
                 self._handle_request_error(
@@ -651,7 +650,7 @@ class SlicerClient:
                 nodes = []
                 for node_id, node_name in zip(ids, names):
                     # Extract node type from ID (e.g., vtkMRMLScalarVolumeNode1 -> vtkMRMLScalarVolumeNode)
-                    node_type = "".join(c for c in node_id if not c.isdigit())
+                    node_type = re.sub(r'\d+$', '', node_id)
                     nodes.append({"id": node_id, "name": node_name, "type": node_type})
 
                 logger.info(f"Fetched {len(nodes)} scene nodes")
