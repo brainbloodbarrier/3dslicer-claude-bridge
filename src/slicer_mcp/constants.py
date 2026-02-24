@@ -29,6 +29,9 @@ VIEW_MAP = {
     "full": VIEW_FULL,
 }
 
+# Valid 3D view camera axes (for look_from_axis parameter)
+VALID_3D_AXES = frozenset(["left", "right", "anterior", "posterior", "superior", "inferior"])
+
 # =============================================================================
 # Valid Layouts and GUI Modes
 # =============================================================================

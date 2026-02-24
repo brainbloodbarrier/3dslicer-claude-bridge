@@ -20,6 +20,7 @@ from slicer_mcp.constants import (
     MAX_NODE_ID_LENGTH,
     MAX_PYTHON_CODE_LENGTH,
     MAX_SEGMENT_NAME_LENGTH,
+    VALID_3D_AXES,
     VALID_GUI_MODES,
     VALID_LAYOUTS,
     VIEW_MAP,
@@ -432,6 +433,14 @@ def capture_screenshot(
             f"Invalid view_type '{view_type}'. Must be one of: {', '.join(VIEW_MAP.keys())}"
         )
 
+    # Validate look_from_axis if provided
+    if look_from_axis is not None:
+        if look_from_axis not in VALID_3D_AXES:
+            raise ValueError(
+                f"Invalid look_from_axis '{look_from_axis}'. "
+                f"Must be one of: {', '.join(sorted(VALID_3D_AXES))}"
+            )
+
     client = get_client()
 
     try:
@@ -817,7 +826,7 @@ def _get_valid_datasets() -> list[str]:
         return [d["name"] for d in sample_data["datasets"]]
     except (SlicerConnectionError, json.JSONDecodeError, KeyError, TypeError) as e:
         logger.warning(f"Dynamic dataset discovery failed, using fallback: {e}")
-        return FALLBACK_SAMPLE_DATASETS
+        return list(FALLBACK_SAMPLE_DATASETS)
 
 
 def load_sample_data(dataset_name: str) -> dict[str, Any]:

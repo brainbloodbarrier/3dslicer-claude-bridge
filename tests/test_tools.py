@@ -942,3 +942,47 @@ class TestBuildSegmentStatisticsCode:
         for var_name in ["brainSeg", "segmentation", "seg_node"]:
             code = _build_segment_statistics_code(var_name)
             assert f"{var_name}.GetID()" in code
+
+
+class TestCaptureScreenshotValidation:
+    """Test capture_screenshot input validation."""
+
+    def test_capture_screenshot_rejects_invalid_look_from_axis(self):
+        """Invalid look_from_axis should raise ValueError."""
+        from slicer_mcp.tools import capture_screenshot
+
+        with pytest.raises(ValueError) as exc_info:
+            capture_screenshot("3d", look_from_axis="malicious_value")
+        assert "look_from_axis" in str(exc_info.value)
+
+    def test_capture_screenshot_accepts_valid_look_from_axis(self):
+        """Valid look_from_axis should pass validation."""
+        from slicer_mcp.tools import capture_screenshot
+
+        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+            mock_client = Mock()
+            mock_client.get_3d_screenshot.return_value = b"\x89PNG\r\n\x1a\n"
+            mock_get_client.return_value = mock_client
+
+            result = capture_screenshot("3d", look_from_axis="anterior")
+            assert result["success"] is True
+
+    def test_capture_screenshot_allows_none_look_from_axis(self):
+        """None look_from_axis should be allowed for 3d view."""
+        from slicer_mcp.tools import capture_screenshot
+
+        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+            mock_client = Mock()
+            mock_client.get_3d_screenshot.return_value = b"\x89PNG\r\n\x1a\n"
+            mock_get_client.return_value = mock_client
+
+            result = capture_screenshot("3d", look_from_axis=None)
+            assert result["success"] is True
+
+    def test_capture_screenshot_invalid_view_type(self):
+        """Invalid view_type should raise ValueError."""
+        from slicer_mcp.tools import capture_screenshot
+
+        with pytest.raises(ValueError) as exc_info:
+            capture_screenshot("invalid_view")
+        assert "Invalid view_type" in str(exc_info.value)
