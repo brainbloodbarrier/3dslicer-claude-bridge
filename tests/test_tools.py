@@ -387,6 +387,19 @@ class TestAuditLogPathValidation:
         assert result.endswith("audit.log")
 
 
+    def test_symlink_to_forbidden_directory_rejected(self, tmp_path):
+        """Test that symlink pointing to forbidden directory is rejected."""
+        import os
+
+        # Create a symlink pointing to /etc
+        symlink_path = tmp_path / "innocent.log"
+        symlink_path.symlink_to("/etc/audit.log")
+
+        with pytest.raises(ValueError) as exc_info:
+            _validate_audit_log_path(str(symlink_path))
+        assert "forbidden directory" in str(exc_info.value)
+
+
 # =============================================================================
 # Malformed JSON Response Tests (Batch 6 Fix 6.2)
 # =============================================================================
@@ -660,6 +673,21 @@ class TestDICOMValidation:
             validate_folder_path(str(test_file))
 
         assert "not a directory" in str(exc_info.value)
+
+
+    def test_validate_folder_path_symlink_resolved(self, tmp_path):
+        """Test that symlinks are resolved to real path."""
+        from slicer_mcp.tools import validate_folder_path
+
+        # Create a real directory and a symlink pointing to it
+        real_dir = tmp_path / "real_dir"
+        real_dir.mkdir()
+        symlink_dir = tmp_path / "link_dir"
+        symlink_dir.symlink_to(real_dir)
+
+        # Should resolve the symlink and return the real path
+        result = validate_folder_path(str(symlink_dir))
+        assert result == str(real_dir)
 
     def test_validate_dicom_uid_valid(self):
         """Test valid DICOM UIDs."""

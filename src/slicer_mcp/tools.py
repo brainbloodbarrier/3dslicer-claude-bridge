@@ -98,7 +98,7 @@ def _validate_audit_log_path(path: str) -> str:
         ValueError: If path is in a forbidden directory
     """
     # Expand user home directory and resolve to absolute path
-    abs_path = os.path.abspath(os.path.expanduser(path))
+    abs_path = os.path.realpath(os.path.expanduser(path))
 
     # Check against forbidden directories
     for forbidden in FORBIDDEN_AUDIT_PATHS:
