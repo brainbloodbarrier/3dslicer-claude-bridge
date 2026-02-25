@@ -185,7 +185,7 @@ class TestPythonExecutionBenchmark:
 
         results = measure_latency(
             lambda: live_client.exec_python(
-                "import slicer; len(slicer.mrmlScene.GetNodesByClass('vtkMRMLVolumeNode'))"
+                "import slicer\n__execResult = slicer.mrmlScene.GetNodesByClass('vtkMRMLVolumeNode').GetNumberOfItems()"
             ),
             iterations=20,
         )
