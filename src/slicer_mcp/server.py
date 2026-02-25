@@ -8,6 +8,7 @@ from mcp.server.fastmcp import FastMCP
 # Import tools and resources
 from slicer_mcp import (
     diagnostic_tools_ct,
+    diagnostic_tools_mri,
     diagnostic_tools_xray,
     instrumentation_tools,
     resources,
@@ -542,7 +543,7 @@ def assess_osteoporosis_ct(
     LONG OPERATION: Runs TotalSegmentator if no segmentation provided.
 
     Uses trabecular ROI with 3mm morphological erosion and Pickhardt 2013
-    classification. Not equivalent to DXA — opportunistic screening only.
+    classification. Not equivalent to DXA -- opportunistic screening only.
 
     Args:
         volume_node_id: MRML node ID of the CT volume
@@ -639,7 +640,7 @@ def measure_listhesis_ct(
     LONG OPERATION: Runs TotalSegmentator if no segmentation provided.
 
     Calculates translation (mm and percentage), Meyerding grade (I-V),
-    slip angle, and spondylolysis detection. Static measurement only —
+    slip angle, and spondylolysis detection. Static measurement only --
     dynamic instability requires flexion/extension X-ray.
 
     Args:
@@ -903,6 +904,132 @@ def analyze_bone_quality(
         return _handle_tool_error(e, "analyze_bone_quality")
 
 
+# MRI Diagnostic Protocol Tools
+# ==============================
+
+
+@mcp.tool()
+def classify_modic_changes(
+    t1_node_id: str,
+    t2_node_id: str,
+    region: str = "lumbar",
+) -> dict:
+    """Classify Modic endplate changes using T1 and T2 MRI sequences.
+
+    LONG OPERATION: Requires registration check + TotalSegmentator segmentation + analysis.
+
+    Analyzes vertebral endplate signal patterns to classify:
+    - Type 0: Normal
+    - Type I: Edema/inflammation (T1 low, T2 high)
+    - Type II: Fatty degeneration (T1 high, T2 iso/high)
+    - Type III: Sclerosis (T1 low, T2 low)
+
+    Uses ratio normalization against reference vertebral body (MRI signals are not absolute).
+
+    Args:
+        t1_node_id: MRML node ID of T1-weighted volume
+        t2_node_id: MRML node ID of T2-weighted volume
+        region: Spine region - "cervical", "thoracic", or "lumbar"
+
+    Returns:
+        Dict with per-level Modic type, signal ratios, mixed patterns, and summary counts
+    """
+    try:
+        return diagnostic_tools_mri.classify_modic_changes(t1_node_id, t2_node_id, region)
+    except Exception as e:
+        return _handle_tool_error(e, "classify_modic_changes")
+
+
+@mcp.tool()
+def assess_disc_degeneration_mri(
+    t2_node_id: str,
+    region: str = "lumbar",
+) -> dict:
+    """Assess intervertebral disc degeneration using Pfirrmann grading on T2 MRI.
+
+    LONG OPERATION: Requires TotalSegmentator segmentation + per-disc analysis.
+
+    Evaluates T2 signal intensity (normalized to CSF), homogeneity (CV),
+    disc height, and nucleus-annulus distinction to assign Pfirrmann grades I-V.
+
+    Args:
+        t2_node_id: MRML node ID of T2-weighted sagittal volume
+        region: Spine region - "cervical", "thoracic", or "lumbar"
+
+    Returns:
+        Dict with per-disc Pfirrmann grade, signal ratio to CSF,
+            homogeneity, height loss, and grade summary
+    """
+    try:
+        return diagnostic_tools_mri.assess_disc_degeneration_mri(t2_node_id, region)
+    except Exception as e:
+        return _handle_tool_error(e, "assess_disc_degeneration_mri")
+
+
+@mcp.tool()
+def detect_cord_compression_mri(
+    t2_node_id: str,
+    t1_node_id: str | None = None,
+    region: str = "cervical",
+) -> dict:
+    """Detect spinal cord compression on MRI with optional myelopathy assessment.
+
+    LONG OPERATION: Requires TotalSegmentator segmentation + per-level analysis.
+
+    Measures cord AP/transverse diameters, compression ratio, cross-section area,
+    MSCC ratio, and stenosis grading. Detects T2 hyperintensity (myelopathy sign).
+    If T1 is provided, assesses reversibility (T1 normal=reversible, T1 hypo=irreversible).
+
+    Args:
+        t2_node_id: MRML node ID of T2-weighted volume
+        t1_node_id: MRML node ID of T1-weighted volume (optional, for reversibility)
+        region: Spine region - "cervical", "thoracic", or "lumbar"
+
+    Returns:
+        Dict with per-level compression metrics, stenosis grades,
+            myelopathy status, and MSCC assessment
+    """
+    try:
+        return diagnostic_tools_mri.detect_cord_compression_mri(t2_node_id, t1_node_id, region)
+    except Exception as e:
+        return _handle_tool_error(e, "detect_cord_compression_mri")
+
+
+@mcp.tool()
+def detect_metastatic_lesions_mri(
+    t1_node_id: str,
+    t2_stir_node_id: str,
+    region: str = "full",
+) -> dict:
+    """Detect metastatic lesions in the spine using T1 and T2/STIR MRI.
+
+    LONG OPERATION: Requires registration + TotalSegmentator segmentation + per-vertebra analysis.
+
+    Classifies lesion signal patterns:
+    - Lytic: T1 low, T2/STIR high
+    - Blastic: T1 low, T2/STIR low
+    - Mixed: T1 low, T2/STIR intermediate
+
+    Also evaluates posterior element involvement and benign vs malignant
+    fracture differentiation features.
+
+    Args:
+        t1_node_id: MRML node ID of T1-weighted volume
+        t2_stir_node_id: MRML node ID of T2/STIR-weighted volume
+        region: Spine region - "cervical", "thoracic", "lumbar", or "full"
+
+    Returns:
+        Dict with per-vertebra signal analysis, suspicious lesions,
+            lesion type summary, and posterior element involvement
+    """
+    try:
+        return diagnostic_tools_mri.detect_metastatic_lesions_mri(
+            t1_node_id, t2_stir_node_id, region
+        )
+    except Exception as e:
+        return _handle_tool_error(e, "detect_metastatic_lesions_mri")
+
+
 # Register Resources
 # ==================
 
@@ -948,7 +1075,7 @@ def main():
     """Run the MCP Slicer Bridge server with stdio transport."""
     logger.info("Starting MCP Slicer Bridge server")
     logger.info(
-        "Registered 30 tools: capture_screenshot, list_scene_nodes, "
+        "Registered 34 tools: capture_screenshot, list_scene_nodes, "
         "execute_python, measure_volume, list_sample_data, load_sample_data, "
         "set_layout, import_dicom, list_dicom_studies, list_dicom_series, "
         "load_dicom_series, run_brain_extraction, measure_sagittal_balance_xray, "
@@ -959,7 +1086,9 @@ def main():
         "detect_metastatic_lesions_ct, calculate_sins_score, "
         "measure_listhesis_ct, measure_spinal_canal_ct, plan_cervical_screws, "
         "measure_ccj_angles, measure_spine_alignment, segment_spine, "
-        "segment_vertebral_artery, analyze_bone_quality"
+        "segment_vertebral_artery, analyze_bone_quality, "
+        "classify_modic_changes, assess_disc_degeneration_mri, "
+        "detect_cord_compression_mri, detect_metastatic_lesions_mri"
     )
     logger.info("Registered 3 resources: slicer://scene, slicer://volumes, slicer://status")
 

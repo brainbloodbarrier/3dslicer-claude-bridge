@@ -601,13 +601,13 @@ INSTRUMENTATION_TIMEOUT = 120
 # =============================================================================
 
 SAFETY_GREEN = "green"
-"""Safe — all clearances adequate."""
+"""Safe -- all clearances adequate."""
 
 SAFETY_YELLOW = "yellow"
-"""Warning — marginal clearances, proceed with caution."""
+"""Warning -- marginal clearances, proceed with caution."""
 
 SAFETY_RED = "red"
-"""Blocked — insufficient clearance, technique contraindicated."""
+"""Blocked -- insufficient clearance, technique contraindicated."""
 
 
 # =============================================================================
