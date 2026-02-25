@@ -6,7 +6,7 @@ import sys
 from mcp.server.fastmcp import FastMCP
 
 # Import tools and resources
-from slicer_mcp import resources, tools
+from slicer_mcp import resources, spine_tools, tools
 from slicer_mcp.circuit_breaker import CircuitOpenError
 from slicer_mcp.slicer_client import SlicerConnectionError, SlicerTimeoutError
 
@@ -290,6 +290,61 @@ def run_brain_extraction(input_node_id: str, method: str = "hd-bet", device: str
         return _handle_tool_error(e, "run_brain_extraction")
 
 
+@mcp.tool()
+def measure_ccj_angles(segmentation_node_id: str, population: str = "adult") -> dict:
+    """Measure craniocervical junction (CCJ) angles and distances.
+
+    Computes CXA, ADI, Powers ratio, BDI, BAI, Ranawat, McGregor,
+    Chamberlain, and Wackenheim measurements from a spine segmentation.
+    Requires C1/C2 vertebral segments (e.g., from TotalSegmentator).
+
+    LONG OPERATION: May take 30-60 seconds depending on segmentation size.
+
+    Args:
+        segmentation_node_id: MRML node ID of segmentation containing
+            vertebral segments (e.g., "vtkMRMLSegmentationNode1")
+        population: Patient population - "adult" (ADI <= 3mm)
+            or "child" (ADI <= 5mm)
+
+    Returns:
+        Dict with landmarks, measurements (CXA, ADI, Powers, BDI, BAI,
+        Ranawat, McGregor, Chamberlain, Wackenheim), reference_ranges,
+        statuses, and coordinate_system (RAS)
+    """
+    try:
+        return spine_tools.measure_ccj_angles(segmentation_node_id, population)
+    except Exception as e:
+        return _handle_tool_error(e, "measure_ccj_angles")
+
+
+@mcp.tool()
+def measure_spine_alignment(segmentation_node_id: str, region: str = "full") -> dict:
+    """Measure sagittal spinal alignment parameters.
+
+    Computes cervical lordosis, thoracic kyphosis, lumbar lordosis,
+    SVA, C2-C7 SVA, T1 slope, pelvic incidence, pelvic tilt,
+    sacral slope, PI-LL mismatch, Roussouly type, and SRS-Schwab
+    classification from vertebral body segmentations.
+
+    LONG OPERATION: May take 1-3 minutes depending on region and segmentation size.
+
+    Args:
+        segmentation_node_id: MRML node ID of segmentation containing
+            vertebral segments (e.g., "vtkMRMLSegmentationNode1")
+        region: Spine region - "cervical" (C1-C7), "thoracic" (T1-T12),
+            "lumbar" (L1-L5), or "full" (all vertebrae)
+
+    Returns:
+        Dict with vertebrae_found, vertebrae_data (centroids, endplates),
+        measurements (CL, TK, LL, SVA, T1 slope, PI, PT, SS, etc.),
+        reference_ranges, statuses, Roussouly type, and Schwab classification
+    """
+    try:
+        return spine_tools.measure_spine_alignment(segmentation_node_id, region)
+    except Exception as e:
+        return _handle_tool_error(e, "measure_spine_alignment")
+
+
 # Register Resources
 # ==================
 
@@ -335,10 +390,11 @@ def main():
     """Run the MCP Slicer Bridge server with stdio transport."""
     logger.info("Starting MCP Slicer Bridge server")
     logger.info(
-        "Registered 12 tools: capture_screenshot, list_scene_nodes, "
+        "Registered 14 tools: capture_screenshot, list_scene_nodes, "
         "execute_python, measure_volume, list_sample_data, load_sample_data, "
         "set_layout, import_dicom, list_dicom_studies, list_dicom_series, "
-        "load_dicom_series, run_brain_extraction"
+        "load_dicom_series, run_brain_extraction, measure_ccj_angles, "
+        "measure_spine_alignment"
     )
     logger.info("Registered 3 resources: slicer://scene, slicer://volumes, slicer://status")
 
