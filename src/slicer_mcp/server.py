@@ -6,7 +6,7 @@ import sys
 from mcp.server.fastmcp import FastMCP
 
 # Import tools and resources
-from slicer_mcp import instrumentation_tools, resources, spine_tools, tools
+from slicer_mcp import diagnostic_tools_ct, instrumentation_tools, resources, spine_tools, tools
 from slicer_mcp.circuit_breaker import CircuitOpenError
 from slicer_mcp.slicer_client import SlicerConnectionError, SlicerTimeoutError
 
@@ -290,6 +290,206 @@ def run_brain_extraction(input_node_id: str, method: str = "hd-bet", device: str
         return _handle_tool_error(e, "run_brain_extraction")
 
 
+# CT Diagnostic Protocol Tools
+# ============================
+
+
+@mcp.tool()
+def detect_vertebral_fractures_ct(
+    volume_node_id: str,
+    segmentation_node_id: str | None = None,
+    region: str = "full",
+    classification_system: str = "ao_spine",
+) -> dict:
+    """Detect vertebral fractures in CT with Genant, AO Spine, and Denis classification.
+
+    LONG OPERATION: Runs TotalSegmentator if no segmentation provided.
+
+    Calculates vertebral body heights (Ha, Hm, Hp), Genant grading (0-3),
+    AO Spine classification (Type A/B/C), Denis 3-column analysis, posterior
+    wall retropulsion, and canal compromise percentage.
+
+    Args:
+        volume_node_id: MRML node ID of the CT volume
+        segmentation_node_id: MRML node ID of existing spine segmentation (optional)
+        region: Spine region - "full", "cervical", "thoracic", "lumbar"
+        classification_system: "ao_spine", "genant", "denis", or "all"
+
+    Returns:
+        Dict with per-vertebra fracture analysis including heights, ratios,
+            classification grades, canal compromise, and summary
+    """
+    try:
+        return diagnostic_tools_ct.detect_vertebral_fractures_ct(
+            volume_node_id, segmentation_node_id, region, classification_system
+        )
+    except Exception as e:
+        return _handle_tool_error(e, "detect_vertebral_fractures_ct")
+
+
+@mcp.tool()
+def assess_osteoporosis_ct(
+    volume_node_id: str,
+    segmentation_node_id: str | None = None,
+    levels: list[str] | None = None,
+    method: str = "trabecular_roi",
+) -> dict:
+    """Assess bone density for opportunistic osteoporosis screening on CT.
+
+    LONG OPERATION: Runs TotalSegmentator if no segmentation provided.
+
+    Uses trabecular ROI with 3mm morphological erosion and Pickhardt 2013
+    classification. Not equivalent to DXA — opportunistic screening only.
+
+    Args:
+        volume_node_id: MRML node ID of the CT volume
+        segmentation_node_id: MRML node ID of existing spine segmentation (optional)
+        levels: Vertebral levels to assess (default: ["L1"])
+        method: "trabecular_roi", "vertebral_mean", or "both"
+
+    Returns:
+        Dict with per-level HU statistics, Pickhardt classification,
+            screw pullout risk, and cement augmentation flags
+    """
+    try:
+        return diagnostic_tools_ct.assess_osteoporosis_ct(
+            volume_node_id, segmentation_node_id, levels, method
+        )
+    except Exception as e:
+        return _handle_tool_error(e, "assess_osteoporosis_ct")
+
+
+@mcp.tool()
+def detect_metastatic_lesions_ct(
+    volume_node_id: str,
+    segmentation_node_id: str | None = None,
+    region: str = "full",
+    include_posterior_elements: bool = True,
+) -> dict:
+    """Detect metastatic lesions (lytic/blastic/mixed) in vertebral bodies on CT.
+
+    LONG OPERATION: Runs TotalSegmentator if no segmentation provided.
+
+    Uses adaptive HU thresholds relative to adjacent-level baseline with
+    3D connected component clustering. Reports volume, body involvement
+    percentage, and posterior element status.
+
+    Args:
+        volume_node_id: MRML node ID of the CT volume
+        segmentation_node_id: MRML node ID of existing spine segmentation (optional)
+        region: Spine region - "full", "cervical", "thoracic", "lumbar"
+        include_posterior_elements: Whether to analyze posterior elements
+
+    Returns:
+        Dict with per-vertebra lesion analysis including type, volume,
+            body involvement, and canal compromise
+    """
+    try:
+        return diagnostic_tools_ct.detect_metastatic_lesions_ct(
+            volume_node_id, segmentation_node_id, region, include_posterior_elements
+        )
+    except Exception as e:
+        return _handle_tool_error(e, "detect_metastatic_lesions_ct")
+
+
+@mcp.tool()
+def calculate_sins_score(
+    volume_node_id: str,
+    segmentation_node_id: str | None = None,
+    target_levels: list[str] | None = None,
+    pain_score: int | None = None,
+) -> dict:
+    """Calculate SINS (Spinal Instability Neoplastic Score) from CT.
+
+    LONG OPERATION: Runs TotalSegmentator if no segmentation provided.
+
+    Automates 4/6 SINS components from imaging: location, lesion type,
+    alignment, collapse, posterolateral involvement. Pain is clinical input.
+    When pain_score is not provided, reports possible score range.
+
+    Args:
+        volume_node_id: MRML node ID of the CT volume
+        segmentation_node_id: MRML node ID of existing spine segmentation (optional)
+        target_levels: Vertebral levels with known lesions (default: full spine scan)
+        pain_score: Clinical pain score 0=pain-free, 1=occasional, 3=mechanical (optional)
+
+    Returns:
+        Dict with per-level SINS component breakdown, total score,
+            classification (stable/indeterminate/unstable), and score range
+    """
+    try:
+        return diagnostic_tools_ct.calculate_sins_score(
+            volume_node_id, segmentation_node_id, target_levels, pain_score
+        )
+    except Exception as e:
+        return _handle_tool_error(e, "calculate_sins_score")
+
+
+@mcp.tool()
+def measure_listhesis_ct(
+    volume_node_id: str,
+    segmentation_node_id: str | None = None,
+    levels: list[str] | None = None,
+) -> dict:
+    """Measure spondylolisthesis on static CT.
+
+    LONG OPERATION: Runs TotalSegmentator if no segmentation provided.
+
+    Calculates translation (mm and percentage), Meyerding grade (I-V),
+    slip angle, and spondylolysis detection. Static measurement only —
+    dynamic instability requires flexion/extension X-ray.
+
+    Args:
+        volume_node_id: MRML node ID of the CT volume
+        segmentation_node_id: MRML node ID of existing spine segmentation (optional)
+        levels: Vertebral levels to measure (default: ["L3", "L4", "L5"])
+
+    Returns:
+        Dict with per-level translation, Meyerding grade, slip angle,
+            and static measurement disclaimer
+    """
+    try:
+        return diagnostic_tools_ct.measure_listhesis_ct(
+            volume_node_id, segmentation_node_id, levels
+        )
+    except Exception as e:
+        return _handle_tool_error(e, "measure_listhesis_ct")
+
+
+@mcp.tool()
+def measure_spinal_canal_ct(
+    volume_node_id: str,
+    segmentation_node_id: str | None = None,
+    levels: list[str] | None = None,
+) -> dict:
+    """Measure spinal canal morphometry on CT.
+
+    LONG OPERATION: Runs TotalSegmentator if no segmentation provided.
+
+    Calculates AP and transverse diameters, cross-section area,
+    Torg-Pavlov ratio (canal/body AP), and stenosis grading per level.
+
+    Args:
+        volume_node_id: MRML node ID of the CT volume
+        segmentation_node_id: MRML node ID of existing spine segmentation (optional)
+        levels: Vertebral levels to measure (default: ["C3", "C4", "C5", "C6", "C7"])
+
+    Returns:
+        Dict with per-level canal AP/transverse diameters, area,
+            Torg-Pavlov ratio, and stenosis grade
+    """
+    try:
+        return diagnostic_tools_ct.measure_spinal_canal_ct(
+            volume_node_id, segmentation_node_id, levels
+        )
+    except Exception as e:
+        return _handle_tool_error(e, "measure_spinal_canal_ct")
+
+
+# Spine Surgery Planning Tools
+# ============================
+
+
 @mcp.tool()
 def plan_cervical_screws(
     technique: str,
@@ -545,10 +745,12 @@ def main():
     """Run the MCP Slicer Bridge server with stdio transport."""
     logger.info("Starting MCP Slicer Bridge server")
     logger.info(
-        "Registered 18 tools: capture_screenshot, list_scene_nodes, "
+        "Registered 24 tools: capture_screenshot, list_scene_nodes, "
         "execute_python, measure_volume, list_sample_data, load_sample_data, "
         "set_layout, import_dicom, list_dicom_studies, list_dicom_series, "
-        "load_dicom_series, run_brain_extraction, plan_cervical_screws, "
+        "load_dicom_series, run_brain_extraction, detect_vertebral_fractures_ct, "
+        "assess_osteoporosis_ct, detect_metastatic_lesions_ct, calculate_sins_score, "
+        "measure_listhesis_ct, measure_spinal_canal_ct, plan_cervical_screws, "
         "measure_ccj_angles, measure_spine_alignment, segment_spine, "
         "segment_vertebral_artery, analyze_bone_quality"
     )
