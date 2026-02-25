@@ -345,6 +345,105 @@ def measure_spine_alignment(segmentation_node_id: str, region: str = "full") -> 
         return _handle_tool_error(e, "measure_spine_alignment")
 
 
+@mcp.tool()
+def segment_spine(
+    input_node_id: str,
+    region: str = "full",
+    include_discs: bool = False,
+    include_spinal_cord: bool = False,
+) -> dict:
+    """Segment spine structures from a CT volume using TotalSegmentator AI.
+
+    LONG OPERATION: This tool may take 1-5 minutes depending on hardware and region.
+
+    Identifies and labels individual vertebrae from C1-L5, optionally
+    including intervertebral discs and spinal cord.
+
+    Expected durations:
+    - GPU: ~1-2 minutes
+    - CPU: ~3-5 minutes
+
+    Args:
+        input_node_id: MRML node ID of input CT volume
+        region: Spine region - "cervical" (C1-C7), "thoracic" (T1-T12),
+            "lumbar" (L1-L5), or "full" (all vertebrae)
+        include_discs: If True, also segment intervertebral discs
+        include_spinal_cord: If True, also segment the spinal cord
+
+    Returns:
+        Dict with output_segmentation_id, vertebrae_count, vertebrae list,
+        discs list, processing_time_seconds, and long_operation metadata
+    """
+    try:
+        return spine_tools.segment_spine(input_node_id, region, include_discs, include_spinal_cord)
+    except Exception as e:
+        return _handle_tool_error(e, "segment_spine")
+
+
+@mcp.tool()
+def segment_vertebral_artery(
+    input_node_id: str,
+    side: str = "both",
+    seed_points: list[list[float]] | None = None,
+) -> dict:
+    """Segment vertebral arteries from a CTA volume using SlicerVMTK.
+
+    LONG OPERATION: This tool may take 1-5 minutes depending on volume size.
+
+    Pipeline: vesselness filter -> level set segmentation -> centerline extraction.
+    Requires the SlicerVMTK extension to be installed in 3D Slicer.
+
+    Args:
+        input_node_id: MRML node ID of input CTA volume
+        side: Which artery to segment - "left", "right", or "both"
+        seed_points: Optional list of [x, y, z] RAS coordinates to guide segmentation.
+            Each point should be placed inside the artery lumen.
+
+    Returns:
+        Dict with model_node_id, centerline_node_id, diameters along trajectory,
+        mean_diameter_mm, processing_time_seconds, and long_operation metadata
+    """
+    try:
+        return spine_tools.segment_vertebral_artery(input_node_id, side, seed_points)
+    except Exception as e:
+        return _handle_tool_error(e, "segment_vertebral_artery")
+
+
+@mcp.tool()
+def analyze_bone_quality(
+    input_node_id: str,
+    segmentation_node_id: str,
+    region: str = "lumbar",
+) -> dict:
+    """Analyze bone quality per vertebra using CT HU and BoneTexture metrics.
+
+    LONG OPERATION: This tool may take 30 seconds to 3 minutes depending on vertebra count.
+
+    Extracts per-vertebra ROIs from a segmentation, computes mean HU for
+    osteoporosis classification (Pickhardt criteria), and optionally computes
+    trabecular bone metrics (BV/TV, Tb.Th, Tb.Sp) via the BoneTexture extension.
+
+    Pickhardt classification (L1 trabecular HU on non-contrast CT):
+    - Normal: >= 135 HU
+    - Osteopenia: 90-134 HU
+    - Osteoporosis: < 90 HU
+
+    Args:
+        input_node_id: MRML node ID of input CT volume
+        segmentation_node_id: MRML node ID of vertebra segmentation
+            (e.g., from TotalSegmentator)
+        region: Spine region - "cervical", "thoracic", "lumbar", or "full"
+
+    Returns:
+        Dict with per-vertebra metrics (mean_hu, classification, optional BV/TV,
+        Tb.Th, Tb.Sp), summary counts, and processing_time_seconds
+    """
+    try:
+        return spine_tools.analyze_bone_quality(input_node_id, segmentation_node_id, region)
+    except Exception as e:
+        return _handle_tool_error(e, "analyze_bone_quality")
+
+
 # Register Resources
 # ==================
 
@@ -390,11 +489,12 @@ def main():
     """Run the MCP Slicer Bridge server with stdio transport."""
     logger.info("Starting MCP Slicer Bridge server")
     logger.info(
-        "Registered 14 tools: capture_screenshot, list_scene_nodes, "
+        "Registered 17 tools: capture_screenshot, list_scene_nodes, "
         "execute_python, measure_volume, list_sample_data, load_sample_data, "
         "set_layout, import_dicom, list_dicom_studies, list_dicom_series, "
         "load_dicom_series, run_brain_extraction, measure_ccj_angles, "
-        "measure_spine_alignment"
+        "measure_spine_alignment, segment_spine, "
+        "segment_vertebral_artery, analyze_bone_quality"
     )
     logger.info("Registered 3 resources: slicer://scene, slicer://volumes, slicer://status")
 
