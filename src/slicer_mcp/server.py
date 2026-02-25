@@ -6,7 +6,7 @@ import sys
 from mcp.server.fastmcp import FastMCP
 
 # Import tools and resources
-from slicer_mcp import resources, tools
+from slicer_mcp import diagnostic_tools_xray, resources, tools
 from slicer_mcp.circuit_breaker import CircuitOpenError
 from slicer_mcp.slicer_client import SlicerConnectionError, SlicerTimeoutError
 
@@ -290,6 +290,170 @@ def run_brain_extraction(input_node_id: str, method: str = "hd-bet", device: str
         return _handle_tool_error(e, "run_brain_extraction")
 
 
+# X-ray Diagnostic Protocol Tools
+# ================================
+
+
+@mcp.tool()
+def measure_sagittal_balance_xray(
+    volume_node_id: str,
+    landmarks: dict[str, list[float]],
+    magnification_factor: float = 1.0,
+) -> dict:
+    """Measure sagittal spinal balance from lateral standing X-ray.
+
+    Computes SVA, C2-C7 SVA, T1 slope, TPA, cervical lordosis, thoracic
+    kyphosis, lumbar lordosis (Cobb), pelvic parameters (PI, PT, SS),
+    PI-LL mismatch, SRS-Schwab classification, and Roussouly type.
+
+    Args:
+        volume_node_id: MRML node ID of the lateral X-ray volume
+        landmarks: Dict mapping landmark names to [x, y] coordinates.
+            Required landmarks (20): C2_centroid, C7_centroid, C2_sup_ant,
+            C2_sup_post, C7_inf_ant, C7_inf_post, T1_sup_ant, T1_sup_post,
+            T4_sup_ant, T4_sup_post, T12_inf_ant, T12_inf_post, L1_sup_ant,
+            L1_sup_post, S1_sup_ant, S1_sup_post, S1_endplate_mid,
+            femoral_head_center_L, femoral_head_center_R, S1_post_sup
+        magnification_factor: X-ray magnification correction (default 1.0)
+
+    Returns:
+        Dict with sagittal balance parameters, classifications, and metadata
+    """
+    try:
+        return diagnostic_tools_xray.measure_sagittal_balance_xray(
+            volume_node_id, landmarks, magnification_factor
+        )
+    except Exception as e:
+        return _handle_tool_error(e, "measure_sagittal_balance_xray")
+
+
+@mcp.tool()
+def measure_coronal_balance_xray(
+    volume_node_id: str,
+    landmarks: dict[str, list[float]],
+    magnification_factor: float = 1.0,
+) -> dict:
+    """Measure coronal spinal balance from AP standing X-ray.
+
+    Computes C7 plumb line to CSVL offset, trunk shift, pelvic obliquity,
+    shoulder balance, and coronal Cobb angle.
+
+    Args:
+        volume_node_id: MRML node ID of the AP X-ray volume
+        landmarks: Dict mapping landmark names to [x, y] coordinates.
+            Required landmarks (11): C7_centroid, sacrum_center, T1_centroid,
+            shoulder_L, shoulder_R, iliac_crest_L, iliac_crest_R,
+            upper_end_vertebra_L, upper_end_vertebra_R,
+            lower_end_vertebra_L, lower_end_vertebra_R
+        magnification_factor: X-ray magnification correction (default 1.0)
+
+    Returns:
+        Dict with coronal balance parameters and metadata
+    """
+    try:
+        return diagnostic_tools_xray.measure_coronal_balance_xray(
+            volume_node_id, landmarks, magnification_factor
+        )
+    except Exception as e:
+        return _handle_tool_error(e, "measure_coronal_balance_xray")
+
+
+@mcp.tool()
+def measure_listhesis_dynamic_xray(
+    volume_node_ids: dict[str, str],
+    landmarks_per_position: dict[str, dict[str, dict[str, list[float]]]],
+    levels: list[str],
+    region: str = "lumbar",
+    magnification_factor: float = 1.0,
+) -> dict:
+    """Measure dynamic listhesis from neutral, flexion, and extension X-rays.
+
+    Processes 3 lateral X-rays simultaneously. Computes translation and angular
+    motion per position per level, applies White & Panjabi instability criteria,
+    and performs Meyerding grading at worst position.
+
+    Args:
+        volume_node_ids: Dict mapping position to MRML node ID.
+            Required keys: "neutral", "flexion", "extension"
+        landmarks_per_position: Nested dict: position -> level -> landmark -> [x, y].
+            Each level requires 8 landmarks per position
+        levels: List of spinal levels to assess (e.g., ["L4-L5", "L5-S1"])
+        region: Spine region for instability thresholds ("cervical" or "lumbar")
+        magnification_factor: X-ray magnification correction (default 1.0)
+
+    Returns:
+        Dict with per-level measurements, instability assessment, and Meyerding grading
+    """
+    try:
+        return diagnostic_tools_xray.measure_listhesis_dynamic_xray(
+            volume_node_ids, landmarks_per_position, levels, region, magnification_factor
+        )
+    except Exception as e:
+        return _handle_tool_error(e, "measure_listhesis_dynamic_xray")
+
+
+@mcp.tool()
+def detect_vertebral_fractures_xray(
+    volume_node_id: str,
+    landmarks_per_vertebra: dict[str, dict[str, list[float]]],
+    magnification_factor: float = 1.0,
+) -> dict:
+    """Detect vertebral fractures using Genant semi-quantitative method on lateral X-ray.
+
+    6 points per vertebral body define anterior, middle, and posterior heights.
+    Height reduction relative to expected (adjacent) height determines fracture grade.
+
+    Args:
+        volume_node_id: MRML node ID of the lateral X-ray volume
+        landmarks_per_vertebra: Dict: vertebra_label -> landmark_name -> [x, y].
+            Each vertebra requires 6 landmarks (ant_sup, ant_inf, mid_sup,
+            mid_inf, post_sup, post_inf)
+        magnification_factor: X-ray magnification correction (default 1.0)
+
+    Returns:
+        Dict with per-vertebra fracture assessment, Genant grades, and summary
+    """
+    try:
+        return diagnostic_tools_xray.detect_vertebral_fractures_xray(
+            volume_node_id, landmarks_per_vertebra, magnification_factor
+        )
+    except Exception as e:
+        return _handle_tool_error(e, "detect_vertebral_fractures_xray")
+
+
+@mcp.tool()
+def measure_cobb_angle_xray(
+    volume_node_id: str,
+    landmarks: dict[str, list[float]],
+    upper_end_vertebra: str = "",
+    lower_end_vertebra: str = "",
+    curve_type: str = "primary",
+) -> dict:
+    """Measure Cobb angle for scoliosis from AP standing X-ray.
+
+    Computes angle between superior endplate of upper end vertebra and inferior
+    endplate of lower end vertebra. Identifies curve direction and severity.
+
+    Args:
+        volume_node_id: MRML node ID of the AP X-ray volume
+        landmarks: Dict mapping landmark names to [x, y] coordinates.
+            Required landmarks (5): upper_end_sup_L, upper_end_sup_R,
+            lower_end_inf_L, lower_end_inf_R, apex_centroid
+        upper_end_vertebra: Label of upper end vertebra (e.g. "T6")
+        lower_end_vertebra: Label of lower end vertebra (e.g. "L1")
+        curve_type: "primary", "secondary", or "compensatory"
+
+    Returns:
+        Dict with Cobb angle, curve direction, severity, and metadata
+    """
+    try:
+        return diagnostic_tools_xray.measure_cobb_angle_xray(
+            volume_node_id, landmarks, upper_end_vertebra, lower_end_vertebra, curve_type
+        )
+    except Exception as e:
+        return _handle_tool_error(e, "measure_cobb_angle_xray")
+
+
 # Register Resources
 # ==================
 
@@ -335,10 +499,12 @@ def main():
     """Run the MCP Slicer Bridge server with stdio transport."""
     logger.info("Starting MCP Slicer Bridge server")
     logger.info(
-        "Registered 12 tools: capture_screenshot, list_scene_nodes, "
+        "Registered 17 tools: capture_screenshot, list_scene_nodes, "
         "execute_python, measure_volume, list_sample_data, load_sample_data, "
         "set_layout, import_dicom, list_dicom_studies, list_dicom_series, "
-        "load_dicom_series, run_brain_extraction"
+        "load_dicom_series, run_brain_extraction, measure_sagittal_balance_xray, "
+        "measure_coronal_balance_xray, measure_listhesis_dynamic_xray, "
+        "detect_vertebral_fractures_xray, measure_cobb_angle_xray"
     )
     logger.info("Registered 3 resources: slicer://scene, slicer://volumes, slicer://status")
 
