@@ -6,7 +6,7 @@ import sys
 from mcp.server.fastmcp import FastMCP
 
 # Import tools and resources
-from slicer_mcp import resources, spine_tools, tools
+from slicer_mcp import instrumentation_tools, resources, spine_tools, tools
 from slicer_mcp.circuit_breaker import CircuitOpenError
 from slicer_mcp.slicer_client import SlicerConnectionError, SlicerTimeoutError
 
@@ -291,6 +291,62 @@ def run_brain_extraction(input_node_id: str, method: str = "hd-bet", device: str
 
 
 @mcp.tool()
+def plan_cervical_screws(
+    technique: str,
+    level: str,
+    segmentation_node_id: str,
+    side: str = "bilateral",
+    va_node_id: str | None = None,
+    variant: str | None = None,
+    screw_diameter_mm: float | None = None,
+    screw_length_mm: float | None = None,
+) -> dict:
+    """Plan cervical screw placement using one of 6 instrumentation techniques.
+
+    Generates patient-specific screw entry points, trajectory vectors, safety
+    assessments (VA, canal, nerve root), and 3D visualization in Slicer.
+
+    Techniques:
+        - pedicle: Cervical pedicle screws (C2-C7)
+        - lateral_mass: Lateral mass screws (C3-C7) with 4 variants
+            (roy_camille, magerl, an, anderson)
+        - transarticular: C1-C2 Magerl transarticular screws (VA REQUIRED)
+        - c1_lateral_mass: C1 lateral mass Harms/Goel screws
+        - c2_pars: C2 pars interarticularis screws
+        - occipital: Occipital screws with thickness mapping
+        - auto: Analyze anatomy and recommend best technique
+
+    Args:
+        technique: Instrumentation technique name
+        level: Vertebral level (e.g. "C5", "C1C2", "Occiput")
+        segmentation_node_id: MRML node ID of vertebral segmentation
+        side: "left", "right", or "bilateral"
+        va_node_id: MRML node ID of vertebral artery segmentation
+            (REQUIRED for transarticular, recommended for C1-C2)
+        variant: Lateral mass variant (only for lateral_mass technique)
+        screw_diameter_mm: Override default screw diameter (mm)
+        screw_length_mm: Override default screw length (mm)
+
+    Returns:
+        Dict with technique details, screw parameters, safety assessment,
+        visualization node IDs, warnings, and recommendations
+    """
+    try:
+        return instrumentation_tools.plan_cervical_screws(
+            technique=technique,
+            level=level,
+            segmentation_node_id=segmentation_node_id,
+            side=side,
+            va_node_id=va_node_id,
+            variant=variant,
+            screw_diameter_mm=screw_diameter_mm,
+            screw_length_mm=screw_length_mm,
+        )
+    except Exception as e:
+        return _handle_tool_error(e, "plan_cervical_screws")
+
+
+@mcp.tool()
 def measure_ccj_angles(segmentation_node_id: str, population: str = "adult") -> dict:
     """Measure craniocervical junction (CCJ) angles and distances.
 
@@ -489,11 +545,11 @@ def main():
     """Run the MCP Slicer Bridge server with stdio transport."""
     logger.info("Starting MCP Slicer Bridge server")
     logger.info(
-        "Registered 17 tools: capture_screenshot, list_scene_nodes, "
+        "Registered 18 tools: capture_screenshot, list_scene_nodes, "
         "execute_python, measure_volume, list_sample_data, load_sample_data, "
         "set_layout, import_dicom, list_dicom_studies, list_dicom_series, "
-        "load_dicom_series, run_brain_extraction, measure_ccj_angles, "
-        "measure_spine_alignment, segment_spine, "
+        "load_dicom_series, run_brain_extraction, plan_cervical_screws, "
+        "measure_ccj_angles, measure_spine_alignment, segment_spine, "
         "segment_vertebral_artery, analyze_bone_quality"
     )
     logger.info("Registered 3 resources: slicer://scene, slicer://volumes, slicer://status")

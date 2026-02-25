@@ -464,3 +464,147 @@ VERTEBRAL_BODY_HEIGHTS_MM: dict[str, tuple[float, float]] = {
     "L3": (25.0, 31.0),
     "L5": (26.0, 32.0),
 }
+
+
+# =============================================================================
+# Cervical Instrumentation — Technique Definitions
+# =============================================================================
+# Sources:
+# Roy-Camille R et al. "Internal fixation of the unstable cervical spine
+#   by posterior osteosynthesis with plates and screws." 1979.
+# Magerl F et al. "Stable posterior fusion of the atlas and axis by
+#   transarticular screw fixation." 1987.
+# An HS et al. "Anatomic considerations for plate-screw fixation of the
+#   cervical spine." Spine. 1991;16(10 Suppl):S548-51.
+# Harms J, Melcher RP. "Posterior C1-C2 fusion with polyaxial screw
+#   and rod fixation." Spine. 2001;26(22):2467-71.
+# Goel A, Laheri VK. "Plate and screw fixation for atlanto-axial
+#   subluxation." Acta Neurochir (Wien). 1994;129:47-53.
+
+VALID_INSTRUMENTATION_TECHNIQUES = frozenset(
+    ["pedicle", "lateral_mass", "transarticular", "c1_lateral_mass", "c2_pars", "occipital", "auto"]
+)
+"""Valid technique names for plan_cervical_screws."""
+
+VALID_SIDES = frozenset(["left", "right", "bilateral"])
+"""Valid side parameters for screw placement."""
+
+VALID_LATERAL_MASS_VARIANTS = frozenset(["roy_camille", "magerl", "an", "anderson"])
+"""Lateral mass screw technique variants."""
+
+# Valid vertebral levels per technique
+TECHNIQUE_VALID_LEVELS: dict[str, frozenset[str]] = {
+    "pedicle": frozenset(["C2", "C3", "C4", "C5", "C6", "C7"]),
+    "lateral_mass": frozenset(["C3", "C4", "C5", "C6", "C7"]),
+    "transarticular": frozenset(["C1C2"]),
+    "c1_lateral_mass": frozenset(["C1"]),
+    "c2_pars": frozenset(["C2"]),
+    "occipital": frozenset(["Occiput"]),
+}
+
+# =============================================================================
+# Per-Technique Screw Defaults (mm)
+# =============================================================================
+
+CERVICAL_PEDICLE_SCREW_DEFAULTS: dict[str, float] = {
+    "diameter_mm": 3.5,
+    "length_mm": 22.0,
+    "min_length_mm": 16.0,
+    "max_length_mm": 30.0,
+}
+
+TRANSARTICULAR_SCREW_DEFAULTS: dict[str, float] = {
+    "diameter_mm": 3.5,
+    "length_mm": 38.0,
+    "min_length_mm": 32.0,
+    "max_length_mm": 44.0,
+}
+
+C1_LATERAL_MASS_SCREW_DEFAULTS: dict[str, float] = {
+    "diameter_mm": 3.5,
+    "length_mm": 28.0,
+    "min_length_mm": 24.0,
+    "max_length_mm": 32.0,
+}
+
+C2_PARS_SCREW_DEFAULTS: dict[str, float] = {
+    "diameter_mm": 3.5,
+    "length_mm": 24.0,
+    "min_length_mm": 18.0,
+    "max_length_mm": 28.0,
+}
+
+OCCIPITAL_SCREW_DEFAULTS: dict[str, float] = {
+    "diameter_mm": 4.0,
+    "length_mm": 10.0,
+    "min_length_mm": 6.0,
+    "max_length_mm": 14.0,
+}
+
+# =============================================================================
+# Per-Technique Default Angulation (degrees)
+# =============================================================================
+# Angles follow anatomical convention:
+#   medial_deg: positive = toward midline
+#   lateral_deg: positive = away from midline
+#   cephalad_deg: positive = toward head
+#   caudal_deg: positive = toward feet
+
+TECHNIQUE_ANGULATION: dict[str, dict[str, float]] = {
+    "pedicle": {"medial_deg": 25.0, "caudal_deg": 0.0},
+    "lateral_mass_roy_camille": {"lateral_deg": 10.0, "cephalad_deg": 0.0},
+    "lateral_mass_magerl": {"lateral_deg": 25.0, "cephalad_deg": 45.0},
+    "lateral_mass_an": {"lateral_deg": 30.0, "cephalad_deg": 15.0},
+    "lateral_mass_anderson": {"lateral_deg": 10.0, "cephalad_deg": 30.0},
+    "transarticular": {"medial_deg": 10.0, "cephalad_deg": 50.0},
+    "c1_lateral_mass": {"medial_deg": 10.0, "caudal_deg": 5.0},
+    "c2_pars": {"medial_deg": 15.0, "cephalad_deg": 25.0},
+    "occipital": {"perpendicular_deg": 0.0},
+}
+
+# =============================================================================
+# Instrumentation Safety Thresholds (mm)
+# =============================================================================
+
+VA_SAFETY_DISTANCE_MM = 2.0
+"""Minimum distance from screw trajectory to vertebral artery (mm)."""
+
+CANAL_SAFETY_DISTANCE_MM = 2.0
+"""Minimum distance from screw trajectory to spinal canal (mm)."""
+
+NERVE_ROOT_SAFETY_DISTANCE_MM = 2.0
+"""Minimum distance from screw trajectory to nerve root (mm)."""
+
+ISTHMUS_MIN_HEIGHT_MM = 5.0
+"""Minimum C2 isthmus height for transarticular screw (mm).
+Source: Paramore CG et al. Spine 1996;21(13):1501-7."""
+
+ISTHMUS_MIN_WIDTH_MM = 4.0
+"""Minimum C2 isthmus width for transarticular screw (mm)."""
+
+OCCIPITAL_MIN_THICKNESS_MM = 6.0
+"""Minimum occipital bone thickness for bicortical purchase (mm)."""
+
+CERVICAL_PEDICLE_MIN_WIDTH_MM = 4.5
+"""Minimum pedicle width to safely accept 3.5mm screw (mm).
+Source: Abumi K et al. Spine 1994;19(17):1983-6."""
+
+# =============================================================================
+# Instrumentation Timeout
+# =============================================================================
+
+INSTRUMENTATION_TIMEOUT = 120
+"""Timeout for instrumentation planning code execution (seconds)."""
+
+# =============================================================================
+# Safety Color Codes
+# =============================================================================
+
+SAFETY_GREEN = "green"
+"""Safe — all clearances adequate."""
+
+SAFETY_YELLOW = "yellow"
+"""Warning — marginal clearances, proceed with caution."""
+
+SAFETY_RED = "red"
+"""Blocked — insufficient clearance, technique contraindicated."""
