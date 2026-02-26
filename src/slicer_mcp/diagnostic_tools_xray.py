@@ -57,6 +57,28 @@ MAGNIFICATION_DISCLAIMER = (
     "absolute distances. Angles are NOT affected by magnification."
 )
 
+# Disc degeneration X-ray grading (adapted from Pfirrmann/Kellgren-Lawrence)
+# Based on disc height loss and osteophyte assessment from lateral X-ray
+DISC_DEGENERATION_XRAY_GRADES = {
+    1: "Normal disc height, no osteophytes",
+    2: "Slight height decrease (<25%), possible marginal osteophytes",
+    3: "Moderate height decrease (25-50%), definite osteophytes",
+    4: "Severe height decrease (50-75%), large osteophytes, sclerosis",
+    5: "Disc space obliteration (>75%), bridging osteophytes",
+}
+
+# Per-disc landmarks for disc degeneration assessment
+DISC_DEGENERATION_LANDMARKS = [
+    "disc_ant_sup",  # Anterior superior disc margin
+    "disc_ant_inf",  # Anterior inferior disc margin
+    "disc_mid_sup",  # Middle superior disc margin
+    "disc_mid_inf",  # Middle inferior disc margin
+    "disc_post_sup",  # Posterior superior disc margin
+    "disc_post_inf",  # Posterior inferior disc margin
+    "osteophyte_ant",  # Tip of anterior osteophyte (if present, else same as disc_ant)
+    "osteophyte_post",  # Tip of posterior osteophyte (if present, else same as disc_post)
+]
+
 # =============================================================================
 # Geometry Helpers (2D)
 # =============================================================================
@@ -1297,5 +1319,197 @@ def measure_cobb_angle_xray(
     }
 
     logger.info(f"Cobb angle measured: {cobb_angle:.1f}° {curve_direction}, severity={severity}")
+
+    return result
+
+
+# =============================================================================
+# Tool 6: Disc Degeneration Classification (Lateral X-ray)
+# =============================================================================
+
+
+def classify_disc_degeneration_xray(
+    volume_node_id: str,
+    landmarks_per_disc: dict[str, dict[str, list[float]]],
+    reference_disc_height_mm: float | None = None,
+    magnification_factor: float = 1.0,
+) -> dict[str, Any]:
+    """Classify disc degeneration from lateral X-ray using height and osteophyte analysis.
+
+    Adapted grading system combining disc height loss assessment with
+    osteophyte evaluation from projected lateral radiograph. Each disc
+    level requires 8 landmarks defining disc margins and osteophyte tips.
+
+    Args:
+        volume_node_id: MRML node ID of the lateral X-ray volume.
+        landmarks_per_disc: Dict: disc_level -> landmark_name -> [x, y].
+            Each disc requires 8 landmarks (see DISC_DEGENERATION_LANDMARKS).
+        reference_disc_height_mm: Optional known normal disc height in mm
+            for absolute height loss calculation. If None, uses the tallest
+            disc in the series as reference.
+        magnification_factor: X-ray magnification correction factor (default 1.0).
+
+    Returns:
+        Dict with per-disc degeneration grades, height measurements, and summary.
+
+    Raises:
+        ValidationError: If inputs are invalid or landmarks are missing.
+        SlicerConnectionError: If Slicer communication fails.
+    """
+    volume_node_id = validate_mrml_node_id(volume_node_id)
+
+    if not landmarks_per_disc:
+        raise ValidationError(
+            "disc_degeneration: landmarks_per_disc cannot be empty",
+            field="landmarks_per_disc",
+            value="{}",
+        )
+
+    if magnification_factor <= 0:
+        raise ValidationError(
+            "magnification_factor must be positive",
+            field="magnification_factor",
+            value=str(magnification_factor),
+        )
+
+    for disc_label in landmarks_per_disc:
+        _validate_vertebra_label(disc_label, "disc_degeneration")
+
+    # Validate and collect all landmarks
+    all_landmarks: dict[str, tuple[float, float]] = {}
+    disc_pts: dict[str, dict[str, tuple[float, float]]] = {}
+
+    for disc_label, disc_landmarks in landmarks_per_disc.items():
+        validated = _validate_landmarks(
+            disc_landmarks,
+            DISC_DEGENERATION_LANDMARKS,
+            f"disc_degeneration_{disc_label}",
+        )
+        disc_pts[disc_label] = validated
+        for name, coord in validated.items():
+            all_landmarks[f"{disc_label}_{name}"] = coord
+
+    # Place landmarks in Slicer
+    client = get_client()
+    place_code = _build_place_landmarks_code(
+        volume_node_id, all_landmarks, "DiscDegeneration_Landmarks"
+    )
+
+    try:
+        exec_result = client.exec_python(place_code)
+        _parse_json_result(exec_result.get("result", ""), "disc degeneration landmark placement")
+    except SlicerConnectionError:
+        logger.error("Failed to place disc degeneration landmarks in Slicer")
+        raise
+
+    # Compute per-disc measurements
+    disc_results = []
+    disc_heights = []  # For reference height calculation
+
+    for disc_label, dp in disc_pts.items():
+        # Three heights: anterior, middle, posterior
+        anterior_height = _distance_2d(dp["disc_ant_sup"], dp["disc_ant_inf"])
+        middle_height = _distance_2d(dp["disc_mid_sup"], dp["disc_mid_inf"])
+        posterior_height = _distance_2d(dp["disc_post_sup"], dp["disc_post_inf"])
+
+        # Average disc height
+        avg_height = (anterior_height + middle_height + posterior_height) / 3.0
+
+        # Correct for magnification (distances)
+        avg_height_corrected = avg_height / magnification_factor
+        anterior_corrected = anterior_height / magnification_factor
+        middle_corrected = middle_height / magnification_factor
+        posterior_corrected = posterior_height / magnification_factor
+
+        disc_heights.append(avg_height_corrected)
+
+        # Osteophyte assessment
+        # Anterior osteophyte: distance from disc margin to osteophyte tip
+        ant_osteophyte_size = (
+            _distance_2d(dp["disc_ant_sup"], dp["osteophyte_ant"]) / magnification_factor
+        )
+        post_osteophyte_size = (
+            _distance_2d(dp["disc_post_sup"], dp["osteophyte_post"]) / magnification_factor
+        )
+
+        has_ant_osteophyte = ant_osteophyte_size > 1.0  # >1mm = present
+        has_post_osteophyte = post_osteophyte_size > 1.0
+
+        disc_results.append(
+            {
+                "disc_level": disc_label,
+                "anterior_height_mm": round(anterior_corrected, 2),
+                "middle_height_mm": round(middle_corrected, 2),
+                "posterior_height_mm": round(posterior_corrected, 2),
+                "average_height_mm": round(avg_height_corrected, 2),
+                "anterior_osteophyte_mm": round(ant_osteophyte_size, 2),
+                "posterior_osteophyte_mm": round(post_osteophyte_size, 2),
+                "has_anterior_osteophyte": has_ant_osteophyte,
+                "has_posterior_osteophyte": has_post_osteophyte,
+                # Placeholders - will be filled after reference height is determined
+                "_avg_height": avg_height_corrected,
+            }
+        )
+
+    # Determine reference disc height
+    if reference_disc_height_mm is not None and reference_disc_height_mm > 0:
+        ref_height = reference_disc_height_mm
+    elif disc_heights:
+        ref_height = max(disc_heights)
+    else:
+        ref_height = 1.0  # Fallback to prevent division by zero
+
+    # Grade each disc
+    for dr in disc_results:
+        avg_h = dr.pop("_avg_height")
+        height_loss_frac = max(0.0, 1.0 - avg_h / ref_height) if ref_height > 0 else 0.0
+        height_loss_pct = height_loss_frac * 100
+
+        has_osteophytes = dr["has_anterior_osteophyte"] or dr["has_posterior_osteophyte"]
+        large_osteophytes = (
+            dr["anterior_osteophyte_mm"] > 5.0 or dr["posterior_osteophyte_mm"] > 5.0
+        )
+        bridging = dr["anterior_osteophyte_mm"] > 10.0 or dr["posterior_osteophyte_mm"] > 10.0
+
+        # Grading based on height loss + osteophyte severity
+        if height_loss_frac >= 0.75 or bridging:
+            grade = 5
+        elif height_loss_frac >= 0.50 or large_osteophytes:
+            grade = 4
+        elif height_loss_frac >= 0.25 or (has_osteophytes and height_loss_frac >= 0.10):
+            grade = 3
+        elif height_loss_frac >= 0.10 or has_osteophytes:
+            grade = 2
+        else:
+            grade = 1
+
+        dr["height_loss_percent"] = round(height_loss_pct, 1)
+        dr["grade"] = grade
+        dr["grade_description"] = DISC_DEGENERATION_XRAY_GRADES[grade]
+
+    result = {
+        "success": True,
+        "tool": "classify_disc_degeneration_xray",
+        "discs": disc_results,
+        "reference_disc_height_mm": round(ref_height, 2),
+        "summary": {
+            "total_discs_assessed": len(disc_results),
+            "max_grade": max((d["grade"] for d in disc_results), default=0),
+            "grade_distribution": {
+                g: sum(1 for d in disc_results if d["grade"] == g) for g in range(1, 6)
+            },
+        },
+        "magnification_factor": magnification_factor,
+        "disclaimer": MAGNIFICATION_DISCLAIMER,
+        "references": [
+            "Kellgren JH, Lawrence JS. Ann Rheum Dis. 1957;16(4):494-502",
+            "Pfirrmann CW et al. Spine. 2001;26(17):1873-8 (adapted for X-ray)",
+        ],
+    }
+
+    logger.info(
+        f"Disc degeneration assessed: {len(disc_results)} discs, "
+        f"max grade={result['summary']['max_grade']}"
+    )
 
     return result

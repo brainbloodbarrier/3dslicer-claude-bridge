@@ -461,6 +461,38 @@ def measure_cobb_angle_xray(
         return _handle_tool_error(e, "measure_cobb_angle_xray")
 
 
+@mcp.tool()
+def classify_disc_degeneration_xray(
+    volume_node_id: str,
+    landmarks_per_disc: dict[str, dict[str, list[float]]],
+    reference_disc_height_mm: float | None = None,
+    magnification_factor: float = 1.0,
+) -> dict:
+    """Classify disc degeneration from lateral X-ray using height and osteophyte analysis.
+
+    Adapted grading combining disc height loss with osteophyte evaluation.
+    Each disc level requires 8 landmarks: disc margins (anterior/middle/posterior
+    sup and inf) plus osteophyte tips (anterior and posterior).
+
+    Args:
+        volume_node_id: MRML node ID of the lateral X-ray volume
+        landmarks_per_disc: Dict: disc_level -> landmark_name -> [x, y].
+            Each disc needs 8 landmarks.
+        reference_disc_height_mm: Known normal disc height in mm (optional)
+        magnification_factor: X-ray magnification correction factor (default 1.0)
+
+    Returns:
+        Dict with per-disc grades (1-5), height measurements, osteophyte
+            assessment, and summary
+    """
+    try:
+        return diagnostic_tools_xray.classify_disc_degeneration_xray(
+            volume_node_id, landmarks_per_disc, reference_disc_height_mm, magnification_factor
+        )
+    except Exception as e:
+        return _handle_tool_error(e, "classify_disc_degeneration_xray")
+
+
 # CT Diagnostic Protocol Tools
 # ============================
 
@@ -916,12 +948,13 @@ def main():
     """Run the MCP Slicer Bridge server with stdio transport."""
     logger.info("Starting MCP Slicer Bridge server")
     logger.info(
-        "Registered 29 tools: capture_screenshot, list_scene_nodes, "
+        "Registered 30 tools: capture_screenshot, list_scene_nodes, "
         "execute_python, measure_volume, list_sample_data, load_sample_data, "
         "set_layout, import_dicom, list_dicom_studies, list_dicom_series, "
         "load_dicom_series, run_brain_extraction, measure_sagittal_balance_xray, "
         "measure_coronal_balance_xray, measure_listhesis_dynamic_xray, "
         "detect_vertebral_fractures_xray, measure_cobb_angle_xray, "
+        "classify_disc_degeneration_xray, "
         "detect_vertebral_fractures_ct, assess_osteoporosis_ct, "
         "detect_metastatic_lesions_ct, calculate_sins_score, "
         "measure_listhesis_ct, measure_spinal_canal_ct, plan_cervical_screws, "

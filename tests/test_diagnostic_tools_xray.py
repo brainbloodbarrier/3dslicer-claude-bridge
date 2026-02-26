@@ -19,6 +19,7 @@ from slicer_mcp.diagnostic_tools_xray import (
     _signed_angle_2d,
     _validate_landmarks,
     _validate_vertebra_label,
+    classify_disc_degeneration_xray,
     detect_vertebral_fractures_xray,
     measure_cobb_angle_xray,
     measure_coronal_balance_xray,
@@ -1219,3 +1220,164 @@ class TestSlicerConnectionErrors:
 
         with pytest.raises(SlicerConnectionError):
             detect_vertebral_fractures_xray("vtkMRMLScalarVolumeNode1", _make_fracture_landmarks())
+
+
+# =============================================================================
+# Disc Degeneration Classification Tests
+# =============================================================================
+
+
+def _make_disc_degeneration_landmarks():
+    """Create disc degeneration landmarks for two discs."""
+    return {
+        "L4-L5": {
+            "disc_ant_sup": [90.0, 395.0],
+            "disc_ant_inf": [90.0, 405.0],
+            "disc_mid_sup": [100.0, 395.0],
+            "disc_mid_inf": [100.0, 405.0],
+            "disc_post_sup": [110.0, 395.0],
+            "disc_post_inf": [110.0, 405.0],
+            "osteophyte_ant": [90.0, 395.0],  # No osteophyte (same position)
+            "osteophyte_post": [110.0, 395.0],
+        },
+        "L5-S1": {
+            "disc_ant_sup": [88.0, 410.0],
+            "disc_ant_inf": [88.0, 418.0],
+            "disc_mid_sup": [100.0, 410.0],
+            "disc_mid_inf": [100.0, 418.0],
+            "disc_post_sup": [112.0, 410.0],
+            "disc_post_inf": [112.0, 418.0],
+            "osteophyte_ant": [85.0, 408.0],  # Small osteophyte
+            "osteophyte_post": [112.0, 410.0],
+        },
+    }
+
+
+class TestClassifyDiscDegenerationXray:
+    """Test classify_disc_degeneration_xray tool."""
+
+    @patch("slicer_mcp.diagnostic_tools_xray.get_client")
+    def test_successful_assessment(self, mock_get_client):
+        """Full disc degeneration assessment returns expected structure."""
+        mock_client = Mock()
+        mock_client.exec_python.return_value = {
+            "success": True,
+            "result": '{"success": true, "markups_node_id": "vtkMRMLMarkupsFiducialNode1",'
+            ' "markups_node_name": "DiscDegeneration_Landmarks", "num_landmarks": 16}',
+        }
+        mock_get_client.return_value = mock_client
+
+        result = classify_disc_degeneration_xray(
+            "vtkMRMLScalarVolumeNode1",
+            _make_disc_degeneration_landmarks(),
+        )
+
+        assert result["success"] is True
+        assert result["tool"] == "classify_disc_degeneration_xray"
+        assert len(result["discs"]) == 2
+        assert "grade" in result["discs"][0]
+        assert "grade_description" in result["discs"][0]
+        assert "height_loss_percent" in result["discs"][0]
+        assert "anterior_osteophyte_mm" in result["discs"][0]
+        assert "summary" in result
+        assert "grade_distribution" in result["summary"]
+        assert result["disclaimer"] == MAGNIFICATION_DISCLAIMER
+
+    @patch("slicer_mcp.diagnostic_tools_xray.get_client")
+    def test_normal_discs_grade_1(self, mock_get_client):
+        """Equal-height discs with no osteophytes produce grade 1."""
+        mock_client = Mock()
+        mock_client.exec_python.return_value = {
+            "success": True,
+            "result": '{"success": true, "markups_node_id": "vtkMRMLMarkupsFiducialNode1",'
+            ' "markups_node_name": "DiscDegeneration_Landmarks", "num_landmarks": 16}',
+        }
+        mock_get_client.return_value = mock_client
+
+        # Uniform disc heights, osteophyte tips = disc margins
+        landmarks = {
+            "L4-L5": {
+                "disc_ant_sup": [90.0, 390.0],
+                "disc_ant_inf": [90.0, 400.0],
+                "disc_mid_sup": [100.0, 390.0],
+                "disc_mid_inf": [100.0, 400.0],
+                "disc_post_sup": [110.0, 390.0],
+                "disc_post_inf": [110.0, 400.0],
+                "osteophyte_ant": [90.0, 390.0],
+                "osteophyte_post": [110.0, 390.0],
+            },
+        }
+
+        result = classify_disc_degeneration_xray("vtkMRMLScalarVolumeNode1", landmarks)
+
+        assert result["discs"][0]["grade"] == 1
+        assert result["discs"][0]["height_loss_percent"] < 5.0
+
+    def test_empty_landmarks_raises(self):
+        """Empty landmarks dict raises ValidationError."""
+        with pytest.raises(ValidationError, match="cannot be empty"):
+            classify_disc_degeneration_xray("vtkMRMLScalarVolumeNode1", {})
+
+    def test_invalid_disc_label_raises(self):
+        """Invalid disc label raises ValidationError."""
+        landmarks = {"INVALID": _make_disc_degeneration_landmarks()["L4-L5"]}
+        with pytest.raises(ValidationError, match="invalid vertebra label"):
+            classify_disc_degeneration_xray("vtkMRMLScalarVolumeNode1", landmarks)
+
+    def test_negative_magnification_raises(self):
+        """Negative magnification raises ValidationError."""
+        with pytest.raises(ValidationError, match="magnification_factor must be positive"):
+            classify_disc_degeneration_xray(
+                "vtkMRMLScalarVolumeNode1",
+                _make_disc_degeneration_landmarks(),
+                magnification_factor=-1.0,
+            )
+
+    @patch("slicer_mcp.diagnostic_tools_xray.get_client")
+    def test_reference_disc_height_used(self, mock_get_client):
+        """Explicit reference disc height is used for grading."""
+        mock_client = Mock()
+        mock_client.exec_python.return_value = {
+            "success": True,
+            "result": '{"success": true, "markups_node_id": "vtkMRMLMarkupsFiducialNode1",'
+            ' "markups_node_name": "DiscDegeneration_Landmarks", "num_landmarks": 16}',
+        }
+        mock_get_client.return_value = mock_client
+
+        result = classify_disc_degeneration_xray(
+            "vtkMRMLScalarVolumeNode1",
+            _make_disc_degeneration_landmarks(),
+            reference_disc_height_mm=15.0,
+        )
+
+        assert result["reference_disc_height_mm"] == 15.0
+
+    @patch("slicer_mcp.diagnostic_tools_xray.get_client")
+    def test_heights_not_affected_by_magnification_ratio(self, mock_get_client):
+        """Height loss percentage (ratio) does not change with magnification."""
+        mock_client = Mock()
+        mock_client.exec_python.return_value = {
+            "success": True,
+            "result": '{"success": true, "markups_node_id": "vtkMRMLMarkupsFiducialNode1",'
+            ' "markups_node_name": "DiscDegeneration_Landmarks", "num_landmarks": 16}',
+        }
+        mock_get_client.return_value = mock_client
+
+        landmarks = _make_disc_degeneration_landmarks()
+
+        result_1x = classify_disc_degeneration_xray(
+            "vtkMRMLScalarVolumeNode1", landmarks, magnification_factor=1.0
+        )
+        result_2x = classify_disc_degeneration_xray(
+            "vtkMRMLScalarVolumeNode1", landmarks, magnification_factor=2.0
+        )
+
+        for i in range(len(result_1x["discs"])):
+            assert (
+                abs(
+                    result_1x["discs"][i]["height_loss_percent"]
+                    - result_2x["discs"][i]["height_loss_percent"]
+                )
+                < 0.1
+            ), "Height loss percentage should not change with magnification"
+            assert result_1x["discs"][i]["grade"] == result_2x["discs"][i]["grade"]
