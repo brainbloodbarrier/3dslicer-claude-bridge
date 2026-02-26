@@ -608,3 +608,41 @@ SAFETY_YELLOW = "yellow"
 
 SAFETY_RED = "red"
 """Blocked — insufficient clearance, technique contraindicated."""
+
+
+# =============================================================================
+# X-ray Diagnostic Constants
+# =============================================================================
+
+# Coronal balance thresholds
+CORONAL_C7_CSVL_THRESHOLD_MM = 20.0
+CORONAL_COBB_MILD_THRESHOLD_DEG = 25.0
+CORONAL_COBB_MODERATE_THRESHOLD_DEG = 45.0
+
+# Vertebra label validation patterns
+VERTEBRA_LABEL_PATTERN = r"^[CTLS][0-9]{1,2}$"
+VERTEBRA_LEVEL_PATTERN = r"^[CTLS][0-9]{1,2}-[CTLS][0-9]{1,2}$"
+
+# SRS-Schwab classification thresholds (Schwab F et al. Spine 2012)
+SCHWAB_PI_LL_THRESHOLDS = {
+    "matched": 10.0,
+    "moderate": 20.0,
+}
+
+SCHWAB_SVA_THRESHOLDS = {
+    "grade_0": 40.0,
+    "grade_1": 95.0,
+}
+
+SCHWAB_PT_THRESHOLDS = {
+    "grade_0": 20.0,
+    "grade_1": 30.0,
+}
+
+# Roussouly lordosis type criteria (Roussouly P et al. Spine 2005)
+ROUSSOULY_SS_THRESHOLDS = {
+    "type_1_max": 35.0,
+    "type_2_max": 35.0,
+    "type_3_min": 35.0,
+    "type_3_max": 45.0,
+}
