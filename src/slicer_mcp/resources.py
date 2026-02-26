@@ -116,7 +116,7 @@ result = {
     'total_count': len(volumes)
 }
 
-print(json.dumps(result))
+__execResult = result
 """
 
     try:
@@ -160,7 +160,7 @@ result = {
     'python_available': True
 }
 
-print(json.dumps(result))
+__execResult = result
 """
 
         exec_result = client.exec_python(python_code)

@@ -431,7 +431,7 @@ result = {{
     'num_landmarks': markupsNode.GetNumberOfControlPoints()
 }}
 
-print(json.dumps(result))
+__execResult = result
 """
 
 

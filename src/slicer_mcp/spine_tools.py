@@ -236,7 +236,7 @@ result = {{
     'node_name': segNode.GetName()
 }}
 
-print(json.dumps(result))
+__execResult = result
 """
 
 
@@ -412,12 +412,12 @@ result['reference_ranges'] = reference_ranges
 result['statuses'] = statuses
 result['population'] = population
 
-print(json.dumps(result))
+__execResult = result
 """
-    # Replace the final print in landmark_code with the measurement code
-    # landmark_code ends with print(json.dumps(result))
-    # We remove that final print and append measurement code
-    code = landmark_code.rsplit("print(json.dumps(result))", 1)[0]
+    # Replace the final __execResult in landmark_code with the measurement code
+    # landmark_code ends with __execResult = result
+    # We remove that final assignment and append measurement code
+    code = landmark_code.rsplit("__execResult = result", 1)[0]
     return code + measurement_code
 
 
@@ -787,7 +787,7 @@ result = {
     'statuses': statuses
 }
 
-print(json.dumps(result))
+__execResult = result
 """
 
     return extraction_code + alignment_code
@@ -942,7 +942,7 @@ result = {{
     "processing_time_seconds": round(elapsed, 2),
 }}
 
-print(json.dumps(result))
+__execResult = result
 """
 
 
@@ -1063,7 +1063,7 @@ result = {{
     "processing_time_seconds": round(elapsed, 2)
 }}
 
-print(json.dumps(result))
+__execResult = result
 """
 
 
@@ -1185,7 +1185,7 @@ result = {{
     "processing_time_seconds": round(elapsed, 2)
 }}
 
-print(json.dumps(result))
+__execResult = result
 """
 
 
@@ -1385,7 +1385,7 @@ result = {{
     "processing_time_seconds": round(elapsed, 2)
 }}
 
-print(json.dumps(result))
+__execResult = result
 """
 
 

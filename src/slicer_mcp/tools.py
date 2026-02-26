@@ -606,7 +606,7 @@ result = {{
     ]
 }}
 
-print(json.dumps(result))
+__execResult = result
 """
 
 
@@ -668,7 +668,7 @@ result = {{
     'segments': segments
 }}
 
-print(json.dumps(result))
+__execResult = result
 """
 
 
@@ -794,7 +794,7 @@ except Exception as e:
         'error': str(e)
     }
 
-print(json.dumps(result))
+__execResult = result
 """
 
     try:
@@ -884,7 +884,7 @@ else:
         'loaded_node_name': None
     }
 
-print(json.dumps(result))
+__execResult = result
 """
         exec_result = client.exec_python(python_code)
 
@@ -1013,7 +1013,7 @@ else:
             'total_count': len(series)
         }}
 
-print(json.dumps(result))
+__execResult = result
 """
 
     try:
@@ -1105,7 +1105,7 @@ else:
             scalar_range = node.GetImageData().GetScalarRange()
             result['scalar_range'] = list(scalar_range)
 
-print(json.dumps(result))
+__execResult = result
 """
 
     try:
@@ -1184,7 +1184,7 @@ result = {{
     'new_patients': final_patients - initial_patients
 }}
 
-print(json.dumps(result))
+__execResult = result
 """
 
     try:
@@ -1260,7 +1260,7 @@ else:
         'total_count': len(studies)
     }
 
-print(json.dumps(result))
+__execResult = result
 """
 
     try:
@@ -1357,7 +1357,7 @@ result = {
     "processing_time_seconds": round(elapsed, 2)
 }
 
-print(json.dumps(result))
+__execResult = result
 """
 
     return setup_code + _build_segment_statistics_code("brainSeg") + result_code
@@ -1439,7 +1439,7 @@ result = {
     "processing_time_seconds": round(elapsed, 2)
 }
 
-print(json.dumps(result))
+__execResult = result
 """
 
     return setup_code + _build_segment_statistics_code("brainSeg") + result_code

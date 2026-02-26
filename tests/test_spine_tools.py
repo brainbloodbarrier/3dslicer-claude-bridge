@@ -972,9 +972,9 @@ class TestBuildSpineSegmentationCode:
         assert "TotalSegmentator" in code
 
     def test_code_outputs_json(self):
-        """Generated code must end with print(json.dumps(result))."""
+        """Generated code must end with __execResult = result."""
         code = _build_spine_segmentation_code('"vtkNode1"', '"full"', False, False)
-        assert "print(json.dumps(result))" in code
+        assert "__execResult = result" in code
 
     def test_code_uses_vertebral_body_task_when_no_extras(self):
         """Without discs/cord, code should use vertebral_body task."""

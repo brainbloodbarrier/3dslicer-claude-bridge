@@ -606,7 +606,7 @@ result = {{
     }}
 }}
 
-print(json.dumps(result))
+__execResult = result
 """
 
 
@@ -860,7 +860,7 @@ result = {{
     }}
 }}
 
-print(json.dumps(result))
+__execResult = result
 """
 
 
@@ -1110,7 +1110,7 @@ result = {{
     "vertebrae": vertebrae_results
 }}
 
-print(json.dumps(result))
+__execResult = result
 """
 
 
@@ -1405,7 +1405,7 @@ result = {{
     "levels": results_by_level
 }}
 
-print(json.dumps(result))
+__execResult = result
 """
 
 
@@ -1614,7 +1614,7 @@ result = {{
     "levels": levels_results
 }}
 
-print(json.dumps(result))
+__execResult = result
 """
 
 
@@ -1839,7 +1839,7 @@ result = {{
     "levels": levels_results
 }}
 
-print(json.dumps(result))
+__execResult = result
 """
 
 

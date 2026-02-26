@@ -50,7 +50,7 @@ Claude Code ──(MCP/stdio)──▶ server.py ──(HTTP)──▶ Slicer We
 ### Data Flow
 
 1. **server.py** registers tools/resources with `@mcp.tool()` / `@mcp.resource()`. Each tool wrapper catches all exceptions via `_handle_tool_error()` and returns standardized error dicts with `error_type` field (`circuit_open`, `timeout`, `connection`, `unexpected`).
-2. **tools.py** contains the actual logic: validates inputs, builds Python code strings, calls `slicer_client.get_client().exec_python(code)`, and parses JSON results via `_parse_json_result()`. Tool code uses `print(json.dumps(result))` in generated Python to return data from Slicer.
+2. **tools.py** contains the actual logic: validates inputs, builds Python code strings, calls `slicer_client.get_client().exec_python(code)`, and parses JSON results via `_parse_json_result()`. Tool code uses `__execResult = result` in generated Python to return data from Slicer (dict assigned directly — Slicer serializes it to JSON in the HTTP response).
 3. **slicer_client.py** manages HTTP communication:
    - Singleton via `get_client()` with thread-safe double-checked locking (`threading.Lock`).
    - HTTP methods decorated with `@with_retry` (3 attempts, exponential backoff, `ConnectionError` only — timeouts NOT retried).
@@ -60,9 +60,9 @@ Claude Code ──(MCP/stdio)──▶ server.py ──(HTTP)──▶ Slicer We
 
 ### Slicer Exec Endpoint
 
-The `/slicer/exec` endpoint must be explicitly enabled in Slicer (Modules > Developer Tools > Web Server > "Enable Slicer API" + "Enable exec"). Two result patterns:
-- **`print()`**: Output captured in response text — this is what `tools.py` uses via `print(json.dumps(result))`.
-- **`__execResult = value`**: Value returned directly in response body — used for simple expressions.
+The `/slicer/exec` endpoint must be explicitly enabled in Slicer (Modules > Developer Tools > Web Server > "Enable Slicer API" + "Enable exec"). Result patterns:
+- **`__execResult = value`**: Value serialized to JSON in response body — this is what all tools use. Assign a dict directly (not `json.dumps()`; that would double-encode).
+- **`print()`**: In Slicer ≥5.8 stdout is captured in response text, but Slicer 5.10.0 stable does NOT capture `print()` output (returns `{}`). Do not use `print()` for returning data.
 - Bare expressions return `{}` with no output.
 - VTK collections don't support Python `len()` — use `.GetNumberOfItems()` instead.
 

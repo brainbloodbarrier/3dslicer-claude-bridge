@@ -432,7 +432,7 @@ if registration_performed:
     except Exception:
         pass  # Best-effort cleanup
 
-print(json.dumps(result))
+__execResult = result
 """
 
 
@@ -672,7 +672,7 @@ result = {{
     }},
 }}
 
-print(json.dumps(result))
+__execResult = result
 """
 
 
@@ -986,7 +986,7 @@ if registration_performed:
     except Exception:
         pass  # Best-effort cleanup
 
-print(json.dumps(result))
+__execResult = result
 """
 
 
@@ -1215,7 +1215,7 @@ if registration_performed:
     except Exception:
         pass  # Best-effort cleanup
 
-print(json.dumps(result))
+__execResult = result
 """
 
 

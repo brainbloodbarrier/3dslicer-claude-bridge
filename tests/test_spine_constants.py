@@ -58,10 +58,10 @@ class TestSpineRegions:
         assert REGION_VERTEBRAE["thoracic"][-1] == "T12"
 
     def test_region_vertebrae_lumbar_count(self):
-        """Lumbar region must have 5 vertebrae (L1-L5)."""
-        assert len(REGION_VERTEBRAE["lumbar"]) == 5
+        """Lumbar region must have 6 vertebrae (L1-L5 + S1)."""
+        assert len(REGION_VERTEBRAE["lumbar"]) == 6
         assert REGION_VERTEBRAE["lumbar"][0] == "L1"
-        assert REGION_VERTEBRAE["lumbar"][-1] == "L5"
+        assert REGION_VERTEBRAE["lumbar"][-1] == "S1"
 
     def test_region_vertebrae_full_is_union(self):
         """Full region must be the union of cervical + thoracic + lumbar."""
@@ -71,8 +71,8 @@ class TestSpineRegions:
         assert REGION_VERTEBRAE["full"] == expected
 
     def test_full_region_count(self):
-        """Full region must have 24 vertebrae (C1-L5)."""
-        assert len(REGION_VERTEBRAE["full"]) == 24
+        """Full region must have 25 vertebrae (C1-S1)."""
+        assert len(REGION_VERTEBRAE["full"]) == 25
 
 
 # =============================================================================
