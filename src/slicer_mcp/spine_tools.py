@@ -855,7 +855,6 @@ try:
         inputVolume=inputVolume,
         outputSegmentation=outputSeg,
         task=task,
-        fast=False,
     )
 except Exception as e:
     slicer.mrmlScene.RemoveNode(outputSeg)

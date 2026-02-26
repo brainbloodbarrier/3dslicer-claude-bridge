@@ -178,7 +178,7 @@ try:
         inputVolume=slicer.mrmlScene.GetNodeByID({safe_volume_id}),
         outputSegmentation=seg_node,
         task='total_mr',
-        fast=True,
+        quality='fast',
     )
 except Exception as ts_err:
     raise ValueError(f"TotalSegmentator failed: {{ts_err}}")

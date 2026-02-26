@@ -976,10 +976,10 @@ class TestBuildSpineSegmentationCode:
         code = _build_spine_segmentation_code('"vtkNode1"', '"full"', False, False)
         assert "__execResult = result" in code
 
-    def test_code_uses_vertebral_body_task_when_no_extras(self):
-        """Without discs/cord, code should use vertebral_body task."""
+    def test_code_uses_total_task_when_no_extras(self):
+        """Without discs/cord, code should use total task (no license required)."""
         code = _build_spine_segmentation_code('"vtkNode1"', '"full"', False, False)
-        assert '"vertebral_body"' in code
+        assert '"total"' in code
 
     def test_code_uses_total_task_with_discs(self):
         """With include_discs=True, code should use total task."""

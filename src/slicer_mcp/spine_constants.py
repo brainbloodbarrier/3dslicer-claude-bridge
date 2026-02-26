@@ -99,7 +99,8 @@ TOTALSEGMENTATOR_DISC_MAP: dict[str, str] = {
 }
 
 # TotalSegmentator task names
-TOTALSEG_TASK_VERTEBRAE = "vertebral_body"
+# Note: "vertebrae_body" task requires a license; "total" is open and includes vertebrae
+TOTALSEG_TASK_VERTEBRAE = "total"
 TOTALSEG_TASK_FULL = "total"
 
 # =============================================================================
