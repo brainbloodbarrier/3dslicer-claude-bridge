@@ -6,6 +6,15 @@ from unittest.mock import Mock, patch
 import pytest
 
 from slicer_mcp.diagnostic_tools_mri import (
+    VALID_MRI_REGIONS,
+    _validate_mri_region,
+    assess_disc_degeneration_mri,
+    classify_modic_changes,
+    detect_cord_compression_mri,
+    detect_metastatic_lesions_mri,
+)
+from slicer_mcp.slicer_client import SlicerConnectionError
+from slicer_mcp.spine_constants import (
     CORD_COMPRESSION_RATIO_NORMAL,
     CORD_T2_HYPERINTENSITY_THRESHOLD,
     DISC_HOMOGENEOUS_CV_THRESHOLD,
@@ -19,14 +28,7 @@ from slicer_mcp.diagnostic_tools_mri import (
     MRI_ANALYSIS_TIMEOUT,
     MSCC_THRESHOLD,
     PFIRRMANN_BRIGHT_THRESHOLD,
-    VALID_MRI_REGIONS,
-    _validate_mri_region,
-    assess_disc_degeneration_mri,
-    classify_modic_changes,
-    detect_cord_compression_mri,
-    detect_metastatic_lesions_mri,
 )
-from slicer_mcp.slicer_client import SlicerConnectionError
 from slicer_mcp.tools import ValidationError
 
 # =============================================================================
@@ -139,7 +141,7 @@ class TestClassifyModicChanges:
             "success": True,
             "tool": "classify_modic_changes",
             "region": "lumbar",
-            "reference_vertebra": "L3",
+            "reference_vertebra": "median_of_all",
             "registration_performed": False,
             "levels": [
                 {
@@ -189,7 +191,7 @@ class TestClassifyModicChanges:
             "success": True,
             "tool": "classify_modic_changes",
             "region": "lumbar",
-            "reference_vertebra": "L3",
+            "reference_vertebra": "median_of_all",
             "registration_performed": False,
             "levels": [
                 {
@@ -409,34 +411,10 @@ class TestAssessDiscDegenerationMri:
             with pytest.raises(SlicerConnectionError):
                 assess_disc_degeneration_mri("vtkMRMLScalarVolumeNode1")
 
-    def test_cervical_region(self):
-        """Test cervical region is accepted."""
-        mock_result = {
-            "success": True,
-            "tool": "assess_disc_degeneration_mri",
-            "region": "cervical",
-            "csf_reference_signal": 800.0,
-            "discs": [],
-            "total_discs_analyzed": 0,
-            "grade_summary": {
-                "grade_i": 0,
-                "grade_ii": 0,
-                "grade_iii": 0,
-                "grade_iv": 0,
-                "grade_v": 0,
-            },
-        }
-
-        with patch("slicer_mcp.diagnostic_tools_mri.get_client") as mock_get_client:
-            mock_client = Mock()
-            mock_client.exec_python.return_value = {
-                "success": True,
-                "result": json.dumps(mock_result),
-            }
-            mock_get_client.return_value = mock_client
-
-            result = assess_disc_degeneration_mri("vtkMRMLScalarVolumeNode1", region="cervical")
-            assert result["region"] == "cervical"
+    def test_cervical_region_unsupported(self):
+        """Test cervical region raises ValidationError for Pfirrmann grading."""
+        with pytest.raises(ValidationError, match="only supports"):
+            assess_disc_degeneration_mri("vtkMRMLScalarVolumeNode1", region="cervical")
 
 
 # =============================================================================
@@ -645,11 +623,11 @@ class TestDetectMetastaticLesionsMri:
         assert exc_info.value.field == "region"
 
     def test_full_region_accepted(self):
-        """Test 'full' region is accepted for metastasis detection."""
-        mock_result = {
+        """Test 'full' region is accepted for metastasis detection (splits into sub-regions)."""
+        mock_sub_result = {
             "success": True,
             "tool": "detect_metastatic_lesions_mri",
-            "region": "full",
+            "region": "cervical",
             "registration_performed": False,
             "reference_t1_signal": 500.0,
             "reference_t2_stir_signal": 300.0,
@@ -665,7 +643,7 @@ class TestDetectMetastaticLesionsMri:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
-                "result": json.dumps(mock_result),
+                "result": json.dumps(mock_sub_result),
             }
             mock_get_client.return_value = mock_client
 
@@ -675,6 +653,9 @@ class TestDetectMetastaticLesionsMri:
                 region="full",
             )
             assert result["region"] == "full"
+            assert "sub_regions_scanned" in result
+            # Should have called exec_python 3 times (cervical, thoracic, lumbar)
+            assert mock_client.exec_python.call_count == 3
 
     def test_successful_lytic_lesion_detection(self):
         """Test detection of lytic metastatic lesion (T1 low, T2/STIR high)."""
@@ -888,6 +869,134 @@ class TestDetectMetastaticLesionsMri:
                     "vtkMRMLScalarVolumeNode2",
                 )
             assert "Failed to parse" in str(exc_info.value)
+
+
+# =============================================================================
+# Code Generation Verification Tests
+# =============================================================================
+
+
+class TestModicCodeGeneration:
+    """Test that Modic code generation produces correct code."""
+
+    def test_region_escaped_in_codegen(self):
+        """Test that region is JSON-escaped in generated code."""
+        from slicer_mcp.diagnostic_tools_mri import _build_modic_analysis_code
+
+        code = _build_modic_analysis_code('"node1"', '"node2"', "lumbar")
+        # Should use json.dumps for region, not raw f-string interpolation
+        assert "'region': \"lumbar\"" in code or "'region': 'lumbar'" in code
+        # Should NOT contain unescaped {region} pattern
+        assert "'{region}'" not in code.replace("{json.dumps(region)}", "")
+
+    def test_median_reference_used(self):
+        """Test that median reference is used instead of middle vertebra."""
+        from slicer_mcp.diagnostic_tools_mri import _build_modic_analysis_code
+
+        code = _build_modic_analysis_code('"node1"', '"node2"', "lumbar")
+        assert "median" in code.lower() or "np.median" in code
+
+    def test_brainsfit_uses_moments_align(self):
+        """Test that BRAINSFit uses useMomentsAlign."""
+        from slicer_mcp.diagnostic_tools_mri import _build_registration_check_code
+
+        code = _build_registration_check_code('"node1"', '"node2"')
+        assert "useMomentsAlign" in code
+        assert "useCenterOfHeadAlign" not in code
+
+    def test_cleanup_code_present(self):
+        """Test that registration cleanup code is present."""
+        from slicer_mcp.diagnostic_tools_mri import _build_modic_analysis_code
+
+        code = _build_modic_analysis_code('"node1"', '"node2"', "lumbar")
+        assert "T2_to_T1_transform" in code
+
+
+class TestPfirrmannCodeGeneration:
+    """Test Pfirrmann code generation."""
+
+    def test_uses_segment_bounds_for_height(self):
+        """Test that disc height uses GetSegmentBounds instead of cube root."""
+        from slicer_mcp.diagnostic_tools_mri import _build_pfirrmann_analysis_code
+
+        code = _build_pfirrmann_analysis_code('"node1"', "lumbar")
+        assert "GetSegmentBounds" in code
+        assert "** (1.0 / 3.0)" not in code
+        assert "** (1/3)" not in code
+
+    def test_region_validation_for_unsupported(self):
+        """Test that Pfirrmann raises ValidationError for unsupported regions."""
+        with pytest.raises(ValidationError, match="only supports"):
+            assess_disc_degeneration_mri("vtkMRMLScalarVolumeNode1", region="cervical")
+
+
+class TestCordCompressionCodeGeneration:
+    """Test cord compression code generation."""
+
+    def test_measures_cord_not_vertebra(self):
+        """Test that cord compression measures spinal_cord, not vertebral body."""
+        from slicer_mcp.diagnostic_tools_mri import _build_cord_compression_code
+
+        code = _build_cord_compression_code('"node1"', None, "cervical")
+        assert "spinal_cord" in code or "spinal_canal" in code
+
+    def test_uses_np_pi(self):
+        """Test that pi uses np.pi instead of hardcoded value."""
+        from slicer_mcp.diagnostic_tools_mri import _build_cord_compression_code
+
+        code = _build_cord_compression_code('"node1"', None, "cervical")
+        assert "np.pi" in code
+        assert "3.14159" not in code
+
+
+class TestMetastasisCodeGeneration:
+    """Test metastasis code generation."""
+
+    def test_full_region_chunks_into_subregions(self):
+        """Test that region='full' splits into sub-scans."""
+        mock_result_cervical = {
+            "success": True,
+            "tool": "detect_metastatic_lesions_mri",
+            "region": "cervical",
+            "registration_performed": False,
+            "reference_t1_signal": 500.0,
+            "reference_t2_stir_signal": 300.0,
+            "vertebra_results": [
+                {
+                    "vertebra": "C3",
+                    "t1_signal_ratio": 0.95,
+                    "t2_stir_signal_ratio": 1.05,
+                    "suspicious": False,
+                    "lesion_type": None,
+                    "posterior_element_involved": False,
+                    "fracture_features": [],
+                }
+            ],
+            "total_vertebrae_analyzed": 1,
+            "suspicious_lesions": [],
+            "total_suspicious": 0,
+            "lesion_type_summary": {"lytic": 0, "blastic": 0, "mixed": 0},
+            "posterior_element_involvement": False,
+        }
+
+        with patch("slicer_mcp.diagnostic_tools_mri.get_client") as mock_get_client:
+            mock_client = Mock()
+            mock_client.exec_python.return_value = {
+                "success": True,
+                "result": json.dumps(mock_result_cervical),
+            }
+            mock_get_client.return_value = mock_client
+
+            result = detect_metastatic_lesions_mri(
+                "vtkMRMLScalarVolumeNode1",
+                "vtkMRMLScalarVolumeNode2",
+                region="full",
+            )
+
+            assert result["region"] == "full"
+            assert "sub_regions_scanned" in result
+            # Should have called exec_python 3 times (cervical, thoracic, lumbar)
+            assert mock_client.exec_python.call_count == 3
 
 
 # =============================================================================

@@ -22,7 +22,26 @@ from typing import Any
 
 from slicer_mcp.slicer_client import SlicerConnectionError, get_client
 from slicer_mcp.spine_constants import (
+    CORD_T2_HYPERINTENSITY_THRESHOLD,
+    DISC_HOMOGENEOUS_CV_THRESHOLD,
+    DISC_SUPPORTED_REGIONS,
+    METASTASIS_T1_LOW_THRESHOLD,
+    METASTASIS_T2_HIGH_THRESHOLD,
+    METASTASIS_T2_LOW_THRESHOLD,
+    MODIC_T1_HIGH_THRESHOLD,
+    MODIC_T1_LOW_THRESHOLD,
+    MODIC_T2_HIGH_THRESHOLD,
+    MODIC_T2_LOW_THRESHOLD,
+    MRI_ANALYSIS_TIMEOUT,
+    MSCC_THRESHOLD,
+    PFIRRMANN_BRIGHT_THRESHOLD,
+    PFIRRMANN_DARK_THRESHOLD,
     PFIRRMANN_DESCRIPTIONS,
+    PFIRRMANN_GRAY_THRESHOLD,
+    PFIRRMANN_HEIGHT_COLLAPSED,
+    PFIRRMANN_HEIGHT_MODERATE_DECREASE,
+    PFIRRMANN_HEIGHT_SLIGHT_DECREASE,
+    PFIRRMANN_WHITE_THRESHOLD,
     REGION_VERTEBRAE,
     SPINAL_CANAL_AP_DIAMETER,
     SPINAL_CANAL_STENOSIS_ABSOLUTE,
@@ -35,53 +54,11 @@ logger = logging.getLogger("slicer-mcp")
 
 
 # =============================================================================
-# MRI-specific constants
+# MRI-specific constants (local-only; thresholds imported from spine_constants)
 # =============================================================================
-
-# Timeout for multi-sequence MRI analysis (registration + segmentation + analysis)
-MRI_ANALYSIS_TIMEOUT = 360  # 6 minutes
 
 # Valid MRI sequence types for validation
 VALID_MRI_REGIONS = frozenset(["cervical", "thoracic", "lumbar"])
-
-# Modic signal ratio thresholds (relative to reference vertebral body)
-# T1 and T2 signal ratios classify endplate changes
-MODIC_T1_LOW_THRESHOLD = 0.85  # T1 signal < 85% of reference = "low"
-MODIC_T1_HIGH_THRESHOLD = 1.15  # T1 signal > 115% of reference = "high"
-MODIC_T2_LOW_THRESHOLD = 0.85  # T2 signal < 85% of reference = "low"
-MODIC_T2_HIGH_THRESHOLD = 1.15  # T2 signal > 115% of reference = "high"
-
-# Pfirrmann disc signal ratio thresholds (relative to CSF)
-PFIRRMANN_BRIGHT_THRESHOLD = 0.80  # >80% of CSF = bright white (Grade I)
-PFIRRMANN_WHITE_THRESHOLD = 0.60  # 60-80% of CSF = white (Grade II)
-PFIRRMANN_GRAY_THRESHOLD = 0.35  # 35-60% of CSF = gray (Grade III)
-PFIRRMANN_DARK_THRESHOLD = 0.15  # 15-35% of CSF = dark (Grade IV)
-# <15% of CSF = black (Grade V)
-
-# Disc height loss thresholds for Pfirrmann grading
-PFIRRMANN_HEIGHT_SLIGHT_DECREASE = 0.10  # >10% height loss = slight decrease
-PFIRRMANN_HEIGHT_MODERATE_DECREASE = 0.30  # >30% height loss = moderate decrease
-PFIRRMANN_HEIGHT_COLLAPSED = 0.60  # >60% height loss = collapsed
-
-# Homogeneity threshold (coefficient of variation)
-DISC_HOMOGENEOUS_CV_THRESHOLD = 0.15  # CV < 0.15 = homogeneous
-
-# Cord compression thresholds
-CORD_COMPRESSION_RATIO_NORMAL = 0.40  # AP/transverse > 0.40 = normal shape
-CORD_COMPRESSION_RATIO_MILD = 0.30  # 0.30-0.40 = mild compression
-CORD_COMPRESSION_RATIO_MODERATE = 0.20  # 0.20-0.30 = moderate compression
-# <0.20 = severe compression
-
-# T2 hyperintensity threshold for myelopathy detection (relative to normal cord)
-CORD_T2_HYPERINTENSITY_THRESHOLD = 1.30  # >130% of normal cord signal
-
-# MSCC (Metastatic Spinal Cord Compression) ratio threshold
-MSCC_THRESHOLD = 0.50  # MSCC ratio < 0.50 = significant compression
-
-# Metastatic lesion signal thresholds (relative to normal marrow)
-METASTASIS_T1_LOW_THRESHOLD = 0.70  # T1 < 70% of normal = suspicious
-METASTASIS_T2_HIGH_THRESHOLD = 1.40  # T2/STIR > 140% of normal = suspicious
-METASTASIS_T2_LOW_THRESHOLD = 0.70  # T2/STIR < 70% of normal = blastic
 
 
 # =============================================================================
@@ -165,7 +142,7 @@ if origin_diff > 1.0 or spacing_diff > 0.01:
         'linearTransform': outputTransform.GetID(),
         'useRigid': True,
         'useAffine': True,
-        'initializeTransformMode': 'useCenterOfHeadAlign',
+        'initializeTransformMode': 'useMomentsAlign',
     }}
 
     cliNode = slicer.cli.runSync(slicer.modules.brainsfit, None, parameters)
@@ -191,7 +168,8 @@ def _build_totalseg_spine_code(safe_volume_id: str, region: str) -> str:
     return f"""
 # --- TotalSegmentator spine segmentation (MRI mode) ---
 seg_node = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLSegmentationNode')
-seg_node.SetName('SpineSegmentation_{region}')
+safe_region = {json.dumps(region)}
+seg_node.SetName('SpineSegmentation_' + safe_region)
 
 try:
     import TotalSegmentator
@@ -222,61 +200,8 @@ def _build_signal_normalization_code() -> str:
 import sitkUtils
 import SimpleITK as sitk
 
-def get_segment_mean_signal(volume_node, seg_node, segment_name):
-    \"\"\"Get mean signal intensity within a segment ROI.\"\"\"
-    # Get segment as labelmap
-    labelmapNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLLabelMapVolumeNode')
-    slicer.modules.segmentations.logic().ExportVisibleSegmentsToLabelmapNode(
-        seg_node, labelmapNode, volume_node
-    )
-
-    # Find the segment index
-    segmentation = seg_node.GetSegmentation()
-    seg_id = None
-    for i in range(segmentation.GetNumberOfSegments()):
-        seg = segmentation.GetNthSegment(i)
-        if seg.GetName() == segment_name:
-            seg_id = segmentation.GetNthSegmentID(i)
-            break
-
-    if seg_id is None:
-        slicer.mrmlScene.RemoveNode(labelmapNode)
-        return None
-
-    # Export single segment
-    singleLabelmap = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLLabelMapVolumeNode')
-    seg_ids = vtk.vtkStringArray()
-    seg_ids.InsertNextValue(seg_id)
-    slicer.modules.segmentations.logic().ExportSegmentsToLabelmapNode(
-        seg_node, seg_ids, singleLabelmap, volume_node
-    )
-
-    # Use SimpleITK for statistics
-    vol_sitk = sitkUtils.PullVolumeFromSlicer(volume_node)
-    label_sitk = sitkUtils.PullVolumeFromSlicer(singleLabelmap)
-
-    # Resample label to match volume if needed
-    if label_sitk.GetSize() != vol_sitk.GetSize():
-        resampler = sitk.ResampleImageFilter()
-        resampler.SetReferenceImage(vol_sitk)
-        resampler.SetInterpolator(sitk.sitkNearestNeighbor)
-        label_sitk = resampler.Execute(label_sitk)
-
-    stats = sitk.LabelStatisticsImageFilter()
-    stats.Execute(vol_sitk, label_sitk)
-
-    mean_val = None
-    if stats.HasLabel(1):
-        mean_val = stats.GetMean(1)
-
-    slicer.mrmlScene.RemoveNode(labelmapNode)
-    slicer.mrmlScene.RemoveNode(singleLabelmap)
-    return mean_val
-
 def get_segment_stats(volume_node, seg_node, segment_name):
     \"\"\"Get signal statistics (mean, std, count) within a segment ROI.\"\"\"
-    labelmapNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLLabelMapVolumeNode')
-
     segmentation = seg_node.GetSegmentation()
     seg_id = None
     for i in range(segmentation.GetNumberOfSegments()):
@@ -286,37 +211,46 @@ def get_segment_stats(volume_node, seg_node, segment_name):
             break
 
     if seg_id is None:
-        slicer.mrmlScene.RemoveNode(labelmapNode)
         return None
 
-    seg_ids = vtk.vtkStringArray()
-    seg_ids.InsertNextValue(seg_id)
-    slicer.modules.segmentations.logic().ExportSegmentsToLabelmapNode(
-        seg_node, seg_ids, labelmapNode, volume_node
-    )
+    labelmapNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLLabelMapVolumeNode')
+    try:
+        seg_ids = vtk.vtkStringArray()
+        seg_ids.InsertNextValue(seg_id)
+        slicer.modules.segmentations.logic().ExportSegmentsToLabelmapNode(
+            seg_node, seg_ids, labelmapNode, volume_node
+        )
 
-    vol_sitk = sitkUtils.PullVolumeFromSlicer(volume_node)
-    label_sitk = sitkUtils.PullVolumeFromSlicer(labelmapNode)
+        vol_sitk = sitkUtils.PullVolumeFromSlicer(volume_node)
+        label_sitk = sitkUtils.PullVolumeFromSlicer(labelmapNode)
 
-    if label_sitk.GetSize() != vol_sitk.GetSize():
-        resampler = sitk.ResampleImageFilter()
-        resampler.SetReferenceImage(vol_sitk)
-        resampler.SetInterpolator(sitk.sitkNearestNeighbor)
-        label_sitk = resampler.Execute(label_sitk)
+        if label_sitk.GetSize() != vol_sitk.GetSize():
+            resampler = sitk.ResampleImageFilter()
+            resampler.SetReferenceImage(vol_sitk)
+            resampler.SetInterpolator(sitk.sitkNearestNeighbor)
+            label_sitk = resampler.Execute(label_sitk)
 
-    stats = sitk.LabelStatisticsImageFilter()
-    stats.Execute(vol_sitk, label_sitk)
+        stats = sitk.LabelStatisticsImageFilter()
+        stats.Execute(vol_sitk, label_sitk)
 
-    result = None
-    if stats.HasLabel(1):
-        result = {
-            'mean': stats.GetMean(1),
-            'std': stats.GetSigma(1),
-            'count': stats.GetCount(1),
-        }
+        result = None
+        if stats.HasLabel(1):
+            result = {
+                'mean': stats.GetMean(1),
+                'std': stats.GetSigma(1),
+                'count': stats.GetCount(1),
+            }
 
-    slicer.mrmlScene.RemoveNode(labelmapNode)
-    return result
+        return result
+    finally:
+        slicer.mrmlScene.RemoveNode(labelmapNode)
+
+def get_segment_mean_signal(volume_node, seg_node, segment_name):
+    \"\"\"Get mean signal intensity within a segment ROI.\"\"\"
+    stats = get_segment_stats(volume_node, seg_node, segment_name)
+    if stats is None:
+        return None
+    return stats['mean']
 
 def compute_signal_ratio(signal_value, reference_value):
     \"\"\"Compute normalized signal ratio.\"\"\"
@@ -366,26 +300,29 @@ import numpy as np
 vertebrae_map = {json.dumps(ts_vertebrae)}
 disc_map = {json.dumps(region_discs)}
 
-# Select reference vertebra (middle of the region, assumed normal)
-vertebra_names = list(vertebrae_map.keys())
-ref_idx = len(vertebra_names) // 2
-ref_vert_name = vertebra_names[ref_idx] if vertebra_names else None
-
-# Get reference signal (from normal vertebral body)
-ref_t1_signal = None
-ref_t2_signal = None
-if ref_vert_name:
-    ts_label = vertebrae_map[ref_vert_name]
-    ref_t1_signal = get_segment_mean_signal(t1_node, seg_node, ts_label)
-    ref_t2_signal = get_segment_mean_signal(t2_node, seg_node, ts_label)
-
-levels = []
-
 # For each disc level, analyze adjacent endplates
 segmentation = seg_node.GetSegmentation()
 available_segments = []
 for i in range(segmentation.GetNumberOfSegments()):
     available_segments.append(segmentation.GetNthSegment(i).GetName())
+
+# Establish reference signal using median of all vertebral signals
+all_t1_signals = []
+all_t2_signals = []
+for vert_name_ref, ts_label_ref in vertebrae_map.items():
+    if ts_label_ref not in available_segments:
+        continue
+    t1_sig = get_segment_mean_signal(t1_node, seg_node, ts_label_ref)
+    t2_sig = get_segment_mean_signal(t2_node, seg_node, ts_label_ref)
+    if t1_sig is not None:
+        all_t1_signals.append(t1_sig)
+    if t2_sig is not None:
+        all_t2_signals.append(t2_sig)
+
+ref_t1_signal = float(np.median(all_t1_signals)) if all_t1_signals else None
+ref_t2_signal = float(np.median(all_t2_signals)) if all_t2_signals else None
+
+levels = []
 
 for ts_disc_label, disc_name in disc_map.items():
     # Get vertebrae above and below disc
@@ -472,8 +409,8 @@ slicer.mrmlScene.RemoveNode(seg_node)
 result = {{
     'success': True,
     'tool': 'classify_modic_changes',
-    'region': '{region}',
-    'reference_vertebra': ref_vert_name,
+    'region': {json.dumps(region)},
+    'reference_vertebra': 'median_of_all',
     'registration_performed': registration_performed,
     'levels': levels,
     'total_levels_analyzed': len(levels),
@@ -484,6 +421,16 @@ result = {{
         'type_iii': sum(1 for l in levels if l['modic_type'] == 3),
     }},
 }}
+
+# Cleanup registration artifacts
+if registration_performed:
+    try:
+        for node_name in ['T2_to_T1_transform', t2_node.GetName()]:
+            nodes = slicer.mrmlScene.GetNodesByName(node_name)
+            for i in range(nodes.GetNumberOfItems()):
+                slicer.mrmlScene.RemoveNode(nodes.GetItemAsObject(i))
+    except Exception:
+        pass  # Best-effort cleanup
 
 print(json.dumps(result))
 """
@@ -602,20 +549,23 @@ if csf_signal is None:
 vertebrae_map = {vert_to_ts_json}
 
 # Compute average vertebral body height across region
+# Compute average vertebral body height across region using SI bounds
 vert_heights = []
 for vert_name, ts_label in vertebrae_map.items():
     if ts_label not in available_segments:
         continue
-    vert_stats = get_segment_stats(t2_node, seg_node, ts_label)
-    if vert_stats and vert_stats['count'] > 0:
-        # Approximate height from voxel count and spacing
-        spacing = list(t2_node.GetSpacing())
-        # Height is in the superior-inferior direction (typically axis 2)
-        voxel_volume = spacing[0] * spacing[1] * spacing[2]
-        total_vol = vert_stats['count'] * voxel_volume
-        # Approximate cross-section area
-        approx_height = total_vol ** (1.0 / 3.0)  # Cubic approximation
-        vert_heights.append(approx_height)
+    vert_seg_id = None
+    for i in range(segmentation.GetNumberOfSegments()):
+        seg = segmentation.GetNthSegment(i)
+        if seg.GetName() == ts_label:
+            vert_seg_id = segmentation.GetNthSegmentID(i)
+            break
+    if vert_seg_id:
+        vert_bounds = [0.0] * 6
+        segmentation.GetSegmentBounds(vert_seg_id, vert_bounds)
+        vert_si_height = abs(vert_bounds[5] - vert_bounds[4])
+        if vert_si_height > 0:
+            vert_heights.append(vert_si_height)
 
 ref_height = np.mean(vert_heights) if vert_heights else None
 
@@ -643,11 +593,19 @@ for ts_disc_label, disc_name in disc_map.items():
     cv = disc_std / disc_mean if disc_mean > 0 else 999.0
     is_homogeneous = cv < {DISC_HOMOGENEOUS_CV_THRESHOLD}
 
-    # Disc height estimation
-    spacing = list(t2_node.GetSpacing())
-    voxel_volume = spacing[0] * spacing[1] * spacing[2]
-    disc_volume = disc_count * voxel_volume
-    disc_height_approx = disc_volume ** (1.0 / 3.0)
+    # Disc height from segment bounds (SI axis)
+    disc_seg_id = None
+    for i in range(segmentation.GetNumberOfSegments()):
+        seg = segmentation.GetNthSegment(i)
+        if seg.GetName() == ts_disc_label:
+            disc_seg_id = segmentation.GetNthSegmentID(i)
+            break
+
+    disc_height_approx = 0.0
+    if disc_seg_id:
+        disc_bounds = [0.0] * 6
+        segmentation.GetSegmentBounds(disc_seg_id, disc_bounds)
+        disc_height_approx = abs(disc_bounds[5] - disc_bounds[4])
 
     height_ratio = None
     height_loss_pct = None
@@ -701,7 +659,7 @@ slicer.mrmlScene.RemoveNode(seg_node)
 result = {{
     'success': True,
     'tool': 'assess_disc_degeneration_mri',
-    'region': '{region}',
+    'region': {json.dumps(region)},
     'csf_reference_signal': round(csf_signal, 1) if csf_signal else None,
     'discs': discs,
     'total_discs_analyzed': len(discs),
@@ -742,6 +700,14 @@ def assess_disc_degeneration_mri(
     """
     t2_node_id = validate_mrml_node_id(t2_node_id)
     region = _validate_mri_region(region)
+
+    if region not in DISC_SUPPORTED_REGIONS:
+        raise ValidationError(
+            f"Disc degeneration assessment only supports regions: "
+            f"{', '.join(sorted(DISC_SUPPORTED_REGIONS))}. Got '{region}'",
+            "region",
+            region,
+        )
 
     client = get_client()
 
@@ -831,6 +797,15 @@ if 'spinal_cord' in available_segments:
     if cord_stats:
         normal_cord_signal = cord_stats['mean']
 
+# Detect spinal cord or canal segment for compression measurement
+cord_segment_name = None
+measurement_source = 'none'
+for candidate in ['spinal_cord', 'spinal_canal']:
+    if candidate in available_segments:
+        cord_segment_name = candidate
+        measurement_source = candidate
+        break
+
 vertebrae_map = {vert_to_ts_json}
 
 levels = []
@@ -839,8 +814,7 @@ for vert_name, ts_label in vertebrae_map.items():
     if ts_label not in available_segments:
         continue
 
-    # Get vertebral body dimensions for canal estimation
-    # Export segment to get bounding box
+    # Get vertebral body SI range for level clipping
     seg_id = None
     for i in range(segmentation.GetNumberOfSegments()):
         seg = segmentation.GetNthSegment(i)
@@ -851,13 +825,68 @@ for vert_name, ts_label in vertebrae_map.items():
     if seg_id is None:
         continue
 
-    # Get segment bounds
-    bounds = [0.0] * 6
-    segmentation.GetSegmentBounds(seg_id, bounds)
+    # Get vertebra bounds for SI clipping
+    vert_bounds = [0.0] * 6
+    segmentation.GetSegmentBounds(seg_id, vert_bounds)
+    si_min = vert_bounds[4]  # Z-axis = superior-inferior
+    si_max = vert_bounds[5]
 
-    # AP diameter approximation from bounds (anterior-posterior)
-    ap_diameter = abs(bounds[3] - bounds[2])  # Y-axis typically AP
-    transverse_diameter = abs(bounds[1] - bounds[0])  # X-axis typically lateral
+    # Measure cord/canal at this vertebral level
+    ap_diameter = 0.0
+    transverse_diameter = 0.0
+
+    if cord_segment_name:
+        # Find cord segment ID
+        cord_seg_id = None
+        for i in range(segmentation.GetNumberOfSegments()):
+            seg = segmentation.GetNthSegment(i)
+            if seg.GetName() == cord_segment_name:
+                cord_seg_id = segmentation.GetNthSegmentID(i)
+                break
+
+        if cord_seg_id:
+            # Export cord segment as labelmap
+            cord_labelmap = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLLabelMapVolumeNode')
+            cord_seg_ids = vtk.vtkStringArray()
+            cord_seg_ids.InsertNextValue(cord_seg_id)
+            try:
+                slicer.modules.segmentations.logic().ExportSegmentsToLabelmapNode(
+                    seg_node, cord_seg_ids, cord_labelmap, t2_node
+                )
+
+                # Get labelmap as numpy array
+                cord_array = slicer.util.arrayFromVolume(cord_labelmap)
+                cord_spacing = list(cord_labelmap.GetSpacing())
+                cord_origin = list(cord_labelmap.GetOrigin())
+
+                # Find SI range in voxel coordinates
+                si_spacing = cord_spacing[2]  # Z spacing
+                if si_spacing > 0:
+                    si_min_vox = max(0, int((si_min - cord_origin[2]) / si_spacing))
+                    si_max_idx = int((si_max - cord_origin[2]) / si_spacing) + 1
+                    si_max_vox = min(cord_array.shape[0], si_max_idx)
+
+                    # Clip to vertebral level
+                    clipped = cord_array[si_min_vox:si_max_vox, :, :]
+
+                    # Find non-zero voxels
+                    nonzero = np.argwhere(clipped > 0)
+                    if len(nonzero) > 0:
+                        # Bounding box of non-zero voxels
+                        ap_min_vox = nonzero[:, 1].min()
+                        ap_max_vox = nonzero[:, 1].max()
+                        lr_min_vox = nonzero[:, 2].min()
+                        lr_max_vox = nonzero[:, 2].max()
+
+                        ap_diameter = (ap_max_vox - ap_min_vox + 1) * cord_spacing[1]
+                        transverse_diameter = (lr_max_vox - lr_min_vox + 1) * cord_spacing[0]
+            finally:
+                slicer.mrmlScene.RemoveNode(cord_labelmap)
+    else:
+        # Fallback: use vertebral body bounds (less accurate)
+        measurement_source = 'vertebral_body_fallback'
+        ap_diameter = abs(vert_bounds[3] - vert_bounds[2])
+        transverse_diameter = abs(vert_bounds[1] - vert_bounds[0])
 
     # Compression ratio
     compression_ratio = (ap_diameter / transverse_diameter) if transverse_diameter > 0 else 0
@@ -873,7 +902,7 @@ for vert_name, ts_label in vertebrae_map.items():
         stenosis_grade = "normal"
 
     # Cross-section area approximation (ellipse)
-    cross_section_area = 3.14159 * (ap_diameter / 2) * (transverse_diameter / 2)
+    cross_section_area = np.pi * (ap_diameter / 2) * (transverse_diameter / 2)
 
     # MSCC ratio (AP at level / expected AP)
     expected_ap = (canal_normal_min + canal_normal_max) / 2
@@ -908,6 +937,7 @@ for vert_name, ts_label in vertebrae_map.items():
         'compression_ratio': round(compression_ratio, 3),
         'mscc_ratio': round(mscc_ratio, 3),
         'stenosis_grade': stenosis_grade,
+        'measurement_source': measurement_source,
         't2_hyperintensity': t2_hyperintensity,
     }}
 
@@ -934,7 +964,7 @@ myelopathy_detected = any(l.get('t2_hyperintensity', False) for l in levels)
 result = {{
     'success': True,
     'tool': 'detect_cord_compression_mri',
-    'region': '{region}',
+    'region': {json.dumps(region)},
     't1_available': {str(has_t1).lower()},
     'registration_performed': registration_performed,
     'canal_normal_range_mm': [canal_normal_min, canal_normal_max],
@@ -945,6 +975,16 @@ result = {{
     'myelopathy_detected': myelopathy_detected,
     'mscc_significant': any(l['mscc_ratio'] < {MSCC_THRESHOLD} for l in levels),
 }}
+
+# Cleanup registration artifacts
+if registration_performed:
+    try:
+        for node_name in ['T2_to_T1_transform', t2_node.GetName()]:
+            nodes = slicer.mrmlScene.GetNodesByName(node_name)
+            for i in range(nodes.GetNumberOfItems()):
+                slicer.mrmlScene.RemoveNode(nodes.GetItemAsObject(i))
+    except Exception:
+        pass  # Best-effort cleanup
 
 print(json.dumps(result))
 """
@@ -1147,7 +1187,7 @@ slicer.mrmlScene.RemoveNode(seg_node)
 result = {{
     'success': True,
     'tool': 'detect_metastatic_lesions_mri',
-    'region': '{region}',
+    'region': {json.dumps(region)},
     'registration_performed': registration_performed,
     'reference_t1_signal': round(ref_t1, 1) if ref_t1 else None,
     'reference_t2_stir_signal': round(ref_t2, 1) if ref_t2 else None,
@@ -1164,6 +1204,16 @@ result = {{
         l.get('posterior_element_involved', False) for l in lesions
     ),
 }}
+
+# Cleanup registration artifacts
+if registration_performed:
+    try:
+        for node_name in ['T2_to_T1_transform', t2_node.GetName()]:
+            nodes = slicer.mrmlScene.GetNodesByName(node_name)
+            for i in range(nodes.GetNumberOfItems()):
+                slicer.mrmlScene.RemoveNode(nodes.GetItemAsObject(i))
+    except Exception:
+        pass  # Best-effort cleanup
 
 print(json.dumps(result))
 """
@@ -1214,6 +1264,59 @@ def detect_metastatic_lesions_mri(
 
     safe_t1_id = json.dumps(t1_node_id)
     safe_t2_stir_id = json.dumps(t2_stir_node_id)
+
+    if region == "full":
+        # Split full-spine scan into sub-regions to avoid timeout
+        sub_regions = ["cervical", "thoracic", "lumbar"]
+        all_vertebra_results: list[dict[str, Any]] = []
+        all_lesions: list[dict[str, Any]] = []
+        registration_performed = False
+
+        for sub_region in sub_regions:
+            python_code = _build_metastasis_detection_code(safe_t1_id, safe_t2_stir_id, sub_region)
+            try:
+                exec_result = client.exec_python(python_code, timeout=MRI_ANALYSIS_TIMEOUT)
+                sub_result = _parse_json_result(
+                    exec_result.get("result", ""), f"metastatic lesion detection ({sub_region})"
+                )
+                all_vertebra_results.extend(sub_result.get("vertebra_results", []))
+                all_lesions.extend(sub_result.get("suspicious_lesions", []))
+                if sub_result.get("registration_performed"):
+                    registration_performed = True
+            except SlicerConnectionError as e:
+                logger.error(f"Metastatic lesion detection failed for {sub_region}: {e.message}")
+                raise
+
+        result_data = {
+            "success": True,
+            "tool": "detect_metastatic_lesions_mri",
+            "region": "full",
+            "registration_performed": registration_performed,
+            "reference_t1_signal": None,
+            "reference_t2_stir_signal": None,
+            "vertebra_results": all_vertebra_results,
+            "total_vertebrae_analyzed": len(all_vertebra_results),
+            "suspicious_lesions": all_lesions,
+            "total_suspicious": len(all_lesions),
+            "lesion_type_summary": {
+                "lytic": sum(1 for lesion in all_lesions if lesion.get("lesion_type") == "lytic"),
+                "blastic": sum(
+                    1 for lesion in all_lesions if lesion.get("lesion_type") == "blastic"
+                ),
+                "mixed": sum(1 for lesion in all_lesions if lesion.get("lesion_type") == "mixed"),
+            },
+            "posterior_element_involvement": any(
+                lesion.get("posterior_element_involved", False) for lesion in all_lesions
+            ),
+            "sub_regions_scanned": sub_regions,
+        }
+
+        logger.info(
+            f"Metastatic lesion detection completed (full spine): "
+            f"vertebrae={len(all_vertebra_results)}, "
+            f"suspicious={len(all_lesions)}"
+        )
+        return result_data
 
     python_code = _build_metastasis_detection_code(safe_t1_id, safe_t2_stir_id, region)
 
