@@ -30,7 +30,7 @@ REGION_VERTEBRAE: dict[str, tuple[str, ...]] = {
         "T11",
         "T12",
     ),
-    "lumbar": ("L1", "L2", "L3", "L4", "L5"),
+    "lumbar": ("L1", "L2", "L3", "L4", "L5", "S1"),
     "full": (
         "C1",
         "C2",
@@ -56,6 +56,7 @@ REGION_VERTEBRAE: dict[str, tuple[str, ...]] = {
         "L3",
         "L4",
         "L5",
+        "S1",
     ),
 }
 
@@ -467,7 +468,7 @@ VERTEBRAL_BODY_HEIGHTS_MM: dict[str, tuple[float, float]] = {
 
 
 # =============================================================================
-# Cervical Instrumentation — Technique Definitions
+# Cervical Instrumentation -- Technique Definitions
 # =============================================================================
 # Sources:
 # Roy-Camille R et al. "Internal fixation of the unstable cervical spine
@@ -601,13 +602,13 @@ INSTRUMENTATION_TIMEOUT = 120
 # =============================================================================
 
 SAFETY_GREEN = "green"
-"""Safe — all clearances adequate."""
+"""Safe -- all clearances adequate."""
 
 SAFETY_YELLOW = "yellow"
-"""Warning — marginal clearances, proceed with caution."""
+"""Warning -- marginal clearances, proceed with caution."""
 
 SAFETY_RED = "red"
-"""Blocked — insufficient clearance, technique contraindicated."""
+"""Blocked -- insufficient clearance, technique contraindicated."""
 
 
 # =============================================================================
@@ -646,3 +647,49 @@ ROUSSOULY_SS_THRESHOLDS = {
     "type_3_min": 35.0,
     "type_3_max": 45.0,
 }
+
+# =============================================================================
+# MRI Diagnostic Constants
+# =============================================================================
+
+# Timeout for multi-sequence MRI analysis (registration + segmentation + analysis)
+MRI_ANALYSIS_TIMEOUT = 360  # 6 minutes
+
+# Modic signal ratio thresholds (relative to reference vertebral body)
+MODIC_T1_LOW_THRESHOLD = 0.85
+MODIC_T1_HIGH_THRESHOLD = 1.15
+MODIC_T2_LOW_THRESHOLD = 0.85
+MODIC_T2_HIGH_THRESHOLD = 1.15
+
+# Pfirrmann disc signal ratio thresholds (relative to CSF)
+PFIRRMANN_BRIGHT_THRESHOLD = 0.80
+PFIRRMANN_WHITE_THRESHOLD = 0.60
+PFIRRMANN_GRAY_THRESHOLD = 0.35
+PFIRRMANN_DARK_THRESHOLD = 0.15
+
+# Disc height loss thresholds for Pfirrmann grading
+PFIRRMANN_HEIGHT_SLIGHT_DECREASE = 0.10
+PFIRRMANN_HEIGHT_MODERATE_DECREASE = 0.30
+PFIRRMANN_HEIGHT_COLLAPSED = 0.60
+
+# Homogeneity threshold (coefficient of variation)
+DISC_HOMOGENEOUS_CV_THRESHOLD = 0.15
+
+# Cord compression thresholds
+CORD_COMPRESSION_RATIO_NORMAL = 0.40
+CORD_COMPRESSION_RATIO_MILD = 0.30
+CORD_COMPRESSION_RATIO_MODERATE = 0.20
+
+# T2 hyperintensity threshold for myelopathy detection
+CORD_T2_HYPERINTENSITY_THRESHOLD = 1.30
+
+# MSCC ratio threshold
+MSCC_THRESHOLD = 0.50
+
+# Metastatic lesion signal thresholds (relative to normal marrow)
+METASTASIS_T1_LOW_THRESHOLD = 0.70
+METASTASIS_T2_HIGH_THRESHOLD = 1.40
+METASTASIS_T2_LOW_THRESHOLD = 0.70
+
+# Supported regions for disc analysis (Pfirrmann)
+DISC_SUPPORTED_REGIONS = frozenset(["lumbar"])
