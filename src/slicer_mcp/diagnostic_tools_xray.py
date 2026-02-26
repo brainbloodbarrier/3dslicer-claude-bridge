@@ -18,13 +18,23 @@ References:
 import json
 import logging
 import math
+import re
 from typing import Any
 
 from slicer_mcp.slicer_client import SlicerConnectionError, get_client
 from slicer_mcp.spine_constants import (
+    CORONAL_C7_CSVL_THRESHOLD_MM,
+    CORONAL_COBB_MILD_THRESHOLD_DEG,
+    CORONAL_COBB_MODERATE_THRESHOLD_DEG,
     DYNAMIC_INSTABILITY_THRESHOLDS,
     GENANT_THRESHOLDS,
     MEYERDING_THRESHOLDS,
+    ROUSSOULY_SS_THRESHOLDS,
+    SCHWAB_PI_LL_THRESHOLDS,
+    SCHWAB_PT_THRESHOLDS,
+    SCHWAB_SVA_THRESHOLDS,
+    VERTEBRA_LABEL_PATTERN,
+    VERTEBRA_LEVEL_PATTERN,
 )
 from slicer_mcp.tools import ValidationError, _parse_json_result, validate_mrml_node_id
 
@@ -46,36 +56,6 @@ MAGNIFICATION_DISCLAIMER = (
     "Use known-size calibration marker or specify magnification factor for accurate "
     "absolute distances. Angles are NOT affected by magnification."
 )
-
-# SRS-Schwab classification thresholds (Schwab F et al. Spine 2012)
-SCHWAB_PI_LL_THRESHOLDS = {
-    "matched": 10.0,  # PI-LL < 10°
-    "moderate": 20.0,  # 10° <= PI-LL < 20°
-    # >= 20° = marked
-}
-
-SCHWAB_SVA_THRESHOLDS = {
-    "grade_0": 40.0,  # SVA < 4 cm
-    "grade_1": 95.0,  # 4 cm <= SVA < 9.5 cm
-    # >= 9.5 cm = grade 2 (marked)
-}
-
-SCHWAB_PT_THRESHOLDS = {
-    "grade_0": 20.0,  # PT < 20°
-    "grade_1": 30.0,  # 20° <= PT < 30°
-    # >= 30° = grade 2 (marked)
-}
-
-# Roussouly lordosis type criteria (Roussouly P et al. Spine 2005)
-# Based on sacral slope (SS) and lordosis shape
-ROUSSOULY_SS_THRESHOLDS = {
-    "type_1_max": 35.0,  # SS < 35° with short lordosis
-    "type_2_max": 35.0,  # SS < 35° with flat lordosis
-    "type_3_min": 35.0,  # 35° <= SS <= 45°
-    "type_3_max": 45.0,
-    # SS > 45° = type 4
-}
-
 
 # =============================================================================
 # Geometry Helpers (2D)
@@ -112,9 +92,18 @@ def _distance_2d(p1: tuple[float, float], p2: tuple[float, float]) -> float:
     return math.sqrt((p2[0] - p1[0]) ** 2 + (p2[1] - p1[1]) ** 2)
 
 
-def _horizontal_distance_2d(p1: tuple[float, float], p2: tuple[float, float]) -> float:
-    """Horizontal (X-axis) distance between two 2D points."""
-    return abs(p2[0] - p1[0])
+def _signed_angle_2d(vec: tuple[float, float], ref: tuple[float, float]) -> float:
+    """Compute signed angle from reference vector to vec using atan2.
+
+    Returns angle in degrees (-180 to +180).
+    Positive = counter-clockwise from reference.
+    """
+    # Cross product (z-component) and dot product
+    cross = ref[0] * vec[1] - ref[1] * vec[0]
+    dot = ref[0] * vec[0] + ref[1] * vec[1]
+    if abs(cross) < 1e-12 and abs(dot) < 1e-12:
+        return 0.0
+    return math.degrees(math.atan2(cross, dot))
 
 
 def _cobb_angle_2d(
@@ -338,30 +327,27 @@ def _validate_landmarks(
     return result
 
 
-def _validate_view_type(view_type: str, expected: str, tool_name: str) -> None:
-    """Validate that the X-ray view type matches expected.
+def _validate_vertebra_label(label: str, tool_name: str) -> str:
+    """Validate a vertebra label (e.g., 'T12') or level (e.g., 'L4-L5').
 
     Args:
-        view_type: Provided view type.
-        expected: Expected view type ("lateral" or "ap").
+        label: Vertebra label or level string.
         tool_name: Tool name for error messages.
 
+    Returns:
+        The validated label string.
+
     Raises:
-        ValidationError: If view_type doesn't match expected.
+        ValidationError: If label doesn't match expected pattern.
     """
-    if view_type not in VALID_XRAY_VIEWS:
-        raise ValidationError(
-            f"{tool_name}: invalid view_type '{view_type}'. "
-            f"Must be one of: {', '.join(sorted(VALID_XRAY_VIEWS))}",
-            field="view_type",
-            value=view_type,
-        )
-    if view_type != expected:
-        raise ValidationError(
-            f"{tool_name}: requires '{expected}' X-ray view, got '{view_type}'",
-            field="view_type",
-            value=view_type,
-        )
+    if re.match(VERTEBRA_LABEL_PATTERN, label) or re.match(VERTEBRA_LEVEL_PATTERN, label):
+        return label
+    raise ValidationError(
+        f"{tool_name}: invalid vertebra label '{label}'. "
+        f"Must match pattern like 'T12' or 'L4-L5'",
+        field="vertebra_label",
+        value=label,
+    )
 
 
 # =============================================================================
@@ -532,13 +518,12 @@ def measure_sagittal_balance_xray(
     # C2-C7 SVA: horizontal distance from C2 plumb to C7
     c2_c7_sva_mm = (pts["C2_centroid"][0] - pts["C7_centroid"][0]) / magnification_factor
 
-    # T1 slope: angle between T1 superior endplate and horizontal
-    t1_slope = _angle_between_lines_2d(
-        pts["T1_sup_ant"],
-        pts["T1_sup_post"],
-        (0, 0),
-        (1, 0),  # horizontal reference
+    # T1 slope: angle between T1 superior endplate and horizontal (signed)
+    t1_vec = (
+        pts["T1_sup_ant"][0] - pts["T1_sup_post"][0],
+        pts["T1_sup_ant"][1] - pts["T1_sup_post"][1],
     )
+    t1_slope = _signed_angle_2d(t1_vec, (1, 0))
 
     # Cervical Lordosis (CL): C2 sup endplate to C7 inf endplate (Cobb)
     cl = _cobb_angle_2d(
@@ -564,33 +549,42 @@ def measure_sagittal_balance_xray(
         pts["S1_sup_post"],
     )
 
-    # Sacral Slope (SS): angle between S1 endplate and horizontal
-    ss = _angle_between_lines_2d(
-        pts["S1_sup_ant"],
-        pts["S1_sup_post"],
-        (0, 0),
-        (1, 0),
+    # Sacral Slope (SS): signed angle between S1 endplate and horizontal
+    s1_vec = (
+        pts["S1_sup_ant"][0] - pts["S1_sup_post"][0],
+        pts["S1_sup_ant"][1] - pts["S1_sup_post"][1],
     )
+    ss = _signed_angle_2d(s1_vec, (1, 0))
 
-    # Pelvic Tilt (PT): angle between line from S1 endplate midpoint to
-    # femoral head center and vertical
-    pt_val = _angle_between_lines_2d(
-        pts["S1_endplate_mid"],
-        fem_mid,
-        (0, 0),
-        (0, 1),  # vertical reference
+    # Pelvic Tilt (PT): signed angle between S1_mid->fem_head and vertical
+    pt_vec = (
+        fem_mid[0] - pts["S1_endplate_mid"][0],
+        fem_mid[1] - pts["S1_endplate_mid"][1],
     )
+    pt_val = _signed_angle_2d(pt_vec, (0, 1))
 
-    # Pelvic Incidence (PI): PI = PT + SS
-    pi_val = pt_val + ss
+    # Pelvic Incidence (PI): angle between perpendicular to S1 endplate
+    # and line from S1_mid to femoral head center. PI is always positive.
+    # Perpendicular to S1 endplate: rotate s1_vec 90deg CCW
+    s1_perp = (-s1_vec[1], s1_vec[0])
+    s1_to_fem = (
+        fem_mid[0] - pts["S1_endplate_mid"][0],
+        fem_mid[1] - pts["S1_endplate_mid"][1],
+    )
+    pi_val = abs(_signed_angle_2d(s1_to_fem, s1_perp))
 
     # PI-LL mismatch
     pi_ll = pi_val - ll
 
     # T1 Pelvic Angle (TPA): angle between line from T1 centroid to femoral
     # head center and line from S1 endplate midpoint to femoral head center
+    # TPA is unsigned
+    t1_centroid = (
+        (pts["T1_sup_ant"][0] + pts["T1_sup_post"][0]) / 2,
+        (pts["T1_sup_ant"][1] + pts["T1_sup_post"][1]) / 2,
+    )
     tpa = _angle_between_lines_2d(
-        pts["T1_sup_ant"],
+        t1_centroid,
         fem_mid,
         pts["S1_endplate_mid"],
         fem_mid,
@@ -752,9 +746,15 @@ def measure_coronal_balance_xray(
             "coronal_cobb_angle_deg": round(coronal_cobb, 2),
         },
         "interpretation": {
-            "C7_CSVL": ("balanced" if abs(c7_csvl_offset_mm) < 20.0 else "imbalanced"),
+            "C7_CSVL": (
+                "balanced"
+                if abs(c7_csvl_offset_mm) < CORONAL_C7_CSVL_THRESHOLD_MM
+                else "imbalanced"
+            ),
             "coronal_cobb_severity": (
-                "mild" if coronal_cobb < 25.0 else "moderate" if coronal_cobb < 45.0 else "severe"
+                "mild"
+                if coronal_cobb < CORONAL_COBB_MILD_THRESHOLD_DEG
+                else "moderate" if coronal_cobb < CORONAL_COBB_MODERATE_THRESHOLD_DEG else "severe"
             ),
         },
         "magnification_factor": magnification_factor,
@@ -840,6 +840,9 @@ def measure_listhesis_dynamic_xray(
             value="[]",
         )
 
+    for level in levels:
+        _validate_vertebra_label(level, "listhesis_dynamic")
+
     if magnification_factor <= 0:
         raise ValidationError(
             "magnification_factor must be positive",
@@ -863,9 +866,11 @@ def measure_listhesis_dynamic_xray(
                     value=str(list(landmarks_per_position[pos].keys())),
                 )
 
-    # Place landmarks in Slicer for each position
+    # Place landmarks in Slicer for each position, caching validated results
+    validated_landmarks: dict[str, dict[str, dict[str, tuple[float, float]]]] = {}
     client = get_client()
     for pos in required_positions:
+        validated_landmarks[pos] = {}
         all_pos_landmarks: dict[str, tuple[float, float]] = {}
         for level in levels:
             level_lm = _validate_landmarks(
@@ -873,6 +878,7 @@ def measure_listhesis_dynamic_xray(
                 LISTHESIS_LEVEL_LANDMARKS,
                 f"listhesis_{pos}_{level}",
             )
+            validated_landmarks[pos][level] = level_lm
             for name, coord in level_lm.items():
                 all_pos_landmarks[f"{level}_{name}"] = coord
 
@@ -898,11 +904,7 @@ def measure_listhesis_dynamic_xray(
         level_data: dict[str, Any] = {"level": level, "positions": {}}
 
         for pos in required_positions:
-            lm = _validate_landmarks(
-                landmarks_per_position[pos][level],
-                LISTHESIS_LEVEL_LANDMARKS,
-                f"listhesis_{pos}_{level}",
-            )
+            lm = validated_landmarks[pos][level]
 
             # Translation: posterior wall offset
             translation_mm = (
@@ -912,9 +914,7 @@ def measure_listhesis_dynamic_xray(
             # Slip fraction for Meyerding: anterior offset / inferior body width
             inf_body_width = _distance_2d(lm["inf_ant_sup"], lm["inf_post_sup"])
             if inf_body_width > 1e-6:
-                slip_fraction = abs(lm["sup_ant_inf"][0] - lm["inf_ant_sup"][0]) / (
-                    inf_body_width * magnification_factor
-                )
+                slip_fraction = abs(lm["sup_ant_inf"][0] - lm["inf_ant_sup"][0]) / inf_body_width
             else:
                 slip_fraction = 0.0
 
@@ -1031,6 +1031,9 @@ def detect_vertebral_fractures_xray(
             field="landmarks_per_vertebra",
             value="{}",
         )
+
+    for vert_label in landmarks_per_vertebra:
+        _validate_vertebra_label(vert_label, "detect_fractures")
 
     if magnification_factor <= 0:
         raise ValidationError(
