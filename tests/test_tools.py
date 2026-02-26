@@ -1,15 +1,19 @@
 """Unit tests for MCP tool implementations."""
 
 import os
-import pytest
 from unittest.mock import Mock, patch
 
+import pytest
+
+from slicer_mcp.slicer_client import SlicerConnectionError
 from slicer_mcp.tools import (
+    ValidationError,
+    _build_segment_statistics_code,
+    _validate_audit_log_path,
+    execute_python,
+    measure_volume,
     validate_mrml_node_id,
     validate_segment_name,
-    ValidationError,
-    measure_volume,
-    _validate_audit_log_path,
 )
 
 
@@ -179,11 +183,17 @@ class TestMeasureVolumeValidation:
 
     def test_measure_volume_valid_inputs_proceeds(self):
         """Test measure_volume with valid inputs proceeds to Slicer call."""
-        with patch('slicer_mcp.tools.get_client') as mock_get_client:
+        with patch("slicer_mcp.tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
-                "result": '{"node_id": "vtkMRMLSegmentationNode1", "node_name": "Test", "total_volume_mm3": 1000, "total_volume_ml": 1.0, "segments": []}'
+                "result": (
+                    '{"node_id": "vtkMRMLSegmentationNode1",'
+                    ' "node_name": "Test",'
+                    ' "total_volume_mm3": 1000,'
+                    ' "total_volume_ml": 1.0,'
+                    ' "segments": []}'
+                ),
             }
             mock_get_client.return_value = mock_client
 
@@ -197,17 +207,24 @@ class TestMeasureVolumeValidation:
 # Code Injection Defense-in-Depth Tests (Batch 1 Fix 1.3)
 # =============================================================================
 
+
 class TestMeasureVolumeCodeGeneration:
     """Test measure_volume generates safe Python code using json.dumps()."""
 
     def test_measure_volume_uses_json_escaped_node_id(self):
         """Test measure_volume uses json.dumps for node_id escaping."""
-        import json
-        with patch('slicer_mcp.tools.get_client') as mock_get_client:
+
+        with patch("slicer_mcp.tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
-                "result": '{"node_id": "vtkMRMLSegmentationNode1", "node_name": "Test", "total_volume_mm3": 1000, "total_volume_ml": 1.0, "segments": []}'
+                "result": (
+                    '{"node_id": "vtkMRMLSegmentationNode1",'
+                    ' "node_name": "Test",'
+                    ' "total_volume_mm3": 1000,'
+                    ' "total_volume_ml": 1.0,'
+                    ' "segments": []}'
+                ),
             }
             mock_get_client.return_value = mock_client
 
@@ -225,12 +242,19 @@ class TestMeasureVolumeCodeGeneration:
 
     def test_measure_volume_uses_json_escaped_segment_name(self):
         """Test measure_volume uses json.dumps for segment_name escaping."""
-        import json
-        with patch('slicer_mcp.tools.get_client') as mock_get_client:
+
+        with patch("slicer_mcp.tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
-                "result": '{"node_id": "vtkMRMLSegmentationNode1", "node_name": "Test", "total_volume_mm3": 1000, "total_volume_ml": 1.0, "segments": [{"name": "Tumor", "volume_mm3": 1000, "volume_ml": 1.0}]}'
+                "result": (
+                    '{"node_id": "vtkMRMLSegmentationNode1",'
+                    ' "node_name": "Test",'
+                    ' "total_volume_mm3": 1000,'
+                    ' "total_volume_ml": 1.0,'
+                    ' "segments": [{"name": "Tumor",'
+                    ' "volume_mm3": 1000, "volume_ml": 1.0}]}'
+                ),
             }
             mock_get_client.return_value = mock_client
 
@@ -246,11 +270,17 @@ class TestMeasureVolumeCodeGeneration:
 
     def test_measure_volume_code_uses_variable_not_interpolation(self):
         """Test generated code uses variables instead of direct interpolation."""
-        with patch('slicer_mcp.tools.get_client') as mock_get_client:
+        with patch("slicer_mcp.tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
-                "result": '{"node_id": "vtkMRMLSegmentationNode1", "node_name": "Test", "total_volume_mm3": 1000, "total_volume_ml": 1.0, "segments": []}'
+                "result": (
+                    '{"node_id": "vtkMRMLSegmentationNode1",'
+                    ' "node_name": "Test",'
+                    ' "total_volume_mm3": 1000,'
+                    ' "total_volume_ml": 1.0,'
+                    ' "segments": []}'
+                ),
             }
             mock_get_client.return_value = mock_client
 
@@ -259,17 +289,24 @@ class TestMeasureVolumeCodeGeneration:
             python_code = mock_client.exec_python.call_args[0][0]
 
             # Verify the code uses the variable, not direct interpolation
-            assert 'GetNodeByID(node_id)' in python_code
+            assert "GetNodeByID(node_id)" in python_code
             # Should NOT have the old pattern with direct string interpolation
             assert "GetNodeByID('vtkMRMLSegmentationNode1')" not in python_code
 
     def test_measure_volume_segment_code_uses_variable(self):
         """Test generated code for segment measurement uses variables."""
-        with patch('slicer_mcp.tools.get_client') as mock_get_client:
+        with patch("slicer_mcp.tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
-                "result": '{"node_id": "vtkMRMLSegmentationNode1", "node_name": "Test", "total_volume_mm3": 1000, "total_volume_ml": 1.0, "segments": [{"name": "Brain", "volume_mm3": 1000, "volume_ml": 1.0}]}'
+                "result": (
+                    '{"node_id": "vtkMRMLSegmentationNode1",'
+                    ' "node_name": "Test",'
+                    ' "total_volume_mm3": 1000,'
+                    ' "total_volume_ml": 1.0,'
+                    ' "segments": [{"name": "Brain",'
+                    ' "volume_mm3": 1000, "volume_ml": 1.0}]}'
+                ),
             }
             mock_get_client.return_value = mock_client
 
@@ -278,7 +315,7 @@ class TestMeasureVolumeCodeGeneration:
             python_code = mock_client.exec_python.call_args[0][0]
 
             # Verify GetSegment uses the variable
-            assert 'GetSegment(segment_name)' in python_code
+            assert "GetSegment(segment_name)" in python_code
             # Should NOT have old pattern with direct interpolation
             assert "GetSegment('Brain')" not in python_code
 
@@ -286,6 +323,7 @@ class TestMeasureVolumeCodeGeneration:
 # =============================================================================
 # Audit Log Path Validation Tests (Batch 5 Fix 5.1)
 # =============================================================================
+
 
 class TestAuditLogPathValidation:
     """Test audit log path validation."""
@@ -364,7 +402,7 @@ class TestAuditLogPathValidation:
     def test_valid_path_absolute(self):
         """Test valid absolute path is accepted."""
         result = _validate_audit_log_path("/tmp/audit.log")
-        assert result == "/tmp/audit.log"
+        assert result == os.path.realpath("/tmp/audit.log")
 
     def test_path_expansion_tilde(self):
         """Test ~ is properly expanded to home directory."""
@@ -381,10 +419,21 @@ class TestAuditLogPathValidation:
         assert os.path.isabs(result)
         assert result.endswith("audit.log")
 
+    def test_symlink_to_forbidden_directory_rejected(self, tmp_path):
+        """Test that symlink pointing to forbidden directory is rejected."""
+        # Create a symlink pointing to /etc
+        symlink_path = tmp_path / "innocent.log"
+        symlink_path.symlink_to("/etc/audit.log")
+
+        with pytest.raises(ValueError) as exc_info:
+            _validate_audit_log_path(str(symlink_path))
+        assert "forbidden directory" in str(exc_info.value)
+
 
 # =============================================================================
 # Malformed JSON Response Tests (Batch 6 Fix 6.2)
 # =============================================================================
+
 
 class TestMalformedJsonHandling:
     """Test handling of malformed JSON responses from Slicer."""
@@ -392,12 +441,10 @@ class TestMalformedJsonHandling:
     def test_measure_volume_malformed_json(self):
         """Test measure_volume handles malformed JSON gracefully."""
         from slicer_mcp.slicer_client import SlicerConnectionError
-        with patch('slicer_mcp.tools.get_client') as mock_get_client:
+
+        with patch("slicer_mcp.tools.get_client") as mock_get_client:
             mock_client = Mock()
-            mock_client.exec_python.return_value = {
-                "success": True,
-                "result": "not valid json {"
-            }
+            mock_client.exec_python.return_value = {"success": True, "result": "not valid json {"}
             mock_get_client.return_value = mock_client
 
             with pytest.raises(SlicerConnectionError) as exc_info:
@@ -408,12 +455,10 @@ class TestMalformedJsonHandling:
     def test_measure_volume_empty_result(self):
         """Test measure_volume handles empty result."""
         from slicer_mcp.slicer_client import SlicerConnectionError
-        with patch('slicer_mcp.tools.get_client') as mock_get_client:
+
+        with patch("slicer_mcp.tools.get_client") as mock_get_client:
             mock_client = Mock()
-            mock_client.exec_python.return_value = {
-                "success": True,
-                "result": ""
-            }
+            mock_client.exec_python.return_value = {"success": True, "result": ""}
             mock_get_client.return_value = mock_client
 
             with pytest.raises(SlicerConnectionError) as exc_info:
@@ -424,12 +469,10 @@ class TestMalformedJsonHandling:
     def test_measure_volume_null_result(self):
         """Test measure_volume handles null JSON result."""
         from slicer_mcp.slicer_client import SlicerConnectionError
-        with patch('slicer_mcp.tools.get_client') as mock_get_client:
+
+        with patch("slicer_mcp.tools.get_client") as mock_get_client:
             mock_client = Mock()
-            mock_client.exec_python.return_value = {
-                "success": True,
-                "result": "null"
-            }
+            mock_client.exec_python.return_value = {"success": True, "result": "null"}
             mock_get_client.return_value = mock_client
 
             with pytest.raises(SlicerConnectionError) as exc_info:
@@ -440,12 +483,10 @@ class TestMalformedJsonHandling:
     def test_list_sample_data_malformed_json(self):
         """Test list_sample_data handles malformed JSON gracefully."""
         from slicer_mcp.tools import list_sample_data
-        with patch('slicer_mcp.tools.get_client') as mock_get_client:
+
+        with patch("slicer_mcp.tools.get_client") as mock_get_client:
             mock_client = Mock()
-            mock_client.exec_python.return_value = {
-                "success": True,
-                "result": "invalid json"
-            }
+            mock_client.exec_python.return_value = {"success": True, "result": "invalid json"}
             mock_get_client.return_value = mock_client
 
             # list_sample_data should handle errors gracefully and return fallback
@@ -456,6 +497,7 @@ class TestMalformedJsonHandling:
 # =============================================================================
 # Unicode Segment Name Tests (Batch 7: Unicode Support for Medical Terminology)
 # =============================================================================
+
 
 class TestUnicodeSegmentNames:
     """Test Unicode handling in segment names.
@@ -567,17 +609,17 @@ class TestUnicodeSegmentNames:
         """Test that zero-width characters are removed via NFKC normalization."""
         # Zero-width space (U+200B) should be removed
         # "test\u200Binjection" should become "testinjection"
-        result = validate_segment_name("test\u200Binjection")
+        result = validate_segment_name("test\u200binjection")
         assert result == "testinjection"
 
         # Zero-width non-joiner (U+200C) should be removed
-        result = validate_segment_name("test\u200Cvalue")
+        result = validate_segment_name("test\u200cvalue")
         assert result == "testvalue"
 
     def test_segment_name_normalizes_soft_hyphen(self):
         """Test that soft hyphens are removed via NFKC normalization."""
         # Soft hyphen (U+00AD) should be removed
-        result = validate_segment_name("test\u00ADhidden")
+        result = validate_segment_name("test\u00adhidden")
         assert result == "testhidden"
 
     def test_segment_name_normalizes_compatibility_characters(self):
@@ -590,7 +632,7 @@ class TestUnicodeSegmentNames:
     def test_segment_name_handles_bom(self):
         """Test that byte order marks are removed."""
         # BOM (U+FEFF) should be removed
-        result = validate_segment_name("\uFEFFTumor")
+        result = validate_segment_name("\ufeffTumor")
         assert result == "Tumor"
 
     # --- Node ID still rejects Unicode (stricter for MRML IDs) ---
@@ -601,3 +643,542 @@ class TestUnicodeSegmentNames:
             validate_mrml_node_id("vtkMRMLNödë1")
         with pytest.raises(ValidationError):
             validate_mrml_node_id("vtkMRMLαNode1")
+
+
+# =============================================================================
+# DICOM Validation Tests
+# =============================================================================
+
+
+class TestDICOMValidation:
+    """Tests for DICOM-related validation functions."""
+
+    def test_validate_folder_path_valid(self, tmp_path):
+        """Test valid folder paths."""
+        from slicer_mcp.tools import validate_folder_path
+
+        # Create a temporary directory
+        test_dir = tmp_path / "dicom_folder"
+        test_dir.mkdir()
+
+        result = validate_folder_path(str(test_dir))
+        assert result == str(test_dir)
+
+    def test_validate_folder_path_empty(self):
+        """Test empty folder path."""
+        from slicer_mcp.tools import ValidationError, validate_folder_path
+
+        with pytest.raises(ValidationError) as exc_info:
+            validate_folder_path("")
+
+        assert "cannot be empty" in str(exc_info.value)
+
+    def test_validate_folder_path_traversal_attack(self, tmp_path):
+        """Test path traversal attack prevention."""
+        from slicer_mcp.tools import ValidationError, validate_folder_path
+
+        with pytest.raises(ValidationError) as exc_info:
+            validate_folder_path("../../../etc/passwd")
+
+        assert "forbidden component" in str(exc_info.value)
+
+    def test_validate_folder_path_not_exists(self):
+        """Test non-existent path."""
+        from slicer_mcp.tools import ValidationError, validate_folder_path
+
+        with pytest.raises(ValidationError) as exc_info:
+            validate_folder_path("/nonexistent/path/12345")
+
+        assert "does not exist" in str(exc_info.value)
+
+    def test_validate_folder_path_not_directory(self, tmp_path):
+        """Test path that is a file, not directory."""
+        from slicer_mcp.tools import ValidationError, validate_folder_path
+
+        # Create a file
+        test_file = tmp_path / "test_file.txt"
+        test_file.write_text("test")
+
+        with pytest.raises(ValidationError) as exc_info:
+            validate_folder_path(str(test_file))
+
+        assert "not a directory" in str(exc_info.value)
+
+    def test_validate_folder_path_symlink_resolved(self, tmp_path):
+        """Test that symlinks are resolved to real path."""
+        from slicer_mcp.tools import validate_folder_path
+
+        # Create a real directory and a symlink pointing to it
+        real_dir = tmp_path / "real_dir"
+        real_dir.mkdir()
+        symlink_dir = tmp_path / "link_dir"
+        symlink_dir.symlink_to(real_dir)
+
+        # Should resolve the symlink and return the real path
+        result = validate_folder_path(str(symlink_dir))
+        # Use os.path.realpath on expected too (macOS /var -> /private/var)
+        assert result == os.path.realpath(str(real_dir))
+
+    def test_validate_dicom_uid_valid(self):
+        """Test valid DICOM UIDs."""
+        from slicer_mcp.tools import validate_dicom_uid
+
+        # Standard DICOM UID format
+        uid = "1.2.840.113619.2.55.3.604688"
+        assert validate_dicom_uid(uid) == uid
+
+        # Short UID
+        assert validate_dicom_uid("1.2.3") == "1.2.3"
+
+        # Long UID
+        long_uid = "1.2.840.10008.5.1.4.1.1.2.1.20200101.12345.123456789"
+        assert validate_dicom_uid(long_uid) == long_uid
+
+    def test_validate_dicom_uid_empty(self):
+        """Test empty DICOM UID."""
+        from slicer_mcp.tools import ValidationError, validate_dicom_uid
+
+        with pytest.raises(ValidationError) as exc_info:
+            validate_dicom_uid("")
+
+        assert "cannot be empty" in str(exc_info.value)
+
+    def test_validate_dicom_uid_invalid_characters(self):
+        """Test DICOM UID with invalid characters."""
+        from slicer_mcp.tools import ValidationError, validate_dicom_uid
+
+        # Letters not allowed
+        with pytest.raises(ValidationError):
+            validate_dicom_uid("1.2.3.abc")
+
+        # Spaces not allowed
+        with pytest.raises(ValidationError):
+            validate_dicom_uid("1.2.3 4")
+
+        # Special characters not allowed
+        with pytest.raises(ValidationError):
+            validate_dicom_uid("1.2.3;4")
+
+    def test_validate_dicom_uid_too_long(self):
+        """Test DICOM UID that exceeds max length."""
+        from slicer_mcp.tools import ValidationError, validate_dicom_uid
+
+        # Create UID longer than 64 characters
+        long_uid = "1." + ".1" * 40  # ~80 characters
+
+        with pytest.raises(ValidationError) as exc_info:
+            validate_dicom_uid(long_uid)
+
+        assert "exceeds maximum length" in str(exc_info.value)
+
+    def test_validate_dicom_uid_custom_field_name(self):
+        """Test custom field name in error messages."""
+        from slicer_mcp.tools import ValidationError, validate_dicom_uid
+
+        with pytest.raises(ValidationError) as exc_info:
+            validate_dicom_uid("", field_name="series_uid")
+
+        assert "series_uid" in str(exc_info.value)
+
+
+# =============================================================================
+# Brain Extraction Validation Tests
+# =============================================================================
+
+
+class TestBrainExtractionValidation:
+    """Tests for brain extraction validation."""
+
+    def test_valid_brain_extraction_methods(self):
+        """Test that valid methods are defined in constants."""
+        from slicer_mcp.constants import VALID_BRAIN_EXTRACTION_METHODS
+
+        assert "hd-bet" in VALID_BRAIN_EXTRACTION_METHODS
+        assert "swiss" in VALID_BRAIN_EXTRACTION_METHODS
+        assert len(VALID_BRAIN_EXTRACTION_METHODS) == 2
+
+    def test_valid_hdbet_devices(self):
+        """Test that valid HD-BET devices are defined."""
+        from slicer_mcp.constants import VALID_HDBET_DEVICES
+
+        assert "auto" in VALID_HDBET_DEVICES
+        assert "cpu" in VALID_HDBET_DEVICES
+        assert "0" in VALID_HDBET_DEVICES  # GPU index
+
+    def test_invalid_method_rejected(self):
+        """Test that invalid extraction method raises ValidationError."""
+        from slicer_mcp.constants import VALID_BRAIN_EXTRACTION_METHODS
+
+        invalid_method = "invalid_method"
+        assert invalid_method not in VALID_BRAIN_EXTRACTION_METHODS
+
+    def test_invalid_device_rejected(self):
+        """Test that invalid device raises ValidationError."""
+        from slicer_mcp.constants import VALID_HDBET_DEVICES
+
+        invalid_device = "invalid_device"
+        assert invalid_device not in VALID_HDBET_DEVICES
+
+    def test_node_id_validation_applied(self):
+        """Test that node ID validation is applied."""
+        from slicer_mcp.tools import ValidationError, validate_mrml_node_id
+
+        # Empty node ID should fail
+        with pytest.raises(ValidationError):
+            validate_mrml_node_id("")
+
+        # Valid format should pass
+        result = validate_mrml_node_id("vtkMRMLScalarVolumeNode1")
+        assert result == "vtkMRMLScalarVolumeNode1"
+
+
+class TestBrainExtractionLongOperation:
+    """Tests for brain extraction long-operation behavior."""
+
+    def test_run_brain_extraction_uses_extended_timeout(self):
+        """Tool should call exec_python with BRAIN_EXTRACTION_TIMEOUT."""
+        from slicer_mcp.constants import BRAIN_EXTRACTION_TIMEOUT
+        from slicer_mcp.tools import run_brain_extraction
+
+        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+            mock_client = Mock()
+            mock_client.exec_python.return_value = {
+                "success": True,
+                "result": (
+                    '{"success": true,'
+                    ' "brain_volume_ml": 123.4,'
+                    ' "processing_time_seconds": 12.3}'
+                ),
+            }
+            mock_get_client.return_value = mock_client
+
+            result = run_brain_extraction("vtkMRMLScalarVolumeNode1", method="hd-bet", device="cpu")
+
+            assert result["success"] is True
+            mock_client.exec_python.assert_called_once()
+            _, call_kwargs = mock_client.exec_python.call_args
+            assert call_kwargs["timeout"] == BRAIN_EXTRACTION_TIMEOUT
+
+    def test_run_brain_extraction_adds_long_operation_metadata(self):
+        """Tool should include long_operation metadata in result."""
+        from slicer_mcp.tools import run_brain_extraction
+
+        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+            mock_client = Mock()
+            mock_client.exec_python.return_value = {
+                "success": True,
+                "result": (
+                    '{"success": true,'
+                    ' "brain_volume_ml": 123.4,'
+                    ' "processing_time_seconds": 12.3}'
+                ),
+            }
+            mock_get_client.return_value = mock_client
+
+            result = run_brain_extraction("vtkMRMLScalarVolumeNode1", method="swiss")
+
+            assert "long_operation" in result
+            assert result["long_operation"]["type"] == "brain_extraction"
+            assert result["long_operation"]["method"] == "swiss"
+
+
+# =============================================================================
+# Execute Python Code Length Validation Tests
+# =============================================================================
+
+
+class TestExecutePythonCodeLengthValidation:
+    """Test MAX_PYTHON_CODE_LENGTH validation in execute_python."""
+
+    def test_execute_python_accepts_code_at_max_length(self):
+        """execute_python should accept code exactly at MAX_PYTHON_CODE_LENGTH."""
+        from slicer_mcp.constants import MAX_PYTHON_CODE_LENGTH
+
+        # Create code exactly at the limit
+        code = "x" * MAX_PYTHON_CODE_LENGTH
+
+        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+            mock_client = Mock()
+            mock_client.exec_python.return_value = {"success": True, "result": "ok"}
+            mock_get_client.return_value = mock_client
+
+            # Should not raise - code is at the limit, not over
+            result = execute_python(code)
+            assert result["success"] is True
+
+    def test_execute_python_rejects_code_exceeding_max_length(self):
+        """execute_python should reject code exceeding MAX_PYTHON_CODE_LENGTH."""
+        from slicer_mcp.constants import MAX_PYTHON_CODE_LENGTH
+
+        # Create code over the limit
+        oversized_code = "x" * (MAX_PYTHON_CODE_LENGTH + 1)
+
+        with pytest.raises(ValidationError) as exc_info:
+            execute_python(oversized_code)
+
+        assert "maximum length" in str(exc_info.value)
+        assert exc_info.value.field == "code"
+
+    def test_execute_python_error_includes_code_size(self):
+        """ValidationError should include the actual code size."""
+        from slicer_mcp.constants import MAX_PYTHON_CODE_LENGTH
+
+        oversized_code = "x" * (MAX_PYTHON_CODE_LENGTH + 500)
+
+        with pytest.raises(ValidationError) as exc_info:
+            execute_python(oversized_code)
+
+        # Error should mention the code size
+        assert f"{MAX_PYTHON_CODE_LENGTH + 500} bytes" in str(exc_info.value.value)
+
+
+# =============================================================================
+# Segment Statistics Code Generation Tests
+# =============================================================================
+
+
+class TestBuildSegmentStatisticsCode:
+    """Test _build_segment_statistics_code helper generates valid Python."""
+
+    def test_build_segment_statistics_code_contains_imports(self):
+        """Generated code should import SegmentStatistics module."""
+        code = _build_segment_statistics_code("testNode")
+
+        assert "from SegmentStatistics import SegmentStatisticsLogic" in code
+
+    def test_build_segment_statistics_code_uses_provided_variable(self):
+        """Generated code should use the provided segmentation node variable."""
+        code = _build_segment_statistics_code("mySegNode")
+
+        # The variable should be used in GetID() call
+        assert "mySegNode.GetID()" in code
+
+    def test_build_segment_statistics_code_calculates_volume(self):
+        """Generated code should calculate brain_vol_cc."""
+        code = _build_segment_statistics_code("segNode")
+
+        # Should initialize volume variable
+        assert "brain_vol_cc = 0.0" in code
+        # Should compute statistics
+        assert "computeStatistics()" in code
+        # Should look for volume_cc in results
+        assert "volume_cc" in code
+
+    def test_build_segment_statistics_code_handles_errors(self):
+        """Generated code should handle exceptions gracefully."""
+        code = _build_segment_statistics_code("segNode")
+
+        # Should have try/except block
+        assert "try:" in code
+        assert "except Exception as e:" in code
+        # Should print warning instead of crashing
+        assert "Volume calculation warning" in code
+
+    def test_build_segment_statistics_code_different_variable_names(self):
+        """Generated code should work with various variable names."""
+        # Test with different variable names used in the codebase
+        for var_name in ["brainSeg", "segmentation", "seg_node"]:
+            code = _build_segment_statistics_code(var_name)
+            assert f"{var_name}.GetID()" in code
+
+
+class TestCaptureScreenshotValidation:
+    """Test capture_screenshot input validation."""
+
+    def test_capture_screenshot_rejects_invalid_look_from_axis(self):
+        """Invalid look_from_axis should raise ValueError."""
+        from slicer_mcp.tools import capture_screenshot
+
+        with pytest.raises(ValueError) as exc_info:
+            capture_screenshot("3d", look_from_axis="malicious_value")
+        assert "look_from_axis" in str(exc_info.value)
+
+    def test_capture_screenshot_accepts_valid_look_from_axis(self):
+        """Valid look_from_axis should pass validation."""
+        from slicer_mcp.tools import capture_screenshot
+
+        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+            mock_client = Mock()
+            mock_client.get_3d_screenshot.return_value = b"\x89PNG\r\n\x1a\n"
+            mock_get_client.return_value = mock_client
+
+            result = capture_screenshot("3d", look_from_axis="anterior")
+            assert result["success"] is True
+
+    def test_capture_screenshot_allows_none_look_from_axis(self):
+        """None look_from_axis should be allowed for 3d view."""
+        from slicer_mcp.tools import capture_screenshot
+
+        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+            mock_client = Mock()
+            mock_client.get_3d_screenshot.return_value = b"\x89PNG\r\n\x1a\n"
+            mock_get_client.return_value = mock_client
+
+            result = capture_screenshot("3d", look_from_axis=None)
+            assert result["success"] is True
+
+    def test_capture_screenshot_invalid_view_type(self):
+        """Invalid view_type should raise ValueError."""
+        from slicer_mcp.tools import capture_screenshot
+
+        with pytest.raises(ValueError) as exc_info:
+            capture_screenshot("invalid_view")
+        assert "Invalid view_type" in str(exc_info.value)
+
+
+class TestCaptureScreenshotTool:
+    """Test capture_screenshot tool success paths."""
+
+    def test_axial_view(self):
+        """Axial view screenshot should return success with base64 image."""
+        from slicer_mcp.tools import capture_screenshot
+
+        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+            mock_client = Mock()
+            mock_client.get_screenshot.return_value = b"\x89PNG\r\n\x1a\n"
+            mock_get_client.return_value = mock_client
+            result = capture_screenshot("axial")
+            assert result["success"] is True
+            assert result["view_type"] == "axial"
+            assert "image_base64" in result
+
+    def test_3d_view(self):
+        """3D view screenshot should return success with look_from_axis."""
+        from slicer_mcp.tools import capture_screenshot
+
+        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+            mock_client = Mock()
+            mock_client.get_3d_screenshot.return_value = b"\x89PNG\r\n\x1a\n"
+            mock_get_client.return_value = mock_client
+            result = capture_screenshot("3d", look_from_axis="anterior")
+            assert result["success"] is True
+            assert result["look_from_axis"] == "anterior"
+
+    def test_full_view(self):
+        """Full layout screenshot should return success."""
+        from slicer_mcp.tools import capture_screenshot
+
+        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+            mock_client = Mock()
+            mock_client.get_full_screenshot.return_value = b"\x89PNG\r\n\x1a\n"
+            mock_get_client.return_value = mock_client
+            result = capture_screenshot("full")
+            assert result["success"] is True
+
+    def test_with_scroll_position(self):
+        """Screenshot with scroll_position should include it in result."""
+        from slicer_mcp.tools import capture_screenshot
+
+        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+            mock_client = Mock()
+            mock_client.get_screenshot.return_value = b"\x89PNG\r\n\x1a\n"
+            mock_get_client.return_value = mock_client
+            result = capture_screenshot("sagittal", scroll_position=0.5)
+            assert result["scroll_position"] == 0.5
+
+    def test_connection_error_propagates(self):
+        """SlicerConnectionError should propagate from capture_screenshot."""
+        from slicer_mcp.tools import capture_screenshot
+
+        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+            mock_client = Mock()
+            mock_client.get_screenshot.side_effect = SlicerConnectionError("fail")
+            mock_get_client.return_value = mock_client
+            with pytest.raises(SlicerConnectionError):
+                capture_screenshot("axial")
+
+
+class TestSetLayoutTool:
+    """Test set_layout tool."""
+
+    def test_valid_layout(self):
+        """Valid layout name should return success."""
+        from slicer_mcp.tools import set_layout
+
+        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+            mock_client = Mock()
+            mock_client.set_layout.return_value = {"success": True}
+            mock_get_client.return_value = mock_client
+            result = set_layout("FourUp")
+            assert result["success"] is True
+
+    def test_invalid_layout(self):
+        """Invalid layout name should raise ValueError."""
+        from slicer_mcp.tools import set_layout
+
+        with pytest.raises(ValueError) as exc_info:
+            set_layout("InvalidLayout")
+        assert "Invalid layout" in str(exc_info.value)
+
+    def test_invalid_gui_mode(self):
+        """Invalid gui_mode should raise ValueError."""
+        from slicer_mcp.tools import set_layout
+
+        with pytest.raises(ValueError) as exc_info:
+            set_layout("FourUp", gui_mode="invalid")
+        assert "Invalid gui_mode" in str(exc_info.value)
+
+
+class TestDICOMTools:
+    """Test DICOM tool functions."""
+
+    def test_list_dicom_studies(self):
+        """list_dicom_studies should return parsed JSON result."""
+        from slicer_mcp.tools import list_dicom_studies
+
+        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+            mock_client = Mock()
+            mock_client.exec_python.return_value = {
+                "success": True,
+                "result": '{"studies": [], "total_count": 0}',
+            }
+            mock_get_client.return_value = mock_client
+            result = list_dicom_studies()
+            assert result["total_count"] == 0
+
+    def test_list_dicom_series(self):
+        """list_dicom_series should return parsed JSON result."""
+        from slicer_mcp.tools import list_dicom_series
+
+        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+            mock_client = Mock()
+            mock_client.exec_python.return_value = {
+                "success": True,
+                "result": '{"series": [], "total_count": 0}',
+            }
+            mock_get_client.return_value = mock_client
+            result = list_dicom_series("1.2.840.113619")
+            assert result["total_count"] == 0
+
+    def test_load_dicom_series(self):
+        """load_dicom_series should return parsed JSON result."""
+        from slicer_mcp.tools import load_dicom_series
+
+        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+            mock_client = Mock()
+            mock_client.exec_python.return_value = {
+                "success": True,
+                "result": (
+                    '{"success": true, "node_id":'
+                    ' "vtkMRMLScalarVolumeNode1", "node_name": "CT_Series"}'
+                ),
+            }
+            mock_get_client.return_value = mock_client
+            result = load_dicom_series("1.2.840.113619")
+            assert result["success"] is True
+
+    def test_import_dicom(self, tmp_path):
+        """import_dicom should return parsed JSON result."""
+        from slicer_mcp.tools import import_dicom
+
+        dicom_dir = tmp_path / "dicoms"
+        dicom_dir.mkdir()
+        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+            mock_client = Mock()
+            mock_client.exec_python.return_value = {
+                "success": True,
+                "result": '{"success": true, "patients_count": 1, "series_count": 3}',
+            }
+            mock_get_client.return_value = mock_client
+            result = import_dicom(str(dicom_dir))
+            assert result["success"] is True

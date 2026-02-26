@@ -10,6 +10,15 @@ from slicer_mcp.tools import _parse_json_result
 logger = logging.getLogger("slicer-mcp")
 
 
+def _iso_timestamp() -> str:
+    """Generate ISO 8601 timestamp in UTC with 'Z' suffix.
+
+    Returns:
+        Timestamp string like '2024-01-15T14:30:00Z'
+    """
+    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
 def get_scene_resource() -> str:
     """Get the current MRML scene structure as JSON.
 
@@ -27,7 +36,7 @@ def get_scene_resource() -> str:
         # Build scene resource
         scene_data = {
             "scene_id": "vtkMRMLScene",
-            "modified_time": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "modified_time": _iso_timestamp(),
             "node_count": len(nodes),
             "nodes": nodes,
             "connections": [],  # Future: add node connections if needed
@@ -167,7 +176,7 @@ print(json.dumps(result))
             "response_time_ms": health["response_time_ms"],
             "scene_loaded": slicer_info["scene_loaded"],
             "python_available": slicer_info["python_available"],
-            "last_check": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "last_check": _iso_timestamp(),
         }
 
         logger.info(f"Status resource retrieved: connected={status_data['connected']}")
@@ -185,7 +194,7 @@ print(json.dumps(result))
             "response_time_ms": None,
             "scene_loaded": False,
             "python_available": False,
-            "last_check": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "last_check": _iso_timestamp(),
             "error": e.message,
         }
 

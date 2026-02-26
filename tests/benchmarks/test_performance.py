@@ -11,10 +11,12 @@ Or with timing output:
     pytest tests/benchmarks/ -v -s --durations=0
 """
 
-import time
 import statistics
+import time
+from collections.abc import Callable
+from typing import Any
+
 import pytest
-from typing import List, Callable, Any
 
 from slicer_mcp.slicer_client import (
     SlicerClient,
@@ -33,7 +35,7 @@ def measure_latency(func: Callable[[], Any], iterations: int = 10) -> dict:
     Returns:
         Dict with avg, min, max, p95, p99 latencies in milliseconds
     """
-    latencies: List[float] = []
+    latencies: list[float] = []
 
     for _ in range(iterations):
         start = time.perf_counter()
@@ -83,11 +85,10 @@ class TestHealthCheckBenchmark:
         reset_circuit_breaker()
 
         results = measure_latency(
-            lambda: live_client.health_check(check_version=False),
-            iterations=20
+            lambda: live_client.health_check(check_version=False), iterations=20
         )
 
-        print(f"\n=== Health Check Latency ===")
+        print("\n=== Health Check Latency ===")
         print(f"  Iterations: {results['iterations']}")
         print(f"  Average:    {results['avg_ms']:.2f}ms")
         print(f"  Median:     {results['median_ms']:.2f}ms")
@@ -97,10 +98,10 @@ class TestHealthCheckBenchmark:
         print(f"  Stdev:      {results['stdev_ms']:.2f}ms")
 
         # Soft assertion - warn but don't fail
-        if results['avg_ms'] > 100:
-            print(f"  WARNING: Average latency exceeds 100ms target")
+        if results["avg_ms"] > 100:
+            print("  WARNING: Average latency exceeds 100ms target")
 
-        assert results['avg_ms'] < 500, "Health check should complete within 500ms"
+        assert results["avg_ms"] < 500, "Health check should complete within 500ms"
 
 
 @pytest.mark.integration
@@ -112,12 +113,9 @@ class TestScreenshotBenchmark:
         """Measure 2D slice screenshot latency (target: <200ms avg)."""
         reset_circuit_breaker()
 
-        results = measure_latency(
-            lambda: live_client.get_screenshot("Red"),
-            iterations=10
-        )
+        results = measure_latency(lambda: live_client.get_screenshot("Red"), iterations=10)
 
-        print(f"\n=== 2D Screenshot Latency (Red/Axial) ===")
+        print("\n=== 2D Screenshot Latency (Red/Axial) ===")
         print(f"  Iterations: {results['iterations']}")
         print(f"  Average:    {results['avg_ms']:.2f}ms")
         print(f"  Median:     {results['median_ms']:.2f}ms")
@@ -125,18 +123,15 @@ class TestScreenshotBenchmark:
         print(f"  Max:        {results['max_ms']:.2f}ms")
         print(f"  P95:        {results['p95_ms']:.2f}ms")
 
-        assert results['avg_ms'] < 1000, "Screenshot should complete within 1s"
+        assert results["avg_ms"] < 1000, "Screenshot should complete within 1s"
 
     def test_3d_screenshot_latency(self, live_client):
         """Measure 3D view screenshot latency (target: <300ms avg)."""
         reset_circuit_breaker()
 
-        results = measure_latency(
-            lambda: live_client.get_3d_screenshot(),
-            iterations=10
-        )
+        results = measure_latency(lambda: live_client.get_3d_screenshot(), iterations=10)
 
-        print(f"\n=== 3D Screenshot Latency ===")
+        print("\n=== 3D Screenshot Latency ===")
         print(f"  Iterations: {results['iterations']}")
         print(f"  Average:    {results['avg_ms']:.2f}ms")
         print(f"  Median:     {results['median_ms']:.2f}ms")
@@ -144,18 +139,15 @@ class TestScreenshotBenchmark:
         print(f"  Max:        {results['max_ms']:.2f}ms")
         print(f"  P95:        {results['p95_ms']:.2f}ms")
 
-        assert results['avg_ms'] < 2000, "3D screenshot should complete within 2s"
+        assert results["avg_ms"] < 2000, "3D screenshot should complete within 2s"
 
     def test_full_screenshot_latency(self, live_client):
         """Measure full window screenshot latency (target: <500ms avg)."""
         reset_circuit_breaker()
 
-        results = measure_latency(
-            lambda: live_client.get_full_screenshot(),
-            iterations=10
-        )
+        results = measure_latency(lambda: live_client.get_full_screenshot(), iterations=10)
 
-        print(f"\n=== Full Screenshot Latency ===")
+        print("\n=== Full Screenshot Latency ===")
         print(f"  Iterations: {results['iterations']}")
         print(f"  Average:    {results['avg_ms']:.2f}ms")
         print(f"  Median:     {results['median_ms']:.2f}ms")
@@ -163,7 +155,7 @@ class TestScreenshotBenchmark:
         print(f"  Max:        {results['max_ms']:.2f}ms")
         print(f"  P95:        {results['p95_ms']:.2f}ms")
 
-        assert results['avg_ms'] < 3000, "Full screenshot should complete within 3s"
+        assert results["avg_ms"] < 3000, "Full screenshot should complete within 3s"
 
 
 @pytest.mark.integration
@@ -175,12 +167,9 @@ class TestPythonExecutionBenchmark:
         """Measure simple Python expression latency (target: <50ms avg)."""
         reset_circuit_breaker()
 
-        results = measure_latency(
-            lambda: live_client.exec_python("1 + 1"),
-            iterations=20
-        )
+        results = measure_latency(lambda: live_client.exec_python("1 + 1"), iterations=20)
 
-        print(f"\n=== Simple Expression Latency ===")
+        print("\n=== Simple Expression Latency ===")
         print(f"  Iterations: {results['iterations']}")
         print(f"  Average:    {results['avg_ms']:.2f}ms")
         print(f"  Median:     {results['median_ms']:.2f}ms")
@@ -188,7 +177,7 @@ class TestPythonExecutionBenchmark:
         print(f"  Max:        {results['max_ms']:.2f}ms")
         print(f"  P95:        {results['p95_ms']:.2f}ms")
 
-        assert results['avg_ms'] < 500, "Simple expression should complete within 500ms"
+        assert results["avg_ms"] < 500, "Simple expression should complete within 500ms"
 
     def test_slicer_api_call_latency(self, live_client):
         """Measure Slicer API call latency (target: <100ms avg)."""
@@ -196,12 +185,14 @@ class TestPythonExecutionBenchmark:
 
         results = measure_latency(
             lambda: live_client.exec_python(
-                "import slicer; len(slicer.mrmlScene.GetNodesByClass('vtkMRMLVolumeNode'))"
+                "import slicer\n"
+                "__execResult = slicer.mrmlScene.GetNodesByClass("
+                "'vtkMRMLVolumeNode').GetNumberOfItems()"
             ),
-            iterations=20
+            iterations=20,
         )
 
-        print(f"\n=== Slicer API Call Latency ===")
+        print("\n=== Slicer API Call Latency ===")
         print(f"  Iterations: {results['iterations']}")
         print(f"  Average:    {results['avg_ms']:.2f}ms")
         print(f"  Median:     {results['median_ms']:.2f}ms")
@@ -209,7 +200,7 @@ class TestPythonExecutionBenchmark:
         print(f"  Max:        {results['max_ms']:.2f}ms")
         print(f"  P95:        {results['p95_ms']:.2f}ms")
 
-        assert results['avg_ms'] < 1000, "API call should complete within 1s"
+        assert results["avg_ms"] < 1000, "API call should complete within 1s"
 
 
 @pytest.mark.integration
@@ -221,12 +212,9 @@ class TestSceneOperationsBenchmark:
         """Measure scene node listing latency (target: <200ms avg)."""
         reset_circuit_breaker()
 
-        results = measure_latency(
-            lambda: live_client.get_scene_nodes(),
-            iterations=10
-        )
+        results = measure_latency(lambda: live_client.get_scene_nodes(), iterations=10)
 
-        print(f"\n=== Scene Nodes Listing Latency ===")
+        print("\n=== Scene Nodes Listing Latency ===")
         print(f"  Iterations: {results['iterations']}")
         print(f"  Average:    {results['avg_ms']:.2f}ms")
         print(f"  Median:     {results['median_ms']:.2f}ms")
@@ -234,4 +222,4 @@ class TestSceneOperationsBenchmark:
         print(f"  Max:        {results['max_ms']:.2f}ms")
         print(f"  P95:        {results['p95_ms']:.2f}ms")
 
-        assert results['avg_ms'] < 1000, "Scene listing should complete within 1s"
+        assert results["avg_ms"] < 1000, "Scene listing should complete within 1s"

@@ -4,31 +4,34 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-MCP (Model Context Protocol) server bridging Claude Code to 3D Slicer for AI-assisted medical image analysis. Uses FastMCP framework with stdio transport.
+MCP server bridging Claude Code to 3D Slicer for AI-assisted medical image analysis. Uses FastMCP with stdio transport. The server exposes 12 tools and 3 resources over MCP/stdio, communicating with Slicer's WebServer extension over HTTP.
+
+Entry point: `slicer-mcp` → `slicer_mcp:main` (in `server.py`).
 
 ## Commands
 
 ```bash
-# Install dependencies
-uv sync
+# Dependencies
+uv sync                                    # Install dependencies
+uv sync --all-extras                       # Install with dev + metrics extras
 
-# Run tests (no Slicer required)
-uv run pytest -v
+# Testing
+uv run pytest -v                           # All tests (unit + integration + benchmarks)
+uv run pytest -v -m "not integration and not benchmark"  # Unit tests only (no Slicer needed)
+uv run pytest -v -m integration            # Integration tests (requires running Slicer)
+uv run pytest -v -m benchmark              # Performance benchmarks (requires running Slicer)
+uv run pytest --cov=slicer_mcp             # Coverage (fail_under=85, configured in .coveragerc)
+uv run pytest tests/test_tools.py -v       # Single test file
+uv run pytest tests/test_tools.py::TestCaptureScreenshotTool::test_axial_view -v  # Single test
 
-# Run integration tests (requires Slicer WebServer on localhost:2016)
-uv run pytest -v -m integration
+# Code quality
+uv run black src tests                     # Format code
+uv run ruff check src tests                # Lint
+uv run ruff check src tests --fix          # Lint with auto-fix
+uv run pre-commit run --all-files          # All pre-commit hooks (black, ruff, mypy)
 
-# Run with coverage
-uv run pytest --cov=slicer_mcp --cov-report=html
-
-# Format code
-uv run black src tests
-
-# Lint code
-uv run ruff check src tests
-
-# Run the MCP server
-uv run slicer-mcp
+# Run
+uv run slicer-mcp                          # Start the MCP server
 ```
 
 ## Architecture
@@ -36,53 +39,86 @@ uv run slicer-mcp
 ```
 Claude Code ──(MCP/stdio)──▶ server.py ──(HTTP)──▶ Slicer WebServer (localhost:2016)
                                │
-                               ├─ tools.py      (7 tools: capture_screenshot, execute_python, etc.)
-                               ├─ resources.py  (3 resources: scene, volumes, status)
-                               └─ slicer_client.py (HTTP client with retry + circuit breaker)
+                               ├─ tools.py           Tool logic (validation + Slicer Python codegen)
+                               ├─ resources.py       Resource handlers (scene, volumes, status)
+                               ├─ slicer_client.py   HTTP client (singleton + retry + circuit breaker)
+                               ├─ circuit_breaker.py Three-state circuit breaker (closed/open/half-open)
+                               ├─ constants.py       All config values, validation limits, patterns
+                               └─ metrics.py         Optional Prometheus metrics (NullMetric when disabled)
 ```
-
-### Key Components
-
-| File | Purpose |
-|------|---------|
-| `src/slicer_mcp/server.py` | FastMCP server entry point, registers tools/resources |
-| `src/slicer_mcp/slicer_client.py` | Singleton HTTP client with retry (3x backoff) and circuit breaker |
-| `src/slicer_mcp/tools.py` | 7 MCP tools (capture_screenshot, execute_python, measure_volume, etc.) |
-| `src/slicer_mcp/resources.py` | 3 MCP resources (slicer://scene, slicer://volumes, slicer://status) |
-| `src/slicer_mcp/circuit_breaker.py` | Circuit breaker pattern (CLOSED→OPEN→HALF_OPEN) |
-| `src/slicer_mcp/constants.py` | Centralized configuration and validation limits |
 
 ### Data Flow
 
-1. Claude Code sends MCP request via stdio (JSON-RPC 2.0)
-2. FastMCP routes to appropriate tool/resource handler
-3. Handler validates input, calls SlicerClient
-4. SlicerClient makes HTTP request to Slicer WebServer with retry logic
-5. Response flows back through the same path
+1. **server.py** registers tools/resources with `@mcp.tool()` / `@mcp.resource()`. Each tool wrapper catches all exceptions via `_handle_tool_error()` and returns standardized error dicts with `error_type` field (`circuit_open`, `timeout`, `connection`, `unexpected`).
+2. **tools.py** contains the actual logic: validates inputs, builds Python code strings, calls `slicer_client.get_client().exec_python(code)`, and parses JSON results via `_parse_json_result()`. Tool code uses `print(json.dumps(result))` in generated Python to return data from Slicer.
+3. **slicer_client.py** manages HTTP communication:
+   - Singleton via `get_client()` with thread-safe double-checked locking (`threading.Lock`).
+   - HTTP methods decorated with `@with_retry` (3 attempts, exponential backoff, `ConnectionError` only — timeouts NOT retried).
+   - **`exec_python()` is intentionally NOT retried** — Python execution is not idempotent (Slicer may execute code even if HTTP response is lost). Sends code via `POST /slicer/exec` with `Content-Type: text/plain`.
+   - No `requests.Session` — Slicer's WebServer closes connections immediately after response.
+4. **circuit_breaker.py** protects against cascading failures. Opens after 5 consecutive failures, auto-recovers after 30s via HALF_OPEN test request. Thread-safe via `threading.Lock`; state lazily transitions to HALF_OPEN on read after timeout.
+
+### Slicer Exec Endpoint
+
+The `/slicer/exec` endpoint must be explicitly enabled in Slicer (Modules > Developer Tools > Web Server > "Enable Slicer API" + "Enable exec"). Two result patterns:
+- **`print()`**: Output captured in response text — this is what `tools.py` uses via `print(json.dumps(result))`.
+- **`__execResult = value`**: Value returned directly in response body — used for simple expressions.
+- Bare expressions return `{}` with no output.
+- VTK collections don't support Python `len()` — use `.GetNumberOfItems()` instead.
+
+### Key Patterns
+
+- **Two-layer error handling**: tools.py catches `ValidationError` and `SlicerConnectionError` specifically; server.py wraps every tool call in `_handle_tool_error()` catching all remaining exceptions.
+- **Input validation**: `validate_mrml_node_id()` checks regex `^[a-zA-Z][a-zA-Z0-9_]*$`. `validate_segment_name()` applies NFKC Unicode normalization and strips invisible zero-width characters. `validate_folder_path()` resolves symlinks via `os.path.realpath()` and prevents path traversal. Values are JSON-escaped via `json.dumps()` when injected into Python code (defense-in-depth).
+- **Audit logging**: `execute_python` logs all code execution when `SLICER_AUDIT_LOG` env var is set. Entries include code hash, truncated preview, result preview, and UUID request ID. Audit log paths are validated against forbidden system directories (also resolving symlinks).
+- **Metrics null object**: `NullMetric` provides interface compatibility when Prometheus is disabled, so code can always call metrics without conditional checks. `prometheus_client` is an optional dependency (`[metrics]` extra).
+- **Logging to stderr**: stdout is reserved for MCP protocol; all logging goes to stderr in JSON format.
 
 ## Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `SLICER_URL` | `http://localhost:2016` | Slicer WebServer URL |
-| `SLICER_TIMEOUT` | `30` | HTTP timeout in seconds |
-| `SLICER_AUDIT_LOG` | *(none)* | Path to audit log for execute_python |
-| `SLICER_METRICS_ENABLED` | `false` | Enable Prometheus metrics |
+| `SLICER_TIMEOUT` | `30` | HTTP timeout in seconds (validated; invalid/non-positive values fall back to default) |
+| `SLICER_AUDIT_LOG` | *(none)* | Audit log file path for execute_python |
+| `SLICER_METRICS_ENABLED` | `false` | Enable Prometheus metrics (requires `prometheus_client`) |
 
-## Test Markers
+## Testing
 
-- `@pytest.mark.integration` - Requires running Slicer instance
-- `@pytest.mark.benchmark` - Performance benchmarks
+- Unit tests mock `requests.get/post` and `slicer_client.get_client()` — **no running Slicer needed**.
+- Integration tests (`-m integration`) and benchmarks (`-m benchmark`) require a running Slicer instance with WebServer enabled, exec API enabled, and sample data loaded (e.g., MRHead).
+- `conftest.py` has an autouse `reset_circuit_breaker` fixture that resets state before/after each test.
+- Use `slicer_client.reset_client()` to reset the singleton between tests when needed.
+- Fixtures: `slicer_client`, `mock_response`, `mock_slicer_exec_result`.
+- Coverage threshold: 85% (configured in `.coveragerc` with branch coverage).
 
 ## Code Style
 
-- **Formatter**: Black (100 char line length)
-- **Linter**: Ruff (rules: E, F, W, I, N, UP)
-- **Python**: 3.10+
-- **Type hints**: Used throughout
+- **Formatter**: Black (line-length 100)
+- **Linter**: Ruff (rules: E, F, W, I, N, UP — configured in `[tool.ruff.lint]`)
+- **Type checker**: mypy (pre-commit hook, `src/` only, `--ignore-missing-imports`)
+- **Python**: 3.10+ (uses `X | Y` union syntax, not `Optional[X]`)
+- **Type hints**: Required on all public functions
+- **Docstrings**: Google-style
+- **Commits**: [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:`)
 
-## See Also
+## Adding Features
 
-- [ARCHITECTURE.md](ARCHITECTURE.md) - Detailed design decisions
-- [SPECIFICATION.md](SPECIFICATION.md) - Complete API reference
-- [.claude/CLAUDE.md](.claude/CLAUDE.md) - Canonical codebase standards
+- **New tool**: Implement in `tools.py`, register with `@mcp.tool()` in `server.py`, test in `tests/test_tools.py`
+- **New resource**: Implement in `resources.py`, register with `@mcp.resource()` in `server.py`, test in `tests/test_resources.py`
+- **New constant**: Add to `constants.py` (never hardcode validation limits, patterns, or config values in other files)
+
+## Quick Reference
+
+| Topic | File |
+|-------|------|
+| Tool API (12 tools) | [ref/api-tools.md](ref/api-tools.md) |
+| Resource API (3 resources) | [ref/api-resources.md](ref/api-resources.md) |
+| Error codes | [ref/error-codes.md](ref/error-codes.md) |
+| Slicer HTTP endpoints | [ref/slicer-webserver.md](ref/slicer-webserver.md) |
+| Design patterns | [ref/project-patterns.md](ref/project-patterns.md) |
+| Circuit breaker & retry | [ref/resilience-patterns.md](ref/resilience-patterns.md) |
+| Security model | [ref/security.md](ref/security.md) |
+| Performance benchmarks | [ref/benchmarks.md](ref/benchmarks.md) |
+| FastMCP framework | [ref/fastmcp.md](ref/fastmcp.md) |
+| Troubleshooting | [ref/troubleshooting.md](ref/troubleshooting.md) |
