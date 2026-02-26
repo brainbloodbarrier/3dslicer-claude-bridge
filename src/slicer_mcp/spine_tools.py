@@ -823,8 +823,8 @@ def _build_spine_segmentation_code(
     """
     task = TOTALSEG_TASK_FULL if (include_discs or include_spinal_cord) else TOTALSEG_TASK_VERTEBRAE
     safe_task = json.dumps(task)
-    safe_include_discs = json.dumps(include_discs)
-    safe_include_spinal_cord = json.dumps(include_spinal_cord)
+    safe_include_discs = str(include_discs)
+    safe_include_spinal_cord = str(include_spinal_cord)
 
     return f"""
 import slicer

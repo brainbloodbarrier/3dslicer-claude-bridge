@@ -1187,7 +1187,7 @@ def _build_sins_code(
         Python code string for execution in Slicer
     """
     safe_levels = json.dumps(target_levels)
-    safe_pain = json.dumps(pain_score)
+    safe_pain = repr(pain_score)  # None→"None", int→"N" (both valid Python)
     seg_block = f"seg_node_id = {safe_seg_id}" if safe_seg_id else "seg_node_id = None"
 
     return f"""
