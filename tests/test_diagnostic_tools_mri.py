@@ -28,6 +28,7 @@ from slicer_mcp.spine_constants import (
     MRI_ANALYSIS_TIMEOUT,
     MSCC_THRESHOLD,
     PFIRRMANN_BRIGHT_THRESHOLD,
+    SPINE_SEGMENTATION_TIMEOUT,
 )
 from slicer_mcp.tools import ValidationError
 
@@ -180,10 +181,10 @@ class TestClassifyModicChanges:
             assert result["levels"][0]["modic_type"] == 1
             assert result["modic_summary"]["type_i"] == 1
 
-            # Verify exec_python was called with extended timeout
+            # Without segmentation_node_id, uses SPINE_SEGMENTATION_TIMEOUT (auto-seg)
             mock_client.exec_python.assert_called_once()
             call_kwargs = mock_client.exec_python.call_args
-            assert call_kwargs[1]["timeout"] == MRI_ANALYSIS_TIMEOUT
+            assert call_kwargs[1]["timeout"] == SPINE_SEGMENTATION_TIMEOUT
 
     def test_modic_type_ii_classification(self):
         """Test Type II (fatty degeneration) classification."""
@@ -1076,3 +1077,300 @@ class TestServerRegistration:
             result = server_detect("vtkMRMLScalarVolumeNode1", "vtkMRMLScalarVolumeNode2")
             assert result["success"] is False
             assert result["error_type"] == "unexpected"
+
+
+# =============================================================================
+# Segmentation Node ID Validation Tests
+# =============================================================================
+
+
+class TestMriSegmentationNodeIdValidation:
+    """Test segmentation_node_id parameter validation for MRI tools."""
+
+    def test_modic_valid_seg_id(self):
+        """Modic tool accepts valid segmentation_node_id."""
+        mock_result = {
+            "success": True,
+            "tool": "classify_modic_changes",
+            "region": "lumbar",
+            "reference_vertebra": "median_of_all",
+            "registration_performed": False,
+            "levels": [],
+            "total_levels_analyzed": 0,
+            "modic_summary": {"type_0": 0, "type_i": 0, "type_ii": 0, "type_iii": 0},
+        }
+        with patch("slicer_mcp.diagnostic_tools_mri.get_client") as mock_gc:
+            mock_client = Mock()
+            mock_client.exec_python.return_value = {
+                "success": True,
+                "result": json.dumps(mock_result),
+            }
+            mock_gc.return_value = mock_client
+            result = classify_modic_changes(
+                "vtkMRMLScalarVolumeNode1",
+                "vtkMRMLScalarVolumeNode2",
+                region="lumbar",
+                segmentation_node_id="vtkMRMLSegmentationNode1",
+            )
+            assert result["success"] is True
+
+    def test_modic_invalid_seg_id(self):
+        """Modic tool rejects invalid segmentation_node_id."""
+        with pytest.raises(ValidationError, match="Invalid node_id format"):
+            classify_modic_changes(
+                "vtkMRMLScalarVolumeNode1",
+                "vtkMRMLScalarVolumeNode2",
+                segmentation_node_id="invalid; id",
+            )
+
+    def test_disc_valid_seg_id(self):
+        """Disc degeneration tool accepts valid segmentation_node_id."""
+        mock_result = {
+            "success": True,
+            "tool": "assess_disc_degeneration_mri",
+            "region": "lumbar",
+            "discs": [],
+            "summary": {"total_discs_analyzed": 0},
+        }
+        with patch("slicer_mcp.diagnostic_tools_mri.get_client") as mock_gc:
+            mock_client = Mock()
+            mock_client.exec_python.return_value = {
+                "success": True,
+                "result": json.dumps(mock_result),
+            }
+            mock_gc.return_value = mock_client
+            result = assess_disc_degeneration_mri(
+                "vtkMRMLScalarVolumeNode1",
+                region="lumbar",
+                segmentation_node_id="vtkMRMLSegmentationNode1",
+            )
+            assert result["success"] is True
+
+    def test_disc_invalid_seg_id(self):
+        """Disc degeneration tool rejects invalid segmentation_node_id."""
+        with pytest.raises(ValidationError, match="Invalid node_id format"):
+            assess_disc_degeneration_mri(
+                "vtkMRMLScalarVolumeNode1",
+                segmentation_node_id="bad id!",
+            )
+
+    def test_cord_valid_seg_id(self):
+        """Cord compression tool accepts valid segmentation_node_id."""
+        mock_result = {
+            "success": True,
+            "tool": "detect_cord_compression_mri",
+            "region": "cervical",
+            "levels": [],
+            "summary": {"total_levels_analyzed": 0},
+        }
+        with patch("slicer_mcp.diagnostic_tools_mri.get_client") as mock_gc:
+            mock_client = Mock()
+            mock_client.exec_python.return_value = {
+                "success": True,
+                "result": json.dumps(mock_result),
+            }
+            mock_gc.return_value = mock_client
+            result = detect_cord_compression_mri(
+                "vtkMRMLScalarVolumeNode1",
+                region="cervical",
+                segmentation_node_id="vtkMRMLSegmentationNode1",
+            )
+            assert result["success"] is True
+
+    def test_cord_invalid_seg_id(self):
+        """Cord compression tool rejects invalid segmentation_node_id."""
+        with pytest.raises(ValidationError, match="Invalid node_id format"):
+            detect_cord_compression_mri(
+                "vtkMRMLScalarVolumeNode1",
+                segmentation_node_id="../etc/passwd",
+            )
+
+    def test_metastasis_valid_seg_id(self):
+        """Metastasis tool accepts valid segmentation_node_id."""
+        mock_result = {
+            "success": True,
+            "tool": "detect_metastatic_lesions_mri",
+            "region": "full",
+            "lesions": [],
+            "summary": {"total_lesions": 0},
+        }
+        with patch("slicer_mcp.diagnostic_tools_mri.get_client") as mock_gc:
+            mock_client = Mock()
+            mock_client.exec_python.return_value = {
+                "success": True,
+                "result": json.dumps(mock_result),
+            }
+            mock_gc.return_value = mock_client
+            result = detect_metastatic_lesions_mri(
+                "vtkMRMLScalarVolumeNode1",
+                "vtkMRMLScalarVolumeNode2",
+                region="full",
+                segmentation_node_id="vtkMRMLSegmentationNode1",
+            )
+            assert result["success"] is True
+
+    def test_metastasis_invalid_seg_id(self):
+        """Metastasis tool rejects invalid segmentation_node_id."""
+        with pytest.raises(ValidationError, match="Invalid node_id format"):
+            detect_metastatic_lesions_mri(
+                "vtkMRMLScalarVolumeNode1",
+                "vtkMRMLScalarVolumeNode2",
+                segmentation_node_id="bad; node",
+            )
+
+
+# =============================================================================
+# Conditional Timeout Tests
+# =============================================================================
+
+
+class TestMriConditionalTimeout:
+    """Test timeout is conditional on segmentation_node_id."""
+
+    def test_modic_timeout_without_seg_id(self):
+        """Without seg_id, uses SPINE_SEGMENTATION_TIMEOUT (auto-seg)."""
+        mock_result = {
+            "success": True,
+            "tool": "classify_modic_changes",
+            "region": "lumbar",
+            "reference_vertebra": "median_of_all",
+            "registration_performed": False,
+            "levels": [],
+            "total_levels_analyzed": 0,
+            "modic_summary": {"type_0": 0, "type_i": 0, "type_ii": 0, "type_iii": 0},
+        }
+        with patch("slicer_mcp.diagnostic_tools_mri.get_client") as mock_gc:
+            mock_client = Mock()
+            mock_client.exec_python.return_value = {
+                "success": True,
+                "result": json.dumps(mock_result),
+            }
+            mock_gc.return_value = mock_client
+            classify_modic_changes(
+                "vtkMRMLScalarVolumeNode1",
+                "vtkMRMLScalarVolumeNode2",
+                region="lumbar",
+            )
+            call_kwargs = mock_client.exec_python.call_args
+            assert call_kwargs[1]["timeout"] == SPINE_SEGMENTATION_TIMEOUT
+
+    def test_modic_timeout_with_seg_id(self):
+        """With seg_id, uses MRI_ANALYSIS_TIMEOUT (analysis only)."""
+        mock_result = {
+            "success": True,
+            "tool": "classify_modic_changes",
+            "region": "lumbar",
+            "reference_vertebra": "median_of_all",
+            "registration_performed": False,
+            "levels": [],
+            "total_levels_analyzed": 0,
+            "modic_summary": {"type_0": 0, "type_i": 0, "type_ii": 0, "type_iii": 0},
+        }
+        with patch("slicer_mcp.diagnostic_tools_mri.get_client") as mock_gc:
+            mock_client = Mock()
+            mock_client.exec_python.return_value = {
+                "success": True,
+                "result": json.dumps(mock_result),
+            }
+            mock_gc.return_value = mock_client
+            classify_modic_changes(
+                "vtkMRMLScalarVolumeNode1",
+                "vtkMRMLScalarVolumeNode2",
+                region="lumbar",
+                segmentation_node_id="vtkMRMLSegmentationNode1",
+            )
+            call_kwargs = mock_client.exec_python.call_args
+            assert call_kwargs[1]["timeout"] == MRI_ANALYSIS_TIMEOUT
+
+    def test_disc_timeout_without_seg_id(self):
+        """Disc degeneration: auto-seg uses SPINE_SEGMENTATION_TIMEOUT."""
+        mock_result = {
+            "success": True,
+            "tool": "assess_disc_degeneration_mri",
+            "region": "lumbar",
+            "discs": [],
+            "summary": {"total_discs_analyzed": 0},
+        }
+        with patch("slicer_mcp.diagnostic_tools_mri.get_client") as mock_gc:
+            mock_client = Mock()
+            mock_client.exec_python.return_value = {
+                "success": True,
+                "result": json.dumps(mock_result),
+            }
+            mock_gc.return_value = mock_client
+            assess_disc_degeneration_mri("vtkMRMLScalarVolumeNode1", region="lumbar")
+            call_kwargs = mock_client.exec_python.call_args
+            assert call_kwargs[1]["timeout"] == SPINE_SEGMENTATION_TIMEOUT
+
+    def test_disc_timeout_with_seg_id(self):
+        """Disc degeneration: with seg_id uses MRI_ANALYSIS_TIMEOUT."""
+        mock_result = {
+            "success": True,
+            "tool": "assess_disc_degeneration_mri",
+            "region": "lumbar",
+            "discs": [],
+            "summary": {"total_discs_analyzed": 0},
+        }
+        with patch("slicer_mcp.diagnostic_tools_mri.get_client") as mock_gc:
+            mock_client = Mock()
+            mock_client.exec_python.return_value = {
+                "success": True,
+                "result": json.dumps(mock_result),
+            }
+            mock_gc.return_value = mock_client
+            assess_disc_degeneration_mri(
+                "vtkMRMLScalarVolumeNode1",
+                region="lumbar",
+                segmentation_node_id="vtkMRMLSegmentationNode1",
+            )
+            call_kwargs = mock_client.exec_python.call_args
+            assert call_kwargs[1]["timeout"] == MRI_ANALYSIS_TIMEOUT
+
+
+# =============================================================================
+# Subprocess Codegen Tests
+# =============================================================================
+
+
+class TestMriSubprocessCodegen:
+    """Test MRI tools generate subprocess-based TotalSegmentator code."""
+
+    def test_totalseg_code_uses_subprocess(self):
+        """Generated TotalSegmentator code uses subprocess, not in-process API."""
+        from slicer_mcp.diagnostic_tools_mri import _build_totalseg_spine_code
+
+        code = _build_totalseg_spine_code('"vtkMRMLScalarVolumeNode1"', "lumbar")
+        assert "subprocess.Popen" in code
+        assert "start_new_session" in code
+        assert "killpg" in code
+        assert '"total_mr"' in code
+        # Must NOT use the in-process API
+        assert "TotalSegmentatorLogic().process" not in code
+
+    def test_totalseg_code_with_seg_id_skips_subprocess(self):
+        """When seg_id is provided, generated code loads existing node."""
+        from slicer_mcp.diagnostic_tools_mri import _build_totalseg_spine_code
+
+        code = _build_totalseg_spine_code(
+            '"vtkMRMLScalarVolumeNode1"', "lumbar", '"vtkMRMLSegmentationNode1"'
+        )
+        assert "seg_node_id = " in code
+        assert "_seg_was_provided" in code
+
+    def test_modic_code_uses_seg_was_provided_for_cleanup(self):
+        """Modic code conditionally cleans up segmentation node."""
+        from slicer_mcp.diagnostic_tools_mri import _build_modic_analysis_code
+
+        code = _build_modic_analysis_code(
+            '"vtkMRMLScalarVolumeNode1"', '"vtkMRMLScalarVolumeNode2"', "lumbar"
+        )
+        assert "if not _seg_was_provided" in code
+        assert "RemoveNode(seg_node)" in code
+
+    def test_pfirrmann_code_uses_seg_was_provided_for_cleanup(self):
+        """Pfirrmann code conditionally cleans up segmentation node."""
+        from slicer_mcp.diagnostic_tools_mri import _build_pfirrmann_analysis_code
+
+        code = _build_pfirrmann_analysis_code('"vtkMRMLScalarVolumeNode1"', "lumbar")
+        assert "if not _seg_was_provided" in code
+        assert "RemoveNode(seg_node)" in code
