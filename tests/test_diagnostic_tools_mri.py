@@ -624,7 +624,7 @@ class TestDetectMetastaticLesionsMri:
         assert exc_info.value.field == "region"
 
     def test_full_region_accepted(self):
-        """Test 'full' region is accepted for metastasis detection (splits into sub-regions)."""
+        """Test 'full' region is accepted when segmentation_node_id is provided."""
         mock_sub_result = {
             "success": True,
             "tool": "detect_metastatic_lesions_mri",
@@ -652,6 +652,7 @@ class TestDetectMetastaticLesionsMri:
                 "vtkMRMLScalarVolumeNode1",
                 "vtkMRMLScalarVolumeNode2",
                 region="full",
+                segmentation_node_id="vtkMRMLSegmentationNode1",
             )
             assert result["region"] == "full"
             assert "sub_regions_scanned" in result
@@ -852,6 +853,7 @@ class TestDetectMetastaticLesionsMri:
                 detect_metastatic_lesions_mri(
                     "vtkMRMLScalarVolumeNode1",
                     "vtkMRMLScalarVolumeNode2",
+                    region="lumbar",
                 )
 
     def test_malformed_json_raises_error(self):
@@ -868,6 +870,7 @@ class TestDetectMetastaticLesionsMri:
                 detect_metastatic_lesions_mri(
                     "vtkMRMLScalarVolumeNode1",
                     "vtkMRMLScalarVolumeNode2",
+                    region="lumbar",
                 )
             assert "Failed to parse" in str(exc_info.value)
 
@@ -954,7 +957,7 @@ class TestMetastasisCodeGeneration:
     """Test metastasis code generation."""
 
     def test_full_region_chunks_into_subregions(self):
-        """Test that region='full' splits into sub-scans."""
+        """Test that region='full' splits into sub-scans (requires seg_id)."""
         mock_result_cervical = {
             "success": True,
             "tool": "detect_metastatic_lesions_mri",
@@ -992,6 +995,7 @@ class TestMetastasisCodeGeneration:
                 "vtkMRMLScalarVolumeNode1",
                 "vtkMRMLScalarVolumeNode2",
                 region="full",
+                segmentation_node_id="vtkMRMLSegmentationNode1",
             )
 
             assert result["region"] == "full"
@@ -1374,3 +1378,187 @@ class TestMriSubprocessCodegen:
         code = _build_pfirrmann_analysis_code('"vtkMRMLScalarVolumeNode1"', "lumbar")
         assert "if not _seg_was_provided" in code
         assert "RemoveNode(seg_node)" in code
+
+    def test_cord_compression_code_uses_seg_was_provided_for_cleanup(self):
+        """Cord compression code conditionally cleans up segmentation node."""
+        from slicer_mcp.diagnostic_tools_mri import _build_cord_compression_code
+
+        code = _build_cord_compression_code('"vtkMRMLScalarVolumeNode1"', None, "cervical")
+        assert "if not _seg_was_provided" in code
+        assert "RemoveNode(seg_node)" in code
+
+    def test_metastasis_code_uses_seg_was_provided_for_cleanup(self):
+        """Metastasis code conditionally cleans up segmentation node."""
+        from slicer_mcp.diagnostic_tools_mri import _build_metastasis_detection_code
+
+        code = _build_metastasis_detection_code(
+            '"vtkMRMLScalarVolumeNode1"', '"vtkMRMLScalarVolumeNode2"', "lumbar"
+        )
+        assert "if not _seg_was_provided" in code
+        assert "RemoveNode(seg_node)" in code
+
+
+# =============================================================================
+# MRI Conditional Timeout -- Cord and Metastasis Tests
+# =============================================================================
+
+
+class TestMriConditionalTimeoutCordMetastasis:
+    """Test timeout is conditional on segmentation_node_id for cord and metastasis tools."""
+
+    def test_cord_timeout_without_seg_id(self):
+        """Cord compression without seg_id uses SPINE_SEGMENTATION_TIMEOUT."""
+        mock_result = {
+            "success": True,
+            "tool": "detect_cord_compression_mri",
+            "region": "cervical",
+            "levels": [],
+            "total_levels_analyzed": 0,
+            "worst_stenosis_grade": "none",
+        }
+        with patch("slicer_mcp.diagnostic_tools_mri.get_client") as mock_gc:
+            mock_client = Mock()
+            mock_client.exec_python.return_value = {
+                "success": True,
+                "result": json.dumps(mock_result),
+            }
+            mock_gc.return_value = mock_client
+            detect_cord_compression_mri("vtkMRMLScalarVolumeNode1", region="cervical")
+            call_kwargs = mock_client.exec_python.call_args
+            assert call_kwargs[1]["timeout"] == SPINE_SEGMENTATION_TIMEOUT
+
+    def test_cord_timeout_with_seg_id(self):
+        """Cord compression with seg_id uses MRI_ANALYSIS_TIMEOUT."""
+        mock_result = {
+            "success": True,
+            "tool": "detect_cord_compression_mri",
+            "region": "cervical",
+            "levels": [],
+            "total_levels_analyzed": 0,
+            "worst_stenosis_grade": "none",
+        }
+        with patch("slicer_mcp.diagnostic_tools_mri.get_client") as mock_gc:
+            mock_client = Mock()
+            mock_client.exec_python.return_value = {
+                "success": True,
+                "result": json.dumps(mock_result),
+            }
+            mock_gc.return_value = mock_client
+            detect_cord_compression_mri(
+                "vtkMRMLScalarVolumeNode1",
+                region="cervical",
+                segmentation_node_id="vtkMRMLSegmentationNode1",
+            )
+            call_kwargs = mock_client.exec_python.call_args
+            assert call_kwargs[1]["timeout"] == MRI_ANALYSIS_TIMEOUT
+
+    def test_metastasis_timeout_without_seg_id(self):
+        """Metastasis without seg_id (non-full region) uses SPINE_SEGMENTATION_TIMEOUT."""
+        mock_result = {
+            "success": True,
+            "tool": "detect_metastatic_lesions_mri",
+            "region": "lumbar",
+            "registration_performed": False,
+            "reference_t1_signal": None,
+            "reference_t2_stir_signal": None,
+            "vertebra_results": [],
+            "total_vertebrae_analyzed": 0,
+            "suspicious_lesions": [],
+            "total_suspicious": 0,
+            "lesion_type_summary": {"lytic": 0, "blastic": 0, "mixed": 0},
+        }
+        with patch("slicer_mcp.diagnostic_tools_mri.get_client") as mock_gc:
+            mock_client = Mock()
+            mock_client.exec_python.return_value = {
+                "success": True,
+                "result": json.dumps(mock_result),
+            }
+            mock_gc.return_value = mock_client
+            detect_metastatic_lesions_mri(
+                "vtkMRMLScalarVolumeNode1",
+                "vtkMRMLScalarVolumeNode2",
+                region="lumbar",
+            )
+            call_kwargs = mock_client.exec_python.call_args
+            assert call_kwargs[1]["timeout"] == SPINE_SEGMENTATION_TIMEOUT
+
+    def test_metastasis_timeout_with_seg_id(self):
+        """Metastasis with seg_id uses MRI_ANALYSIS_TIMEOUT."""
+        mock_result = {
+            "success": True,
+            "tool": "detect_metastatic_lesions_mri",
+            "region": "lumbar",
+            "registration_performed": False,
+            "reference_t1_signal": None,
+            "reference_t2_stir_signal": None,
+            "vertebra_results": [],
+            "total_vertebrae_analyzed": 0,
+            "suspicious_lesions": [],
+            "total_suspicious": 0,
+            "lesion_type_summary": {"lytic": 0, "blastic": 0, "mixed": 0},
+        }
+        with patch("slicer_mcp.diagnostic_tools_mri.get_client") as mock_gc:
+            mock_client = Mock()
+            mock_client.exec_python.return_value = {
+                "success": True,
+                "result": json.dumps(mock_result),
+            }
+            mock_gc.return_value = mock_client
+            detect_metastatic_lesions_mri(
+                "vtkMRMLScalarVolumeNode1",
+                "vtkMRMLScalarVolumeNode2",
+                region="lumbar",
+                segmentation_node_id="vtkMRMLSegmentationNode1",
+            )
+            call_kwargs = mock_client.exec_python.call_args
+            assert call_kwargs[1]["timeout"] == MRI_ANALYSIS_TIMEOUT
+
+
+# =============================================================================
+# MRI Full-Spine Metastasis Validation
+# =============================================================================
+
+
+class TestMriFullSpineMetastasisValidation:
+    """Test that full-spine metastasis detection requires segmentation_node_id."""
+
+    def test_full_region_without_seg_id_raises_validation_error(self):
+        """Full-spine metastasis detection without seg_id raises ValidationError."""
+        with pytest.raises(ValidationError) as exc_info:
+            detect_metastatic_lesions_mri(
+                "vtkMRMLScalarVolumeNode1",
+                "vtkMRMLScalarVolumeNode2",
+                region="full",
+            )
+        assert exc_info.value.field == "segmentation_node_id"
+        assert "pre-computed segmentation" in str(exc_info.value)
+
+    def test_full_region_with_seg_id_proceeds(self):
+        """Full-spine metastasis with seg_id proceeds normally."""
+        mock_result = {
+            "success": True,
+            "tool": "detect_metastatic_lesions_mri",
+            "region": "cervical",
+            "registration_performed": False,
+            "reference_t1_signal": None,
+            "reference_t2_stir_signal": None,
+            "vertebra_results": [],
+            "total_vertebrae_analyzed": 0,
+            "suspicious_lesions": [],
+            "total_suspicious": 0,
+            "lesion_type_summary": {"lytic": 0, "blastic": 0, "mixed": 0},
+        }
+        with patch("slicer_mcp.diagnostic_tools_mri.get_client") as mock_gc:
+            mock_client = Mock()
+            mock_client.exec_python.return_value = {
+                "success": True,
+                "result": json.dumps(mock_result),
+            }
+            mock_gc.return_value = mock_client
+            result = detect_metastatic_lesions_mri(
+                "vtkMRMLScalarVolumeNode1",
+                "vtkMRMLScalarVolumeNode2",
+                region="full",
+                segmentation_node_id="vtkMRMLSegmentationNode1",
+            )
+            assert result["success"] is True

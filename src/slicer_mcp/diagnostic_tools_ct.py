@@ -595,6 +595,10 @@ result = {{
     }}
 }}
 
+# Clean up auto-created segmentation (keep if user-provided)
+if not _seg_was_provided:
+    slicer.mrmlScene.RemoveNode(seg_node)
+
 __execResult = result
 """
 
@@ -846,6 +850,10 @@ result = {{
     }}
 }}
 
+# Clean up auto-created segmentation (keep if user-provided)
+if not _seg_was_provided:
+    slicer.mrmlScene.RemoveNode(seg_node)
+
 __execResult = result
 """
 
@@ -1093,6 +1101,10 @@ result = {{
     "lesions_detected": total_lesions,
     "vertebrae": vertebrae_results
 }}
+
+# Clean up auto-created segmentation (keep if user-provided)
+if not _seg_was_provided:
+    slicer.mrmlScene.RemoveNode(seg_node)
 
 __execResult = result
 """
@@ -1387,6 +1399,10 @@ result = {{
     "levels": results_by_level
 }}
 
+# Clean up auto-created segmentation (keep if user-provided)
+if not _seg_was_provided:
+    slicer.mrmlScene.RemoveNode(seg_node)
+
 __execResult = result
 """
 
@@ -1589,6 +1605,10 @@ result = {{
     "note": "Static CT. Dynamic instability requires flexion/extension X-ray.",
     "levels": levels_results
 }}
+
+# Clean up auto-created segmentation (keep if user-provided)
+if not _seg_was_provided:
+    slicer.mrmlScene.RemoveNode(seg_node)
 
 __execResult = result
 """
@@ -1812,6 +1832,10 @@ result = {{
     "modality": "CT",
     "levels": levels_results
 }}
+
+# Clean up auto-created segmentation (keep if user-provided)
+if not _seg_was_provided:
+    slicer.mrmlScene.RemoveNode(seg_node)
 
 __execResult = result
 """

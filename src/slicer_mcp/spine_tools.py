@@ -826,6 +826,7 @@ def _build_totalseg_subprocess_block(
 
     return f"""
 # --- Segmentation: reuse existing or auto-segment via subprocess ---
+_seg_was_provided = seg_node_id is not None
 if seg_node_id:
     {seg_var} = slicer.mrmlScene.GetNodeByID(seg_node_id)
     if not {seg_var}:
@@ -854,8 +855,10 @@ else:
         _ts_storageNode = slicer.mrmlScene.CreateNodeByClass("vtkMRMLVolumeArchetypeStorageNode")
         _ts_storageNode.SetFileName(_ts_inputFile)
         _ts_storageNode.UseCompressionOff()
-        _ts_storageNode.WriteData({volume_var})
+        _ts_writeOk = _ts_storageNode.WriteData({volume_var})
         _ts_storageNode.UnRegister(None)
+        if not _ts_writeOk:
+            raise RuntimeError(f"Failed to export volume to NIfTI: {{_ts_inputFile}}")
 
         # Build TotalSegmentator CLI command
         _ts_pythonSlicer = _ts_shutil.which('PythonSlicer')
@@ -880,6 +883,7 @@ else:
         _ts_timeout = {timeout_s}
         _ts_poll_interval = 5
         _ts_elapsed = 0
+        _ts_prev_size = 0
 
         while _ts_elapsed < _ts_timeout:
             _ts_ret = _ts_proc.poll()
@@ -890,10 +894,12 @@ else:
                         f"TotalSegmentator exited with code {{_ts_ret}}: {{_ts_err}}"
                     )
                 break
-            if (_ts_os.path.exists(_ts_outputFile)
-                    and _ts_os.path.getsize(_ts_outputFile) > 1000):
-                _ts_time.sleep(3)
-                break
+            if _ts_os.path.exists(_ts_outputFile):
+                _ts_curr_size = _ts_os.path.getsize(_ts_outputFile)
+                if _ts_curr_size > 1000 and _ts_curr_size == _ts_prev_size:
+                    _ts_time.sleep(3)
+                    break
+                _ts_prev_size = _ts_curr_size
             _ts_time.sleep(_ts_poll_interval)
             _ts_elapsed += _ts_poll_interval
 
@@ -901,13 +907,29 @@ else:
         if _ts_proc.poll() is None:
             try:
                 _ts_os.killpg(_ts_os.getpgid(_ts_proc.pid), _ts_signal.SIGTERM)
-            except (ProcessLookupError, PermissionError):
+            except ProcessLookupError:
+                pass
+            except PermissionError:
+                import logging as _ts_logging
+                _ts_logging.getLogger("slicer-mcp").warning(
+                    "Cannot kill TotalSegmentator process group"
+                    f" (PID {{_ts_proc.pid}}): permission denied"
+                )
+            except OSError:
                 pass
             _ts_time.sleep(1)
             if _ts_proc.poll() is None:
                 try:
                     _ts_os.killpg(_ts_os.getpgid(_ts_proc.pid), _ts_signal.SIGKILL)
-                except (ProcessLookupError, PermissionError):
+                except ProcessLookupError:
+                    pass
+                except PermissionError:
+                    import logging as _ts_logging
+                    _ts_logging.getLogger("slicer-mcp").warning(
+                        "Cannot kill TotalSegmentator process group"
+                        f" (PID {{_ts_proc.pid}}): permission denied"
+                    )
+                except OSError:
                     pass
 
         if not _ts_os.path.exists(_ts_outputFile):
@@ -923,15 +945,29 @@ else:
 
     except Exception as _ts_e:
         slicer.mrmlScene.RemoveNode({seg_var})
-        raise ValueError(f"TotalSegmentator failed: {{_ts_e}}")
+        raise ValueError(f"TotalSegmentator failed ({{type(_ts_e).__name__}}): {{_ts_e}}")
     finally:
         if _ts_proc is not None and _ts_proc.poll() is None:
             try:
                 _ts_os.killpg(_ts_os.getpgid(_ts_proc.pid), _ts_signal.SIGKILL)
-            except (ProcessLookupError, PermissionError):
+            except ProcessLookupError:
                 pass
+            except PermissionError:
+                import logging as _ts_logging
+                _ts_logging.getLogger("slicer-mcp").warning(
+                    "Cannot kill TotalSegmentator process group"
+                    f" (PID {{_ts_proc.pid}}): permission denied"
+                )
+            except OSError:
+                pass
+        def _ts_rmtree_onerror(func, path, exc_info):
+            import logging as _ts_log
+            _ts_log.getLogger("slicer-mcp").warning(
+                f"Failed to clean up temp file {{path}}: {{exc_info[1]}}"
+            )
+
         if _ts_tempFolder is not None and _ts_os.path.isdir(_ts_tempFolder):
-            _ts_shutil.rmtree(_ts_tempFolder, ignore_errors=True)
+            _ts_shutil.rmtree(_ts_tempFolder, onerror=_ts_rmtree_onerror)
 """
 
 
@@ -1023,8 +1059,10 @@ try:
     storageNode = slicer.mrmlScene.CreateNodeByClass("vtkMRMLVolumeArchetypeStorageNode")
     storageNode.SetFileName(inputFile)
     storageNode.UseCompressionOff()
-    storageNode.WriteData(inputVolume)
+    _writeOk = storageNode.WriteData(inputVolume)
     storageNode.UnRegister(None)
+    if not _writeOk:
+        raise RuntimeError(f"Failed to export volume to NIfTI: {{inputFile}}")
 
     # Build TotalSegmentator CLI command
     pythonSlicer = shutil.which('PythonSlicer')
@@ -1050,6 +1088,7 @@ try:
     timeout_s = {safe_timeout}
     poll_interval = 5
     elapsed_wait = 0
+    _prev_size = 0
 
     while elapsed_wait < timeout_s:
         # Check if process finished normally
@@ -1059,11 +1098,13 @@ try:
                 stderr_out = proc.stderr.read(8192).decode(errors='replace')[-500:]
                 raise RuntimeError(f"TotalSegmentator exited with code {{ret}}: {{stderr_out}}")
             break
-        # Check if output file exists (segmentation complete, process may hang)
-        if os.path.exists(outputFile) and os.path.getsize(outputFile) > 1000:
-            # Wait a bit for file to finish writing
-            time.sleep(3)
-            break
+        # Check if output file exists and size is stable (fully written)
+        if os.path.exists(outputFile):
+            _curr_size = os.path.getsize(outputFile)
+            if _curr_size > 1000 and _curr_size == _prev_size:
+                time.sleep(3)
+                break
+            _prev_size = _curr_size
         time.sleep(poll_interval)
         elapsed_wait += poll_interval
 
@@ -1072,13 +1113,29 @@ try:
     if proc.poll() is None:
         try:
             os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
-        except (ProcessLookupError, PermissionError):
+        except ProcessLookupError:
+            pass
+        except PermissionError:
+            import logging as _seg_logging
+            _seg_logging.getLogger("slicer-mcp").warning(
+                "Cannot kill TotalSegmentator process group"
+                f" (PID {{proc.pid}}): permission denied"
+            )
+        except OSError:
             pass
         time.sleep(1)
         if proc.poll() is None:
             try:
                 os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-            except (ProcessLookupError, PermissionError):
+            except ProcessLookupError:
+                pass
+            except PermissionError:
+                import logging as _seg_logging
+                _seg_logging.getLogger("slicer-mcp").warning(
+                    "Cannot kill TotalSegmentator process group"
+                    f" (PID {{proc.pid}}): permission denied"
+                )
+            except OSError:
                 pass
 
     if not os.path.exists(outputFile):
@@ -1086,7 +1143,7 @@ try:
 
     # Import segmentation result into Slicer using TotalSegmentator module
     logic = TotalSegmentatorLogic()
-    logic.readSegmentation(outputSeg, outputFile, "total")
+    logic.readSegmentation(outputSeg, outputFile, {safe_task})
 
     # Set source volume reference
     outputSeg.SetNodeReferenceID(
@@ -1095,17 +1152,31 @@ try:
 
 except Exception as e:
     slicer.mrmlScene.RemoveNode(outputSeg)
-    raise ValueError(f"TotalSegmentator failed: {{e}}")
+    raise ValueError(f"TotalSegmentator failed ({{type(e).__name__}}): {{e}}")
 finally:
     # Kill subprocess if still alive (handles exception during poll loop)
     if proc is not None and proc.poll() is None:
         try:
             os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-        except (ProcessLookupError, PermissionError):
+        except ProcessLookupError:
+            pass
+        except PermissionError:
+            import logging as _seg_logging
+            _seg_logging.getLogger("slicer-mcp").warning(
+                "Cannot kill TotalSegmentator process group"
+                f" (PID {{proc.pid}}): permission denied"
+            )
+        except OSError:
             pass
     # Clean up temp files (both success and failure paths)
+    def _seg_rmtree_onerror(func, path, exc_info):
+        import logging as _seg_log
+        _seg_log.getLogger("slicer-mcp").warning(
+            f"Failed to clean up temp file {{path}}: {{exc_info[1]}}"
+        )
+
     if tempFolder is not None and os.path.isdir(tempFolder):
-        shutil.rmtree(tempFolder, ignore_errors=True)
+        shutil.rmtree(tempFolder, onerror=_seg_rmtree_onerror)
 
 elapsed = time.time() - start_time
 

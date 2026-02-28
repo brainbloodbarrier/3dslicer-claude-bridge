@@ -183,7 +183,6 @@ _mri_volume = slicer.mrmlScene.GetNodeByID({safe_volume_id})
 if not _mri_volume:
     raise ValueError(f"MRI volume not found: {{{safe_volume_id}}}")
 {seg_block}
-_seg_was_provided = seg_node_id is not None
 
 {auto_seg}
 """
@@ -1317,6 +1316,14 @@ def detect_metastatic_lesions_mri(
             f"Invalid region '{region}'. " f"Must be one of: {', '.join(sorted(valid_regions))}",
             "region",
             region,
+        )
+
+    if region == "full" and segmentation_node_id is None:
+        raise ValidationError(
+            "Full-spine metastasis detection requires a pre-computed segmentation. "
+            "Run segment_spine first, then pass output_segmentation_id as segmentation_node_id.",
+            "segmentation_node_id",
+            "",
         )
 
     client = get_client()

@@ -15,6 +15,7 @@ from slicer_mcp.spine_tools import (
     _build_ccj_landmark_extraction_code,
     _build_sagittal_alignment_code,
     _build_spine_segmentation_code,
+    _build_totalseg_subprocess_block,
     _build_vertebral_centroid_extraction_code,
     _validate_seed_points,
     analyze_bone_quality,
@@ -1024,6 +1025,83 @@ class TestBuildSpineSegmentationCode:
         assert "killpg" in code
         assert "subprocess.DEVNULL" in code
         assert "finally:" in code
+
+
+# =============================================================================
+# Subprocess Block Builder Tests
+# =============================================================================
+
+
+class TestBuildTotalsegSubprocessBlock:
+    """Tests for the shared _build_totalseg_subprocess_block() code generator."""
+
+    def test_default_parameters_generate_correct_code(self):
+        """Default parameters generate subprocess code with 'total' task."""
+        code = _build_totalseg_subprocess_block()
+        assert "subprocess.Popen" in code
+        assert "start_new_session" in code
+        assert "killpg" in code
+        assert '"total"' in code
+
+    def test_custom_task_parameter(self):
+        """Custom task parameter (e.g. 'total_mr') appears in generated code."""
+        code = _build_totalseg_subprocess_block(task="total_mr")
+        assert '"total_mr"' in code
+
+    def test_custom_volume_var(self):
+        """Custom volume_var appears in generated code."""
+        code = _build_totalseg_subprocess_block(volume_var="my_volume")
+        assert "my_volume.GetName()" in code
+        assert "WriteData(my_volume)" in code
+
+    def test_custom_seg_var(self):
+        """Custom seg_var appears in generated code."""
+        code = _build_totalseg_subprocess_block(seg_var="my_seg")
+        assert "my_seg = slicer.mrmlScene.GetNodeByID" in code
+        assert "my_seg = slicer.mrmlScene.AddNewNodeByClass" in code
+
+    def test_seg_was_provided_is_set(self):
+        """Generated code sets _seg_was_provided flag."""
+        code = _build_totalseg_subprocess_block()
+        assert "_seg_was_provided = seg_node_id is not None" in code
+
+    def test_finally_block_has_rmtree_and_killpg(self):
+        """Finally block includes rmtree cleanup and killpg."""
+        code = _build_totalseg_subprocess_block()
+        assert "finally:" in code
+        assert "rmtree" in code
+        assert "killpg" in code
+
+    def test_write_data_check_present(self):
+        """Generated code checks WriteData() return value."""
+        code = _build_totalseg_subprocess_block()
+        assert "_ts_writeOk = _ts_storageNode.WriteData" in code
+        assert "if not _ts_writeOk" in code
+        assert "Failed to export volume to NIfTI" in code
+
+    def test_file_size_stability_check(self):
+        """Generated code checks file size stability across polls."""
+        code = _build_totalseg_subprocess_block()
+        assert "_ts_prev_size = 0" in code
+        assert "_ts_curr_size = _ts_os.path.getsize" in code
+        assert "_ts_curr_size == _ts_prev_size" in code
+
+    def test_exception_type_in_error_message(self):
+        """Error message includes exception type name."""
+        code = _build_totalseg_subprocess_block()
+        assert "type(_ts_e).__name__" in code
+
+    def test_killpg_permission_error_logged(self):
+        """PermissionError on killpg is logged, not silently suppressed."""
+        code = _build_totalseg_subprocess_block()
+        assert "except PermissionError:" in code
+        assert "permission denied" in code
+
+    def test_rmtree_uses_onerror_callback(self):
+        """rmtree uses onerror callback instead of ignore_errors."""
+        code = _build_totalseg_subprocess_block()
+        assert "onerror=_ts_rmtree_onerror" in code
+        assert "ignore_errors" not in code
 
 
 # =============================================================================
