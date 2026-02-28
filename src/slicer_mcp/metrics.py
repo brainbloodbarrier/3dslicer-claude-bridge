@@ -67,18 +67,22 @@ if METRICS_ENABLED:
 
         logger.info("Metrics collection enabled (prometheus_client)")
 
-        REQUEST_DURATION: 'Histogram | NullMetric' = Histogram(
+        REQUEST_DURATION: "Histogram | NullMetric" = Histogram(
             "slicer_request_duration_seconds",
             "Request duration in seconds",
             ["operation"],
             buckets=(0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0),
         )
 
-        REQUEST_TOTAL: 'Counter | NullMetric' = Counter("slicer_request_total", "Total requests", ["operation", "status"])
+        REQUEST_TOTAL: "Counter | NullMetric" = Counter(
+            "slicer_request_total", "Total requests", ["operation", "status"]
+        )
 
-        RETRY_TOTAL: 'Counter | NullMetric' = Counter("slicer_retry_total", "Total retry attempts", ["operation"])
+        RETRY_TOTAL: "Counter | NullMetric" = Counter(
+            "slicer_retry_total", "Total retry attempts", ["operation"]
+        )
 
-        CIRCUIT_BREAKER_STATE: 'Gauge | NullMetric' = Gauge(
+        CIRCUIT_BREAKER_STATE: "Gauge | NullMetric" = Gauge(
             "slicer_circuit_breaker_state",
             "Circuit breaker state (0=closed, 1=half-open, 2=open)",
             ["breaker_name"],

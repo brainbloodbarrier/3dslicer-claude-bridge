@@ -1493,14 +1493,14 @@ def _validate_seed_points(seed_points: list[list[float]]) -> list[list[float]]:
         )
 
     for i, pt in enumerate(seed_points):
-        if not isinstance(pt, (list, tuple)) or len(pt) != 3:
+        if not isinstance(pt, list | tuple) or len(pt) != 3:
             raise ValidationError(
                 f"Seed point {i} must be [x, y, z] coordinates, got: {pt}",
                 "seed_points",
                 str(pt),
             )
         for j, coord in enumerate(pt):
-            if not isinstance(coord, (int, float)):
+            if not isinstance(coord, int | float):
                 raise ValidationError(
                     f"Seed point {i} coordinate {j} must be numeric, got: {type(coord).__name__}",
                     "seed_points",

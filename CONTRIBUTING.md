@@ -1,6 +1,6 @@
 # Contributing to slicer-mcp
 
-Thank you for your interest in contributing to the MCP Slicer Bridge! 
+Thank you for your interest in contributing to the MCP Slicer Bridge!
 
 ## Development Setup
 

@@ -4,7 +4,7 @@
 
 ## Overview
 
-The MCP Slicer Bridge enables Claude Code to interact with [3D Slicer](https://www.slicer.org), a powerful open-source platform for medical image analysis, surgical planning, and radiomics research. 
+The MCP Slicer Bridge enables Claude Code to interact with [3D Slicer](https://www.slicer.org), a powerful open-source platform for medical image analysis, surgical planning, and radiomics research.
 
 It provides an extensive suite of tools out of the box including base scene interaction, Spine Segmentation (via TotalSegmentator), CT/MRI Diagnostic Tools, X-Ray measurements, and Cervical Screw instrumentation planning.
 
