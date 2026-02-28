@@ -23,7 +23,10 @@ from slicer_mcp.spine_constants import (
     REGION_VERTEBRAE,
     SINS_RANGES,
     SPINE_REGIONS,
+    SPINE_SEGMENTATION_TIMEOUT,
+    TOTALSEG_TASK_VERTEBRAE,
 )
+from slicer_mcp.spine_tools import _build_totalseg_subprocess_block
 from slicer_mcp.tools import (
     ValidationError,
     _parse_json_result,
@@ -376,11 +379,8 @@ def _build_fracture_detection_code(
     vertebrae_list = json.dumps(list(REGION_VERTEBRAE.get(region, REGION_VERTEBRAE["full"])))
     safe_classification = json.dumps(classification_system)
 
-    seg_block = ""
-    if safe_seg_id:
-        seg_block = f"seg_node_id = {safe_seg_id}"
-    else:
-        seg_block = "seg_node_id = None"
+    seg_block = f"seg_node_id = {safe_seg_id}" if safe_seg_id else "seg_node_id = None"
+    auto_seg = _build_totalseg_subprocess_block("volume_node", "seg_node", TOTALSEG_TASK_VERTEBRAE)
 
     return f"""
 import slicer
@@ -398,18 +398,7 @@ volume_node = slicer.mrmlScene.GetNodeByID(volume_node_id)
 if not volume_node:
     raise ValueError("Volume node not found: " + volume_node_id)
 
-# Get or create segmentation
-if seg_node_id:
-    seg_node = slicer.mrmlScene.GetNodeByID(seg_node_id)
-    if not seg_node:
-        raise ValueError("Segmentation node not found: " + seg_node_id)
-else:
-    # Run TotalSegmentator for vertebral body segmentation
-    import TotalSegmentator
-    seg_node = TotalSegmentator.TotalSegmentatorLogic().process(
-        volume_node, task="vertebral_body"
-    )
-    seg_node_id = seg_node.GetID()
+{auto_seg}
 
 segmentation = seg_node.GetSegmentation()
 volume_array_node = slicer.util.arrayFromVolume(volume_node)
@@ -632,6 +621,10 @@ def detect_vertebral_fractures_ct(
     Returns:
         Dict with per-vertebra fracture analysis and summary
 
+    Tip:
+        Run ``segment_spine`` once and pass its ``output_segmentation_id``
+        as ``segmentation_node_id`` to skip auto-segmentation (~10x faster).
+
     Raises:
         ValidationError: If inputs are invalid
         SlicerConnectionError: If Slicer is not reachable
@@ -651,8 +644,9 @@ def detect_vertebral_fractures_ct(
         safe_volume_id, safe_seg_id, region, classification_system
     )
 
+    timeout = SEGMENTATION_TIMEOUT if segmentation_node_id else SPINE_SEGMENTATION_TIMEOUT
     try:
-        exec_result = client.exec_python(python_code, timeout=SEGMENTATION_TIMEOUT)
+        exec_result = client.exec_python(python_code, timeout=timeout)
         data = _parse_json_result(exec_result.get("result", ""), "fracture detection")
         logger.info(
             f"Fracture detection complete: {data.get('fractures_detected', 0)} fractures found"
@@ -690,6 +684,7 @@ def _build_osteoporosis_code(
     safe_method = json.dumps(method)
 
     seg_block = f"seg_node_id = {safe_seg_id}" if safe_seg_id else "seg_node_id = None"
+    auto_seg = _build_totalseg_subprocess_block("volume_node", "seg_node", TOTALSEG_TASK_VERTEBRAE)
 
     return f"""
 import slicer
@@ -706,16 +701,7 @@ volume_node = slicer.mrmlScene.GetNodeByID(volume_node_id)
 if not volume_node:
     raise ValueError("Volume node not found: " + volume_node_id)
 
-# Get or create segmentation
-if seg_node_id:
-    seg_node = slicer.mrmlScene.GetNodeByID(seg_node_id)
-    if not seg_node:
-        raise ValueError("Segmentation node not found: " + seg_node_id)
-else:
-    import TotalSegmentator
-    seg_node = TotalSegmentator.TotalSegmentatorLogic().process(
-        volume_node, task="vertebral_body"
-    )
+{auto_seg}
 
 segmentation = seg_node.GetSegmentation()
 volume_array = slicer.util.arrayFromVolume(volume_node)
@@ -884,6 +870,10 @@ def assess_osteoporosis_ct(
     Returns:
         Dict with per-level HU statistics, classification, and clinical context
 
+    Tip:
+        Run ``segment_spine`` once and pass its ``output_segmentation_id``
+        as ``segmentation_node_id`` to skip auto-segmentation (~10x faster).
+
     Raises:
         ValidationError: If inputs are invalid
         SlicerConnectionError: If Slicer is not reachable
@@ -901,8 +891,9 @@ def assess_osteoporosis_ct(
 
     python_code = _build_osteoporosis_code(safe_volume_id, safe_seg_id, levels, method)
 
+    timeout = SEGMENTATION_TIMEOUT if segmentation_node_id else SPINE_SEGMENTATION_TIMEOUT
     try:
-        exec_result = client.exec_python(python_code, timeout=SEGMENTATION_TIMEOUT)
+        exec_result = client.exec_python(python_code, timeout=timeout)
         data = _parse_json_result(exec_result.get("result", ""), "osteoporosis assessment")
         logger.info(f"Osteoporosis assessment complete for levels: {levels}")
         return data
@@ -936,6 +927,7 @@ def _build_metastatic_detection_code(
     """
     vertebrae_list = json.dumps(list(REGION_VERTEBRAE.get(region, REGION_VERTEBRAE["full"])))
     seg_block = f"seg_node_id = {safe_seg_id}" if safe_seg_id else "seg_node_id = None"
+    auto_seg = _build_totalseg_subprocess_block("volume_node", "seg_node", TOTALSEG_TASK_VERTEBRAE)
 
     return f"""
 import slicer
@@ -953,15 +945,7 @@ volume_node = slicer.mrmlScene.GetNodeByID(volume_node_id)
 if not volume_node:
     raise ValueError("Volume node not found: " + volume_node_id)
 
-if seg_node_id:
-    seg_node = slicer.mrmlScene.GetNodeByID(seg_node_id)
-    if not seg_node:
-        raise ValueError("Segmentation node not found: " + seg_node_id)
-else:
-    import TotalSegmentator
-    seg_node = TotalSegmentator.TotalSegmentatorLogic().process(
-        volume_node, task="vertebral_body"
-    )
+{auto_seg}
 
 segmentation = seg_node.GetSegmentation()
 volume_array = slicer.util.arrayFromVolume(volume_node)
@@ -1135,6 +1119,10 @@ def detect_metastatic_lesions_ct(
     Returns:
         Dict with per-vertebra lesion analysis
 
+    Tip:
+        Run ``segment_spine`` once and pass its ``output_segmentation_id``
+        as ``segmentation_node_id`` to skip auto-segmentation (~10x faster).
+
     Raises:
         ValidationError: If inputs are invalid
         SlicerConnectionError: If Slicer is not reachable
@@ -1153,8 +1141,9 @@ def detect_metastatic_lesions_ct(
         safe_volume_id, safe_seg_id, region, include_posterior_elements
     )
 
+    timeout = SEGMENTATION_TIMEOUT if segmentation_node_id else SPINE_SEGMENTATION_TIMEOUT
     try:
-        exec_result = client.exec_python(python_code, timeout=SEGMENTATION_TIMEOUT)
+        exec_result = client.exec_python(python_code, timeout=timeout)
         data = _parse_json_result(exec_result.get("result", ""), "metastatic lesion detection")
         logger.info(f"Metastatic detection complete: {data.get('lesions_detected', 0)} lesions")
         return data
@@ -1189,6 +1178,7 @@ def _build_sins_code(
     safe_levels = json.dumps(target_levels)
     safe_pain = repr(pain_score)  # None→"None", int→"N" (both valid Python)
     seg_block = f"seg_node_id = {safe_seg_id}" if safe_seg_id else "seg_node_id = None"
+    auto_seg = _build_totalseg_subprocess_block("volume_node", "seg_node", TOTALSEG_TASK_VERTEBRAE)
 
     return f"""
 import slicer
@@ -1205,15 +1195,7 @@ volume_node = slicer.mrmlScene.GetNodeByID(volume_node_id)
 if not volume_node:
     raise ValueError("Volume node not found: " + volume_node_id)
 
-if seg_node_id:
-    seg_node = slicer.mrmlScene.GetNodeByID(seg_node_id)
-    if not seg_node:
-        raise ValueError("Segmentation node not found: " + seg_node_id)
-else:
-    import TotalSegmentator
-    seg_node = TotalSegmentator.TotalSegmentatorLogic().process(
-        volume_node, task="vertebral_body"
-    )
+{auto_seg}
 
 segmentation = seg_node.GetSegmentation()
 volume_array = slicer.util.arrayFromVolume(volume_node)
@@ -1452,8 +1434,9 @@ def calculate_sins_score(
 
     python_code = _build_sins_code(safe_volume_id, safe_seg_id, target_levels, pain_score)
 
+    timeout = SEGMENTATION_TIMEOUT if segmentation_node_id else SPINE_SEGMENTATION_TIMEOUT
     try:
-        exec_result = client.exec_python(python_code, timeout=SEGMENTATION_TIMEOUT)
+        exec_result = client.exec_python(python_code, timeout=timeout)
         data = _parse_json_result(exec_result.get("result", ""), "SINS score calculation")
         logger.info(f"SINS calculation complete for levels: {target_levels}")
         return data
@@ -1485,6 +1468,7 @@ def _build_listhesis_code(
     """
     safe_levels = json.dumps(levels)
     seg_block = f"seg_node_id = {safe_seg_id}" if safe_seg_id else "seg_node_id = None"
+    auto_seg = _build_totalseg_subprocess_block("volume_node", "seg_node", TOTALSEG_TASK_VERTEBRAE)
 
     return f"""
 import slicer
@@ -1499,15 +1483,7 @@ volume_node = slicer.mrmlScene.GetNodeByID(volume_node_id)
 if not volume_node:
     raise ValueError("Volume node not found: " + volume_node_id)
 
-if seg_node_id:
-    seg_node = slicer.mrmlScene.GetNodeByID(seg_node_id)
-    if not seg_node:
-        raise ValueError("Segmentation node not found: " + seg_node_id)
-else:
-    import TotalSegmentator
-    seg_node = TotalSegmentator.TotalSegmentatorLogic().process(
-        volume_node, task="vertebral_body"
-    )
+{auto_seg}
 
 segmentation = seg_node.GetSegmentation()
 spacing = volume_node.GetSpacing()
@@ -1637,6 +1613,10 @@ def measure_listhesis_ct(
     Returns:
         Dict with per-level listhesis measurements
 
+    Tip:
+        Run ``segment_spine`` once and pass its ``output_segmentation_id``
+        as ``segmentation_node_id`` to skip auto-segmentation (~10x faster).
+
     Raises:
         ValidationError: If inputs are invalid
         SlicerConnectionError: If Slicer is not reachable
@@ -1653,8 +1633,9 @@ def measure_listhesis_ct(
 
     python_code = _build_listhesis_code(safe_volume_id, safe_seg_id, levels)
 
+    timeout = SEGMENTATION_TIMEOUT if segmentation_node_id else SPINE_SEGMENTATION_TIMEOUT
     try:
-        exec_result = client.exec_python(python_code, timeout=SEGMENTATION_TIMEOUT)
+        exec_result = client.exec_python(python_code, timeout=timeout)
         data = _parse_json_result(exec_result.get("result", ""), "listhesis measurement")
         logger.info(f"Listhesis measurement complete for levels: {levels}")
         return data
@@ -1686,6 +1667,7 @@ def _build_canal_measurement_code(
     """
     safe_levels = json.dumps(levels)
     seg_block = f"seg_node_id = {safe_seg_id}" if safe_seg_id else "seg_node_id = None"
+    auto_seg = _build_totalseg_subprocess_block("volume_node", "seg_node", TOTALSEG_TASK_VERTEBRAE)
 
     return f"""
 import slicer
@@ -1700,15 +1682,7 @@ volume_node = slicer.mrmlScene.GetNodeByID(volume_node_id)
 if not volume_node:
     raise ValueError("Volume node not found: " + volume_node_id)
 
-if seg_node_id:
-    seg_node = slicer.mrmlScene.GetNodeByID(seg_node_id)
-    if not seg_node:
-        raise ValueError("Segmentation node not found: " + seg_node_id)
-else:
-    import TotalSegmentator
-    seg_node = TotalSegmentator.TotalSegmentatorLogic().process(
-        volume_node, task="total"
-    )
+{auto_seg}
 
 segmentation = seg_node.GetSegmentation()
 volume_array = slicer.util.arrayFromVolume(volume_node)
@@ -1861,6 +1835,10 @@ def measure_spinal_canal_ct(
     Returns:
         Dict with per-level canal measurements
 
+    Tip:
+        Run ``segment_spine`` once and pass its ``output_segmentation_id``
+        as ``segmentation_node_id`` to skip auto-segmentation (~10x faster).
+
     Raises:
         ValidationError: If inputs are invalid
         SlicerConnectionError: If Slicer is not reachable
@@ -1877,8 +1855,9 @@ def measure_spinal_canal_ct(
 
     python_code = _build_canal_measurement_code(safe_volume_id, safe_seg_id, levels)
 
+    timeout = SEGMENTATION_TIMEOUT if segmentation_node_id else SPINE_SEGMENTATION_TIMEOUT
     try:
-        exec_result = client.exec_python(python_code, timeout=SEGMENTATION_TIMEOUT)
+        exec_result = client.exec_python(python_code, timeout=timeout)
         data = _parse_json_result(exec_result.get("result", ""), "spinal canal measurement")
         logger.info(f"Spinal canal measurement complete for levels: {levels}")
         return data

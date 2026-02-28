@@ -976,32 +976,54 @@ class TestBuildSpineSegmentationCode:
         code = _build_spine_segmentation_code('"vtkNode1"', '"full"', False, False)
         assert "__execResult = result" in code
 
-    def test_code_uses_total_task_when_no_extras(self):
-        """Without discs/cord, code should use total task (no license required)."""
+    def test_code_uses_subset_for_region(self):
+        """Code should pass --roi_subset with region-specific vertebrae."""
+        code = _build_spine_segmentation_code('"vtkNode1"', '"lumbar"', False, False)
+        # Subset variable should be defined with lumbar vertebrae
+        assert '"vertebrae_L1"' in code
+        assert '"vertebrae_L5"' in code
+        assert "--roi_subset" in code
+        # Verify the subset list only has lumbar vertebrae (not cervical)
+        import re
+
+        subset_match = re.search(r"subset\s*=\s*(\[.*?\])", code, re.DOTALL)
+        assert subset_match, "subset assignment not found in generated code"
+        subset_str = subset_match.group(1)
+        assert "vertebrae_C1" not in subset_str
+        assert "vertebrae_T1" not in subset_str
+
+    def test_code_uses_cpu_and_fast_cli_flags(self):
+        """Code should use --device cpu and --fast CLI flags."""
         code = _build_spine_segmentation_code('"vtkNode1"', '"full"', False, False)
-        assert '"total"' in code
+        assert '"cpu"' in code
+        assert '"--fast"' in code
+        assert '"--device"' in code
 
-    def test_code_uses_total_task_with_discs(self):
-        """With include_discs=True, code should use total task."""
-        code = _build_spine_segmentation_code('"vtkNode1"', '"full"', True, False)
-        assert '"total"' in code
-
-    def test_code_uses_total_task_with_spinal_cord(self):
-        """With include_spinal_cord=True, code should use total task."""
-        code = _build_spine_segmentation_code('"vtkNode1"', '"full"', False, True)
-        assert '"total"' in code
-
-    def test_code_includes_disc_filtering(self):
-        """Generated code must handle disc filtering logic."""
+    def test_code_subset_includes_discs_when_requested(self):
+        """With include_discs=True, subset should include disc segment names."""
         code = _build_spine_segmentation_code('"vtkNode1"', '"lumbar"', True, False)
-        assert "include_discs" in code
+        assert '"disc_L4_L5"' in code
         assert "DISC_MAP" in code
 
-    def test_code_includes_spinal_cord_filtering(self):
-        """Generated code must handle spinal cord filtering logic."""
+    def test_code_subset_includes_spinal_cord_when_requested(self):
+        """With include_spinal_cord=True, subset should include spinal_cord."""
         code = _build_spine_segmentation_code('"vtkNode1"', '"full"', False, True)
-        assert "include_spinal_cord" in code
-        assert "spinal_cord" in code
+        assert '"spinal_cord"' in code
+
+    def test_code_full_region_includes_all_vertebrae(self):
+        """Full region should include C1-L5 in subset."""
+        code = _build_spine_segmentation_code('"vtkNode1"', '"full"', False, False)
+        assert '"vertebrae_C1"' in code
+        assert '"vertebrae_T1"' in code
+        assert '"vertebrae_L5"' in code
+
+    def test_code_uses_subprocess_with_kill_workaround(self):
+        """Code should use subprocess.Popen with kill workaround for resource_tracker hang."""
+        code = _build_spine_segmentation_code('"vtkNode1"', '"lumbar"', False, False)
+        assert "subprocess.Popen" in code
+        assert "killpg" in code
+        assert "subprocess.DEVNULL" in code
+        assert "finally:" in code
 
 
 # =============================================================================
