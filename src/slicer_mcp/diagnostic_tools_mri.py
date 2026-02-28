@@ -157,9 +157,7 @@ if origin_diff > 1.0 or spacing_diff > 0.01:
 """
 
 
-def _build_totalseg_spine_code(
-    safe_volume_id: str, region: str, safe_seg_id: str | None = None
-) -> str:
+def _build_totalseg_spine_code(safe_volume_id: str, safe_seg_id: str | None = None) -> str:
     """Build Python code for TotalSegmentator spine segmentation in MRI mode.
 
     When ``safe_seg_id`` is provided, the code loads the existing segmentation
@@ -168,7 +166,6 @@ def _build_totalseg_spine_code(
 
     Args:
         safe_volume_id: JSON-escaped volume node ID (reference volume)
-        region: Spine region to segment
         safe_seg_id: JSON-escaped segmentation node ID or None
 
     Returns:
@@ -300,7 +297,7 @@ import numpy as np
 
 {_build_registration_check_code(safe_t1_id, safe_t2_id)}
 
-{_build_totalseg_spine_code(safe_t1_id, region, safe_seg_id)}
+{_build_totalseg_spine_code(safe_t1_id, safe_seg_id)}
 
 # --- Modic endplate analysis ---
 vertebrae_map = {json.dumps(ts_vertebrae)}
@@ -541,7 +538,7 @@ t2_node = slicer.mrmlScene.GetNodeByID({safe_t2_id})
 if not t2_node:
     raise ValueError(f"T2 volume not found: {{{safe_t2_id}}}")
 
-{_build_totalseg_spine_code(safe_t2_id, region, safe_seg_id)}
+{_build_totalseg_spine_code(safe_t2_id, safe_seg_id)}
 
 disc_map = {json.dumps(region_discs)}
 pfirrmann_descriptions = {json.dumps(PFIRRMANN_DESCRIPTIONS)}
@@ -813,7 +810,7 @@ if not t2_node:
 {t1_init}
 {registration_code}
 
-{_build_totalseg_spine_code(safe_t2_id, region, safe_seg_id)}
+{_build_totalseg_spine_code(safe_t2_id, safe_seg_id)}
 
 canal_normal_min = {canal_normal[0]}
 canal_normal_max = {canal_normal[1]}
@@ -1122,7 +1119,7 @@ import numpy as np
 
 {_build_registration_check_code(safe_t1_id, safe_t2_stir_id)}
 
-{_build_totalseg_spine_code(safe_t1_id, region, safe_seg_id)}
+{_build_totalseg_spine_code(safe_t1_id, safe_seg_id)}
 
 vertebrae_map = {json.dumps(ts_vertebrae)}
 

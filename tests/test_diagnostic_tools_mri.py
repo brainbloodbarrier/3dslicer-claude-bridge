@@ -1356,7 +1356,7 @@ class TestMriSubprocessCodegen:
         from slicer_mcp.diagnostic_tools_mri import _build_totalseg_spine_code
 
         code = _build_totalseg_spine_code(
-            '"vtkMRMLScalarVolumeNode1"', "lumbar", '"vtkMRMLSegmentationNode1"'
+            '"vtkMRMLScalarVolumeNode1"', '"vtkMRMLSegmentationNode1"'
         )
         assert "seg_node_id = " in code
         assert "_seg_was_provided" in code
