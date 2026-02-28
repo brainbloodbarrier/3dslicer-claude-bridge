@@ -15,6 +15,7 @@ from slicer_mcp.spine_tools import (
     _build_ccj_landmark_extraction_code,
     _build_sagittal_alignment_code,
     _build_spine_segmentation_code,
+    _build_totalseg_subprocess_block,
     _build_vertebral_centroid_extraction_code,
     _validate_seed_points,
     analyze_bone_quality,
@@ -976,32 +977,131 @@ class TestBuildSpineSegmentationCode:
         code = _build_spine_segmentation_code('"vtkNode1"', '"full"', False, False)
         assert "__execResult = result" in code
 
-    def test_code_uses_total_task_when_no_extras(self):
-        """Without discs/cord, code should use total task (no license required)."""
+    def test_code_uses_subset_for_region(self):
+        """Code should pass --roi_subset with region-specific vertebrae."""
+        code = _build_spine_segmentation_code('"vtkNode1"', '"lumbar"', False, False)
+        # Subset variable should be defined with lumbar vertebrae
+        assert '"vertebrae_L1"' in code
+        assert '"vertebrae_L5"' in code
+        assert "--roi_subset" in code
+        # Verify the subset list only has lumbar vertebrae (not cervical)
+        import re
+
+        subset_match = re.search(r"subset\s*=\s*(\[.*?\])", code, re.DOTALL)
+        assert subset_match, "subset assignment not found in generated code"
+        subset_str = subset_match.group(1)
+        assert "vertebrae_C1" not in subset_str
+        assert "vertebrae_T1" not in subset_str
+
+    def test_code_uses_cpu_and_fast_cli_flags(self):
+        """Code should use --device cpu and --fast CLI flags."""
         code = _build_spine_segmentation_code('"vtkNode1"', '"full"', False, False)
-        assert '"total"' in code
+        assert '"cpu"' in code
+        assert '"--fast"' in code
+        assert '"--device"' in code
 
-    def test_code_uses_total_task_with_discs(self):
-        """With include_discs=True, code should use total task."""
-        code = _build_spine_segmentation_code('"vtkNode1"', '"full"', True, False)
-        assert '"total"' in code
-
-    def test_code_uses_total_task_with_spinal_cord(self):
-        """With include_spinal_cord=True, code should use total task."""
-        code = _build_spine_segmentation_code('"vtkNode1"', '"full"', False, True)
-        assert '"total"' in code
-
-    def test_code_includes_disc_filtering(self):
-        """Generated code must handle disc filtering logic."""
+    def test_code_subset_includes_discs_when_requested(self):
+        """With include_discs=True, subset should include disc segment names."""
         code = _build_spine_segmentation_code('"vtkNode1"', '"lumbar"', True, False)
-        assert "include_discs" in code
+        assert '"disc_L4_L5"' in code
         assert "DISC_MAP" in code
 
-    def test_code_includes_spinal_cord_filtering(self):
-        """Generated code must handle spinal cord filtering logic."""
+    def test_code_subset_includes_spinal_cord_when_requested(self):
+        """With include_spinal_cord=True, subset should include spinal_cord."""
         code = _build_spine_segmentation_code('"vtkNode1"', '"full"', False, True)
-        assert "include_spinal_cord" in code
-        assert "spinal_cord" in code
+        assert '"spinal_cord"' in code
+
+    def test_code_full_region_includes_all_vertebrae(self):
+        """Full region should include C1-L5 in subset."""
+        code = _build_spine_segmentation_code('"vtkNode1"', '"full"', False, False)
+        assert '"vertebrae_C1"' in code
+        assert '"vertebrae_T1"' in code
+        assert '"vertebrae_L5"' in code
+
+    def test_code_uses_subprocess_with_kill_workaround(self):
+        """Code should use subprocess.Popen with kill workaround for resource_tracker hang."""
+        code = _build_spine_segmentation_code('"vtkNode1"', '"lumbar"', False, False)
+        assert "subprocess.Popen" in code
+        assert "killpg" in code
+        assert "subprocess.DEVNULL" in code
+        assert "finally:" in code
+
+
+# =============================================================================
+# Subprocess Block Builder Tests
+# =============================================================================
+
+
+class TestBuildTotalsegSubprocessBlock:
+    """Tests for the shared _build_totalseg_subprocess_block() code generator."""
+
+    def test_default_parameters_generate_correct_code(self):
+        """Default parameters generate subprocess code with 'total' task."""
+        code = _build_totalseg_subprocess_block()
+        assert "subprocess.Popen" in code
+        assert "start_new_session" in code
+        assert "killpg" in code
+        assert '"total"' in code
+
+    def test_custom_task_parameter(self):
+        """Custom task parameter (e.g. 'total_mr') appears in generated code."""
+        code = _build_totalseg_subprocess_block(task="total_mr")
+        assert '"total_mr"' in code
+
+    def test_custom_volume_var(self):
+        """Custom volume_var appears in generated code."""
+        code = _build_totalseg_subprocess_block(volume_var="my_volume")
+        assert "my_volume.GetName()" in code
+        assert "WriteData(my_volume)" in code
+
+    def test_custom_seg_var(self):
+        """Custom seg_var appears in generated code."""
+        code = _build_totalseg_subprocess_block(seg_var="my_seg")
+        assert "my_seg = slicer.mrmlScene.GetNodeByID" in code
+        assert "my_seg = slicer.mrmlScene.AddNewNodeByClass" in code
+
+    def test_seg_was_provided_is_set(self):
+        """Generated code sets _seg_was_provided flag."""
+        code = _build_totalseg_subprocess_block()
+        assert "_seg_was_provided = seg_node_id is not None" in code
+
+    def test_finally_block_has_rmtree_and_killpg(self):
+        """Finally block includes rmtree cleanup and killpg."""
+        code = _build_totalseg_subprocess_block()
+        assert "finally:" in code
+        assert "rmtree" in code
+        assert "killpg" in code
+
+    def test_write_data_check_present(self):
+        """Generated code checks WriteData() return value."""
+        code = _build_totalseg_subprocess_block()
+        assert "_ts_writeOk = _ts_storageNode.WriteData" in code
+        assert "if not _ts_writeOk" in code
+        assert "Failed to export volume to NIfTI" in code
+
+    def test_file_size_stability_check(self):
+        """Generated code checks file size stability across polls."""
+        code = _build_totalseg_subprocess_block()
+        assert "_ts_prev_size = 0" in code
+        assert "_ts_curr_size = _ts_os.path.getsize" in code
+        assert "_ts_curr_size == _ts_prev_size" in code
+
+    def test_exception_type_in_error_message(self):
+        """Error message includes exception type name."""
+        code = _build_totalseg_subprocess_block()
+        assert "type(_ts_e).__name__" in code
+
+    def test_killpg_permission_error_logged(self):
+        """PermissionError on killpg is logged, not silently suppressed."""
+        code = _build_totalseg_subprocess_block()
+        assert "except PermissionError:" in code
+        assert "permission denied" in code
+
+    def test_rmtree_uses_onerror_callback(self):
+        """rmtree uses onerror callback instead of ignore_errors."""
+        code = _build_totalseg_subprocess_block()
+        assert "onerror=_ts_rmtree_onerror" in code
+        assert "ignore_errors" not in code
 
 
 # =============================================================================

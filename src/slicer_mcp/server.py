@@ -913,6 +913,7 @@ def classify_modic_changes(
     t1_node_id: str,
     t2_node_id: str,
     region: str = "lumbar",
+    segmentation_node_id: str | None = None,
 ) -> dict:
     """Classify Modic endplate changes using T1 and T2 MRI sequences.
 
@@ -930,12 +931,16 @@ def classify_modic_changes(
         t1_node_id: MRML node ID of T1-weighted volume
         t2_node_id: MRML node ID of T2-weighted volume
         region: Spine region - "cervical", "thoracic", or "lumbar"
+        segmentation_node_id: MRML node ID of existing segmentation (optional;
+            runs TotalSegmentator if not provided)
 
     Returns:
         Dict with per-level Modic type, signal ratios, mixed patterns, and summary counts
     """
     try:
-        return diagnostic_tools_mri.classify_modic_changes(t1_node_id, t2_node_id, region)
+        return diagnostic_tools_mri.classify_modic_changes(
+            t1_node_id, t2_node_id, region, segmentation_node_id
+        )
     except Exception as e:
         return _handle_tool_error(e, "classify_modic_changes")
 
@@ -944,6 +949,7 @@ def classify_modic_changes(
 def assess_disc_degeneration_mri(
     t2_node_id: str,
     region: str = "lumbar",
+    segmentation_node_id: str | None = None,
 ) -> dict:
     """Assess intervertebral disc degeneration using Pfirrmann grading on T2 MRI.
 
@@ -955,13 +961,17 @@ def assess_disc_degeneration_mri(
     Args:
         t2_node_id: MRML node ID of T2-weighted sagittal volume
         region: Spine region - "cervical", "thoracic", or "lumbar"
+        segmentation_node_id: MRML node ID of existing segmentation (optional;
+            runs TotalSegmentator if not provided)
 
     Returns:
         Dict with per-disc Pfirrmann grade, signal ratio to CSF,
             homogeneity, height loss, and grade summary
     """
     try:
-        return diagnostic_tools_mri.assess_disc_degeneration_mri(t2_node_id, region)
+        return diagnostic_tools_mri.assess_disc_degeneration_mri(
+            t2_node_id, region, segmentation_node_id
+        )
     except Exception as e:
         return _handle_tool_error(e, "assess_disc_degeneration_mri")
 
@@ -971,6 +981,7 @@ def detect_cord_compression_mri(
     t2_node_id: str,
     t1_node_id: str | None = None,
     region: str = "cervical",
+    segmentation_node_id: str | None = None,
 ) -> dict:
     """Detect spinal cord compression on MRI with optional myelopathy assessment.
 
@@ -984,13 +995,17 @@ def detect_cord_compression_mri(
         t2_node_id: MRML node ID of T2-weighted volume
         t1_node_id: MRML node ID of T1-weighted volume (optional, for reversibility)
         region: Spine region - "cervical", "thoracic", or "lumbar"
+        segmentation_node_id: MRML node ID of existing segmentation (optional;
+            runs TotalSegmentator if not provided)
 
     Returns:
         Dict with per-level compression metrics, stenosis grades,
             myelopathy status, and MSCC assessment
     """
     try:
-        return diagnostic_tools_mri.detect_cord_compression_mri(t2_node_id, t1_node_id, region)
+        return diagnostic_tools_mri.detect_cord_compression_mri(
+            t2_node_id, t1_node_id, region, segmentation_node_id
+        )
     except Exception as e:
         return _handle_tool_error(e, "detect_cord_compression_mri")
 
@@ -1000,6 +1015,7 @@ def detect_metastatic_lesions_mri(
     t1_node_id: str,
     t2_stir_node_id: str,
     region: str = "full",
+    segmentation_node_id: str | None = None,
 ) -> dict:
     """Detect metastatic lesions in the spine using T1 and T2/STIR MRI.
 
@@ -1017,6 +1033,8 @@ def detect_metastatic_lesions_mri(
         t1_node_id: MRML node ID of T1-weighted volume
         t2_stir_node_id: MRML node ID of T2/STIR-weighted volume
         region: Spine region - "cervical", "thoracic", "lumbar", or "full"
+        segmentation_node_id: MRML node ID of existing segmentation (optional;
+            runs TotalSegmentator if not provided)
 
     Returns:
         Dict with per-vertebra signal analysis, suspicious lesions,
@@ -1024,7 +1042,7 @@ def detect_metastatic_lesions_mri(
     """
     try:
         return diagnostic_tools_mri.detect_metastatic_lesions_mri(
-            t1_node_id, t2_stir_node_id, region
+            t1_node_id, t2_stir_node_id, region, segmentation_node_id
         )
     except Exception as e:
         return _handle_tool_error(e, "detect_metastatic_lesions_mri")

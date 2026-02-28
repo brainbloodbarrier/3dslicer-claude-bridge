@@ -107,7 +107,7 @@ TOTALSEG_TASK_FULL = "total"
 # Segmentation Timeout
 # =============================================================================
 
-SPINE_SEGMENTATION_TIMEOUT = 300  # 5 minutes for TotalSegmentator spine tasks
+SPINE_SEGMENTATION_TIMEOUT = 600  # 10 minutes for TotalSegmentator spine tasks (CPU via Rosetta 2)
 
 
 # =============================================================================
