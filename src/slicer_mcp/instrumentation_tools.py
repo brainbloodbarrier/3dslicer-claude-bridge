@@ -165,14 +165,14 @@ def _validate_variant(variant: str | None, technique: str) -> str | None:
         raise ValidationError(
             f"Variant parameter only applies to 'lateral_mass' technique, " f"not '{technique}'",
             "variant",
-            variant,
+            variant or "magerl",
         )
     if variant not in VALID_LATERAL_MASS_VARIANTS:
         raise ValidationError(
             f"Invalid variant '{variant}'. "
             f"Must be one of: {', '.join(sorted(VALID_LATERAL_MASS_VARIANTS))}",
             "variant",
-            variant,
+            variant or "magerl",
         )
     return variant
 
@@ -1529,7 +1529,7 @@ def plan_cervical_screws(
             safe_va_id,
             diameter,
             length,
-            variant,
+            variant or "magerl",
         )
     elif technique == "transarticular":
         python_code = _build_transarticular_code(

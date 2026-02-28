@@ -786,7 +786,7 @@ def _build_cord_compression_code(
 
     registration_code = ""
     if has_t1:
-        registration_code = _build_registration_check_code(safe_t1_id, safe_t2_id)
+        registration_code = _build_registration_check_code(safe_t1_id or "", safe_t2_id)
 
     t1_init = ""
     if not has_t1:
