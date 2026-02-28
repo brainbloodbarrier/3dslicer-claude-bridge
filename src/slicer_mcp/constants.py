@@ -162,3 +162,59 @@ FALLBACK_SAMPLE_DATASETS = (
 # Segment Statistics Keys
 # =============================================================================
 SEGMENT_STATISTICS_VOLUME_KEY = "SegmentStatistics.volume_cc"
+
+
+# =============================================================================
+# Volume Rendering & 3D Model Export Constants
+# =============================================================================
+VOLUME_RENDERING_TIMEOUT = 60  # seconds for volume rendering setup
+MODEL_EXPORT_TIMEOUT = 120  # seconds for model export (large meshes)
+
+VALID_VR_PRESETS: frozenset[str] = frozenset(
+    {
+        "CT-AAA",
+        "CT-AAA2",
+        "CT-Bone",
+        "CT-Bones",
+        "CT-Cardiac",
+        "CT-Cardiac2",
+        "CT-Cardiac3",
+        "CT-Chest-Contrast-Enhanced",
+        "CT-Chest-Vasculature",
+        "CT-Coronary-Arteries",
+        "CT-Coronary-Arteries-2",
+        "CT-Coronary-Arteries-3",
+        "CT-Cropped-Volume-Bone",
+        "CT-Fat",
+        "CT-Liver-Vasculature",
+        "CT-Lung",
+        "CT-MIP",
+        "CT-Muscle",
+        "CT-Pulmonary-Arteries",
+        "CT-Soft-Tissue",
+        "CT-Air",
+        "MR-Angio",
+        "MR-Default",
+        "MR-MIP",
+        "MR-T2-Brain",
+    }
+)
+
+VALID_EXPORT_FORMATS: frozenset[str] = frozenset(
+    {
+        "STL",
+        "OBJ",
+        "PLY",
+        "VTK",
+    }
+)
+
+EXPORT_FORMAT_EXTENSIONS: dict[str, str] = {
+    "STL": ".stl",
+    "OBJ": ".obj",
+    "PLY": ".ply",
+    "VTK": ".vtk",
+}
+
+MAX_EXPORT_FILENAME_LENGTH = 255
+EXPORT_FILENAME_PATTERN = r"^[a-zA-Z0-9_\-. ()]+$"

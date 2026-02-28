@@ -12,6 +12,7 @@ from slicer_mcp import (
     diagnostic_tools_xray,
     instrumentation_tools,
     registration_tools,
+    rendering_tools,
     resources,
     spine_tools,
     tools,
@@ -1188,6 +1189,144 @@ def apply_transform(node_id: str, transform_node_id: str, harden: bool = False) 
         return _handle_tool_error(e, "apply_transform")
 
 
+# ==============================
+# Volume Rendering & 3D Model Export Tools
+# ==============================
+
+
+@mcp.tool()
+def enable_volume_rendering(
+    node_id: str,
+    preset: str | None = None,
+    visible: bool = True,
+) -> dict:
+    """Enable volume rendering visualization on a volume node.
+
+    Creates or updates volume rendering display for the given volume.
+    Optionally applies a named preset (e.g., 'CT-Bone', 'MR-Default').
+
+    Args:
+        node_id: MRML node ID of the scalar volume to render
+        preset: Optional volume rendering preset name
+        visible: Whether the volume rendering should be visible (default: True)
+
+    Returns:
+        Dict with success status, volume_node_id, display_node_id, preset, visible
+    """
+    try:
+        return rendering_tools.enable_volume_rendering(node_id, preset, visible)
+    except Exception as e:
+        return _handle_tool_error(e, "enable_volume_rendering")
+
+
+@mcp.tool()
+def set_volume_rendering_property(
+    node_id: str,
+    opacity_scale: float | None = None,
+    window: float | None = None,
+    level: float | None = None,
+    visible: bool | None = None,
+) -> dict:
+    """Adjust volume rendering display properties on a volume node.
+
+    Modifies opacity, window/level, or visibility of an existing volume
+    rendering display. Volume rendering must be enabled first.
+
+    Args:
+        node_id: MRML node ID of the volume with active volume rendering
+        opacity_scale: Multiplier for all opacity values (0.0 to 10.0)
+        window: Window width for window/level adjustment
+        level: Center level for window/level adjustment
+        visible: Whether the volume rendering should be visible
+
+    Returns:
+        Dict with success status, volume_node_id, display_node_id, changes_applied
+    """
+    try:
+        return rendering_tools.set_volume_rendering_property(
+            node_id, opacity_scale, window, level, visible
+        )
+    except Exception as e:
+        return _handle_tool_error(e, "set_volume_rendering_property")
+
+
+@mcp.tool()
+def export_model(
+    node_id: str,
+    output_directory: str,
+    filename: str,
+    file_format: str = "STL",
+) -> dict:
+    """Export a model node to a 3D mesh file.
+
+    Saves the model's polygon data to STL, OBJ, PLY, or VTK format.
+
+    Args:
+        node_id: MRML node ID of the model node to export
+        output_directory: Directory where the file will be saved
+        filename: Output filename without extension
+        file_format: Export format - 'STL', 'OBJ', 'PLY', or 'VTK'
+
+    Returns:
+        Dict with success status, model_node_id, output_path, format,
+            file_size_bytes, point_count, cell_count
+    """
+    try:
+        return rendering_tools.export_model(node_id, output_directory, filename, file_format)
+    except Exception as e:
+        return _handle_tool_error(e, "export_model")
+
+
+@mcp.tool()
+def segmentation_to_models(
+    segmentation_node_id: str,
+    segment_ids: list[str] | None = None,
+) -> dict:
+    """Convert segmentation segments to individual model nodes.
+
+    Creates a vtkMRMLModelNode for each segment by extracting its closed
+    surface representation. Useful for exporting segmentations to 3D files.
+
+    Args:
+        segmentation_node_id: MRML node ID of the segmentation node
+        segment_ids: Optional list of specific segment IDs to convert.
+            If None, all visible segments are converted.
+
+    Returns:
+        Dict with success status, segmentation_node_id, models list, model_count
+    """
+    try:
+        return rendering_tools.segmentation_to_models(segmentation_node_id, segment_ids)
+    except Exception as e:
+        return _handle_tool_error(e, "segmentation_to_models")
+
+
+@mcp.tool()
+def capture_3d_view(
+    output_path: str,
+    width: int | None = None,
+    height: int | None = None,
+    view_index: int = 0,
+) -> dict:
+    """Capture a screenshot of a 3D view to an image file.
+
+    Renders the current 3D view and saves it as PNG, JPG, BMP, or TIFF.
+
+    Args:
+        output_path: Full output file path (supports .png, .jpg, .bmp, .tiff)
+        width: Optional capture width in pixels (default: current view size)
+        height: Optional capture height in pixels (default: current view size)
+        view_index: Index of the 3D view to capture (default: 0)
+
+    Returns:
+        Dict with success status, output_path, file_size_bytes, view_index
+    """
+    try:
+        return rendering_tools.capture_3d_view(output_path, width, height, view_index)
+    except Exception as e:
+        return _handle_tool_error(e, "capture_3d_view")
+
+
 # Register Resources
 # ==================
 
@@ -1233,7 +1372,7 @@ def main():
     """Run the MCP Slicer Bridge server with stdio transport."""
     logger.info("Starting MCP Slicer Bridge server")
     logger.info(
-        "Registered 39 tools: capture_screenshot, list_scene_nodes, "
+        "Registered 44 tools: capture_screenshot, list_scene_nodes, "
         "execute_python, measure_volume, list_sample_data, load_sample_data, "
         "set_layout, import_dicom, list_dicom_studies, list_dicom_series, "
         "load_dicom_series, run_brain_extraction, measure_sagittal_balance_xray, "
@@ -1248,7 +1387,9 @@ def main():
         "classify_modic_changes, assess_disc_degeneration_mri, "
         "detect_cord_compression_mri, detect_metastatic_lesions_mri, "
         "place_landmarks, get_landmarks, register_volumes, "
-        "register_landmarks, apply_transform"
+        "register_landmarks, apply_transform, "
+        "enable_volume_rendering, set_volume_rendering_property, "
+        "export_model, segmentation_to_models, capture_3d_view"
     )
     logger.info("Registered 3 resources: slicer://scene, slicer://volumes, slicer://status")
 
