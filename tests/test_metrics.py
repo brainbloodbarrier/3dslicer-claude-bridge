@@ -150,7 +150,7 @@ class TestMetricsDisabledByDefault:
 
             # If metrics were not enabled at import time, REQUEST_DURATION is NullMetric
             # This test verifies the null object pattern is used
-            assert isinstance(REQUEST_DURATION, (NullMetric, type(REQUEST_DURATION)))
+            assert isinstance(REQUEST_DURATION, NullMetric | type(REQUEST_DURATION))
         finally:
             # Restore env var
             if env_backup is not None:

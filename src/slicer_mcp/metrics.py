@@ -67,18 +67,22 @@ if METRICS_ENABLED:
 
         logger.info("Metrics collection enabled (prometheus_client)")
 
-        REQUEST_DURATION = Histogram(
+        REQUEST_DURATION: "Histogram | NullMetric" = Histogram(
             "slicer_request_duration_seconds",
             "Request duration in seconds",
             ["operation"],
             buckets=(0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0),
         )
 
-        REQUEST_TOTAL = Counter("slicer_request_total", "Total requests", ["operation", "status"])
+        REQUEST_TOTAL: "Counter | NullMetric" = Counter(
+            "slicer_request_total", "Total requests", ["operation", "status"]
+        )
 
-        RETRY_TOTAL = Counter("slicer_retry_total", "Total retry attempts", ["operation"])
+        RETRY_TOTAL: "Counter | NullMetric" = Counter(
+            "slicer_retry_total", "Total retry attempts", ["operation"]
+        )
 
-        CIRCUIT_BREAKER_STATE = Gauge(
+        CIRCUIT_BREAKER_STATE: "Gauge | NullMetric" = Gauge(
             "slicer_circuit_breaker_state",
             "Circuit breaker state (0=closed, 1=half-open, 2=open)",
             ["breaker_name"],
@@ -97,18 +101,18 @@ if METRICS_ENABLED:
             "Install with: pip install prometheus_client"
         )
         METRICS_ENABLED = False
-        REQUEST_DURATION = NullMetric()
-        REQUEST_TOTAL = NullMetric()
-        RETRY_TOTAL = NullMetric()
-        CIRCUIT_BREAKER_STATE = NullMetric()
+        REQUEST_DURATION = NullMetric()  # type: ignore[assignment]
+        REQUEST_TOTAL = NullMetric()  # type: ignore[assignment]
+        RETRY_TOTAL = NullMetric()  # type: ignore[assignment]
+        CIRCUIT_BREAKER_STATE = NullMetric()  # type: ignore[assignment]
         CIRCUIT_STATE_VALUES = {}
 
 else:
     # Metrics disabled - use null objects
-    REQUEST_DURATION = NullMetric()
-    REQUEST_TOTAL = NullMetric()
-    RETRY_TOTAL = NullMetric()
-    CIRCUIT_BREAKER_STATE = NullMetric()
+    REQUEST_DURATION = NullMetric()  # type: ignore[assignment]
+    REQUEST_TOTAL = NullMetric()  # type: ignore[assignment]
+    RETRY_TOTAL = NullMetric()  # type: ignore[assignment]
+    CIRCUIT_BREAKER_STATE = NullMetric()  # type: ignore[assignment]
     CIRCUIT_STATE_VALUES = {}
 
 

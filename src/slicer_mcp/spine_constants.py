@@ -86,6 +86,7 @@ TOTALSEGMENTATOR_VERTEBRA_MAP: dict[str, str] = {
     "vertebrae_L3": "L3",
     "vertebrae_L4": "L4",
     "vertebrae_L5": "L5",
+    "vertebrae_S1": "S1",
 }
 
 # TotalSegmentator disc labels
@@ -107,7 +108,7 @@ TOTALSEG_TASK_FULL = "total"
 # Segmentation Timeout
 # =============================================================================
 
-SPINE_SEGMENTATION_TIMEOUT = 300  # 5 minutes for TotalSegmentator spine tasks
+SPINE_SEGMENTATION_TIMEOUT = 600  # 10 minutes for TotalSegmentator spine tasks (CPU via Rosetta 2)
 
 
 # =============================================================================

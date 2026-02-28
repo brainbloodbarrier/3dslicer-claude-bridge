@@ -122,3 +122,8 @@ The `/slicer/exec` endpoint must be explicitly enabled in Slicer (Modules > Deve
 | Performance benchmarks | [ref/benchmarks.md](ref/benchmarks.md) |
 | FastMCP framework | [ref/fastmcp.md](ref/fastmcp.md) |
 | Troubleshooting | [ref/troubleshooting.md](ref/troubleshooting.md) |
+
+## Agent Orchestration Guidelines
+- **Scope First:** Use `find`, `grep`, or `lsp` to pinpoint exactly where changes belong.
+- **Parallelize:** Obsessively use the Task tool to run `explore` (for discovery) or `reviewer` / `code-simplifier` / `pr-test-analyzer` (for validation) subagents in parallel.
+- **Isolate Code:** Subagents must be given precise context (files to change, exact rules) because they lack history.

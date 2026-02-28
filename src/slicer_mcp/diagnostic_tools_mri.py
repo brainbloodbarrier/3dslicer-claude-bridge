@@ -45,9 +45,11 @@ from slicer_mcp.spine_constants import (
     REGION_VERTEBRAE,
     SPINAL_CANAL_AP_DIAMETER,
     SPINAL_CANAL_STENOSIS_ABSOLUTE,
+    SPINE_SEGMENTATION_TIMEOUT,
     TOTALSEGMENTATOR_DISC_MAP,
     TOTALSEGMENTATOR_VERTEBRA_MAP,
 )
+from slicer_mcp.spine_tools import _build_totalseg_subprocess_block
 from slicer_mcp.tools import ValidationError, _parse_json_result, validate_mrml_node_id
 
 logger = logging.getLogger("slicer-mcp")
@@ -155,33 +157,31 @@ if origin_diff > 1.0 or spacing_diff > 0.01:
 """
 
 
-def _build_totalseg_spine_code(safe_volume_id: str, region: str) -> str:
+def _build_totalseg_spine_code(safe_volume_id: str, safe_seg_id: str | None = None) -> str:
     """Build Python code for TotalSegmentator spine segmentation in MRI mode.
 
+    When ``safe_seg_id`` is provided, the code loads the existing segmentation
+    node.  When omitted, TotalSegmentator runs as a subprocess with the
+    ``resource_tracker`` hang workaround (CPU/Rosetta 2 compatible).
+
     Args:
-        safe_volume_id: JSON-escaped volume node ID (reference volume for segmentation)
-        region: Spine region to segment
+        safe_volume_id: JSON-escaped volume node ID (reference volume)
+        safe_seg_id: JSON-escaped segmentation node ID or None
 
     Returns:
-        Python code string for TotalSegmentator execution
+        Python code string for Slicer execution
     """
+    seg_block = f"seg_node_id = {safe_seg_id}" if safe_seg_id else "seg_node_id = None"
+    auto_seg = _build_totalseg_subprocess_block("_mri_volume", "seg_node", "total_mr")
+
     return f"""
 # --- TotalSegmentator spine segmentation (MRI mode) ---
-seg_node = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLSegmentationNode')
-safe_region = {json.dumps(region)}
-seg_node.SetName('SpineSegmentation_' + safe_region)
+_mri_volume = slicer.mrmlScene.GetNodeByID({safe_volume_id})
+if not _mri_volume:
+    raise ValueError(f"MRI volume not found: {{{safe_volume_id}}}")
+{seg_block}
 
-try:
-    import TotalSegmentator
-    tsLogic = TotalSegmentator.TotalSegmentatorLogic()
-    tsLogic.process(
-        inputVolume=slicer.mrmlScene.GetNodeByID({safe_volume_id}),
-        outputSegmentation=seg_node,
-        task='total_mr',
-        quality='fast',
-    )
-except Exception as ts_err:
-    raise ValueError(f"TotalSegmentator failed: {{ts_err}}")
+{auto_seg}
 """
 
 
@@ -265,13 +265,16 @@ def compute_signal_ratio(signal_value, reference_value):
 # =============================================================================
 
 
-def _build_modic_analysis_code(safe_t1_id: str, safe_t2_id: str, region: str) -> str:
+def _build_modic_analysis_code(
+    safe_t1_id: str, safe_t2_id: str, region: str, safe_seg_id: str | None = None
+) -> str:
     """Build Python code for Modic endplate change classification.
 
     Args:
         safe_t1_id: JSON-escaped T1 volume node ID
         safe_t2_id: JSON-escaped T2 volume node ID
         region: Spine region to analyze
+        safe_seg_id: JSON-escaped segmentation node ID or None
 
     Returns:
         Complete Python code string for Slicer execution
@@ -294,7 +297,7 @@ import numpy as np
 
 {_build_registration_check_code(safe_t1_id, safe_t2_id)}
 
-{_build_totalseg_spine_code(safe_t1_id, region)}
+{_build_totalseg_spine_code(safe_t1_id, safe_seg_id)}
 
 # --- Modic endplate analysis ---
 vertebrae_map = {json.dumps(ts_vertebrae)}
@@ -403,8 +406,9 @@ for ts_disc_label, disc_name in disc_map.items():
             'mixed_pattern': mixed_pattern,
         }})
 
-# Clean up
-slicer.mrmlScene.RemoveNode(seg_node)
+# Clean up auto-created segmentation (keep if user-provided)
+if not _seg_was_provided:
+    slicer.mrmlScene.RemoveNode(seg_node)
 
 result = {{
     'success': True,
@@ -440,6 +444,7 @@ def classify_modic_changes(
     t1_node_id: str,
     t2_node_id: str,
     region: str = "lumbar",
+    segmentation_node_id: str | None = None,
 ) -> dict[str, Any]:
     """Classify Modic endplate changes using T1 and T2 MRI sequences.
 
@@ -455,9 +460,15 @@ def classify_modic_changes(
         t1_node_id: MRML node ID of T1-weighted volume
         t2_node_id: MRML node ID of T2-weighted volume
         region: Spine region - "cervical", "thoracic", or "lumbar"
+        segmentation_node_id: MRML node ID of existing segmentation (optional;
+            runs TotalSegmentator if not provided)
 
     Returns:
         Dict with per-level Modic classification, signal ratios, and summary
+
+    Tip:
+        Run ``segment_spine`` once and pass its ``output_segmentation_id``
+        as ``segmentation_node_id`` to skip auto-segmentation (~10x faster).
 
     Raises:
         ValidationError: If input parameters are invalid
@@ -466,16 +477,20 @@ def classify_modic_changes(
     t1_node_id = validate_mrml_node_id(t1_node_id)
     t2_node_id = validate_mrml_node_id(t2_node_id)
     region = _validate_mri_region(region)
+    if segmentation_node_id is not None:
+        segmentation_node_id = validate_mrml_node_id(segmentation_node_id)
 
     client = get_client()
 
     safe_t1_id = json.dumps(t1_node_id)
     safe_t2_id = json.dumps(t2_node_id)
+    safe_seg_id = json.dumps(segmentation_node_id) if segmentation_node_id else None
 
-    python_code = _build_modic_analysis_code(safe_t1_id, safe_t2_id, region)
+    python_code = _build_modic_analysis_code(safe_t1_id, safe_t2_id, region, safe_seg_id)
 
+    timeout = MRI_ANALYSIS_TIMEOUT if segmentation_node_id else SPINE_SEGMENTATION_TIMEOUT
     try:
-        exec_result = client.exec_python(python_code, timeout=MRI_ANALYSIS_TIMEOUT)
+        exec_result = client.exec_python(python_code, timeout=timeout)
         result_data = _parse_json_result(exec_result.get("result", ""), "Modic classification")
         logger.info(
             f"Modic classification completed: region={region}, "
@@ -493,7 +508,9 @@ def classify_modic_changes(
 # =============================================================================
 
 
-def _build_pfirrmann_analysis_code(safe_t2_id: str, region: str) -> str:
+def _build_pfirrmann_analysis_code(
+    safe_t2_id: str, region: str, safe_seg_id: str | None = None
+) -> str:
     """Build Python code for Pfirrmann disc degeneration grading.
 
     Args:
@@ -521,7 +538,7 @@ t2_node = slicer.mrmlScene.GetNodeByID({safe_t2_id})
 if not t2_node:
     raise ValueError(f"T2 volume not found: {{{safe_t2_id}}}")
 
-{_build_totalseg_spine_code(safe_t2_id, region)}
+{_build_totalseg_spine_code(safe_t2_id, safe_seg_id)}
 
 disc_map = {json.dumps(region_discs)}
 pfirrmann_descriptions = {json.dumps(PFIRRMANN_DESCRIPTIONS)}
@@ -653,8 +670,9 @@ for ts_disc_label, disc_name in disc_map.items():
         ),
     }})
 
-# Clean up
-slicer.mrmlScene.RemoveNode(seg_node)
+# Clean up auto-created segmentation (keep if user-provided)
+if not _seg_was_provided:
+    slicer.mrmlScene.RemoveNode(seg_node)
 
 result = {{
     'success': True,
@@ -679,6 +697,7 @@ __execResult = result
 def assess_disc_degeneration_mri(
     t2_node_id: str,
     region: str = "lumbar",
+    segmentation_node_id: str | None = None,
 ) -> dict[str, Any]:
     """Assess intervertebral disc degeneration using Pfirrmann grading on T2 MRI.
 
@@ -690,9 +709,15 @@ def assess_disc_degeneration_mri(
     Args:
         t2_node_id: MRML node ID of T2-weighted sagittal volume
         region: Spine region - "cervical", "thoracic", or "lumbar"
+        segmentation_node_id: MRML node ID of existing segmentation (optional;
+            runs TotalSegmentator if not provided)
 
     Returns:
         Dict with per-disc Pfirrmann grades, signal ratios, and summary
+
+    Tip:
+        Run ``segment_spine`` once and pass its ``output_segmentation_id``
+        as ``segmentation_node_id`` to skip auto-segmentation (~10x faster).
 
     Raises:
         ValidationError: If input parameters are invalid
@@ -700,6 +725,8 @@ def assess_disc_degeneration_mri(
     """
     t2_node_id = validate_mrml_node_id(t2_node_id)
     region = _validate_mri_region(region)
+    if segmentation_node_id is not None:
+        segmentation_node_id = validate_mrml_node_id(segmentation_node_id)
 
     if region not in DISC_SUPPORTED_REGIONS:
         raise ValidationError(
@@ -712,11 +739,13 @@ def assess_disc_degeneration_mri(
     client = get_client()
 
     safe_t2_id = json.dumps(t2_node_id)
+    safe_seg_id = json.dumps(segmentation_node_id) if segmentation_node_id else None
 
-    python_code = _build_pfirrmann_analysis_code(safe_t2_id, region)
+    python_code = _build_pfirrmann_analysis_code(safe_t2_id, region, safe_seg_id)
 
+    timeout = MRI_ANALYSIS_TIMEOUT if segmentation_node_id else SPINE_SEGMENTATION_TIMEOUT
     try:
-        exec_result = client.exec_python(python_code, timeout=MRI_ANALYSIS_TIMEOUT)
+        exec_result = client.exec_python(python_code, timeout=timeout)
         result_data = _parse_json_result(exec_result.get("result", ""), "Pfirrmann grading")
         logger.info(
             f"Pfirrmann grading completed: region={region}, "
@@ -734,7 +763,9 @@ def assess_disc_degeneration_mri(
 # =============================================================================
 
 
-def _build_cord_compression_code(safe_t2_id: str, safe_t1_id: str | None, region: str) -> str:
+def _build_cord_compression_code(
+    safe_t2_id: str, safe_t1_id: str | None, region: str, safe_seg_id: str | None = None
+) -> str:
     """Build Python code for spinal cord compression detection.
 
     Args:
@@ -755,7 +786,7 @@ def _build_cord_compression_code(safe_t2_id: str, safe_t1_id: str | None, region
 
     registration_code = ""
     if has_t1:
-        registration_code = _build_registration_check_code(safe_t1_id, safe_t2_id)
+        registration_code = _build_registration_check_code(safe_t1_id or "", safe_t2_id)
 
     t1_init = ""
     if not has_t1:
@@ -779,7 +810,7 @@ if not t2_node:
 {t1_init}
 {registration_code}
 
-{_build_totalseg_spine_code(safe_t2_id, region)}
+{_build_totalseg_spine_code(safe_t2_id, safe_seg_id)}
 
 canal_normal_min = {canal_normal[0]}
 canal_normal_max = {canal_normal[1]}
@@ -949,8 +980,9 @@ for vert_name, ts_label in vertebrae_map.items():
 
     levels.append(level_data)
 
-# Clean up
-slicer.mrmlScene.RemoveNode(seg_node)
+# Clean up auto-created segmentation (keep if user-provided)
+if not _seg_was_provided:
+    slicer.mrmlScene.RemoveNode(seg_node)
 
 # Overall assessment
 worst_stenosis = 'normal'
@@ -994,6 +1026,7 @@ def detect_cord_compression_mri(
     t2_node_id: str,
     t1_node_id: str | None = None,
     region: str = "cervical",
+    segmentation_node_id: str | None = None,
 ) -> dict[str, Any]:
     """Detect spinal cord compression on MRI.
 
@@ -1006,9 +1039,15 @@ def detect_cord_compression_mri(
         t2_node_id: MRML node ID of T2-weighted volume
         t1_node_id: MRML node ID of T1-weighted volume (optional, for reversibility)
         region: Spine region - "cervical", "thoracic", or "lumbar"
+        segmentation_node_id: MRML node ID of existing segmentation (optional;
+            runs TotalSegmentator if not provided)
 
     Returns:
         Dict with per-level compression metrics, stenosis grades, and myelopathy status
+
+    Tip:
+        Run ``segment_spine`` once and pass its ``output_segmentation_id``
+        as ``segmentation_node_id`` to skip auto-segmentation (~10x faster).
 
     Raises:
         ValidationError: If input parameters are invalid
@@ -1017,17 +1056,21 @@ def detect_cord_compression_mri(
     t2_node_id = validate_mrml_node_id(t2_node_id)
     if t1_node_id is not None:
         t1_node_id = validate_mrml_node_id(t1_node_id)
+    if segmentation_node_id is not None:
+        segmentation_node_id = validate_mrml_node_id(segmentation_node_id)
     region = _validate_mri_region(region)
 
     client = get_client()
 
     safe_t2_id = json.dumps(t2_node_id)
     safe_t1_id = json.dumps(t1_node_id) if t1_node_id else None
+    safe_seg_id = json.dumps(segmentation_node_id) if segmentation_node_id else None
 
-    python_code = _build_cord_compression_code(safe_t2_id, safe_t1_id, region)
+    python_code = _build_cord_compression_code(safe_t2_id, safe_t1_id, region, safe_seg_id)
 
+    timeout = MRI_ANALYSIS_TIMEOUT if segmentation_node_id else SPINE_SEGMENTATION_TIMEOUT
     try:
-        exec_result = client.exec_python(python_code, timeout=MRI_ANALYSIS_TIMEOUT)
+        exec_result = client.exec_python(python_code, timeout=timeout)
         result_data = _parse_json_result(
             exec_result.get("result", ""), "cord compression detection"
         )
@@ -1048,7 +1091,9 @@ def detect_cord_compression_mri(
 # =============================================================================
 
 
-def _build_metastasis_detection_code(safe_t1_id: str, safe_t2_stir_id: str, region: str) -> str:
+def _build_metastasis_detection_code(
+    safe_t1_id: str, safe_t2_stir_id: str, region: str, safe_seg_id: str | None = None
+) -> str:
     """Build Python code for metastatic lesion detection.
 
     Args:
@@ -1074,7 +1119,7 @@ import numpy as np
 
 {_build_registration_check_code(safe_t1_id, safe_t2_stir_id)}
 
-{_build_totalseg_spine_code(safe_t1_id, region)}
+{_build_totalseg_spine_code(safe_t1_id, safe_seg_id)}
 
 vertebrae_map = {json.dumps(ts_vertebrae)}
 
@@ -1181,8 +1226,9 @@ for vert_name, ts_label in vertebrae_map.items():
     if suspicious:
         lesions.append(vert_result)
 
-# Clean up
-slicer.mrmlScene.RemoveNode(seg_node)
+# Clean up auto-created segmentation (keep if user-provided)
+if not _seg_was_provided:
+    slicer.mrmlScene.RemoveNode(seg_node)
 
 result = {{
     'success': True,
@@ -1223,6 +1269,7 @@ def detect_metastatic_lesions_mri(
     t1_node_id: str,
     t2_stir_node_id: str,
     region: str = "full",
+    segmentation_node_id: str | None = None,
 ) -> dict[str, Any]:
     """Detect metastatic lesions in the spine using T1 and T2/STIR MRI.
 
@@ -1240,9 +1287,15 @@ def detect_metastatic_lesions_mri(
         t1_node_id: MRML node ID of T1-weighted volume
         t2_stir_node_id: MRML node ID of T2/STIR-weighted volume
         region: Spine region - "cervical", "thoracic", "lumbar", or "full"
+        segmentation_node_id: MRML node ID of existing segmentation (optional;
+            runs TotalSegmentator if not provided)
 
     Returns:
         Dict with per-vertebra analysis, suspicious lesions, and type summary
+
+    Tip:
+        Run ``segment_spine`` once and pass its ``output_segmentation_id``
+        as ``segmentation_node_id`` to skip auto-segmentation (~10x faster).
 
     Raises:
         ValidationError: If input parameters are invalid
@@ -1250,6 +1303,8 @@ def detect_metastatic_lesions_mri(
     """
     t1_node_id = validate_mrml_node_id(t1_node_id)
     t2_stir_node_id = validate_mrml_node_id(t2_stir_node_id)
+    if segmentation_node_id is not None:
+        segmentation_node_id = validate_mrml_node_id(segmentation_node_id)
 
     # Metastasis detection supports "full" spine region
     valid_regions = VALID_MRI_REGIONS | {"full"}
@@ -1260,10 +1315,20 @@ def detect_metastatic_lesions_mri(
             region,
         )
 
+    if region == "full" and segmentation_node_id is None:
+        raise ValidationError(
+            "Full-spine metastasis detection requires a pre-computed segmentation. "
+            "Run segment_spine first, then pass output_segmentation_id as segmentation_node_id.",
+            "segmentation_node_id",
+            "",
+        )
+
     client = get_client()
 
     safe_t1_id = json.dumps(t1_node_id)
     safe_t2_stir_id = json.dumps(t2_stir_node_id)
+    safe_seg_id = json.dumps(segmentation_node_id) if segmentation_node_id else None
+    timeout = MRI_ANALYSIS_TIMEOUT if segmentation_node_id else SPINE_SEGMENTATION_TIMEOUT
 
     if region == "full":
         # Split full-spine scan into sub-regions to avoid timeout
@@ -1273,9 +1338,11 @@ def detect_metastatic_lesions_mri(
         registration_performed = False
 
         for sub_region in sub_regions:
-            python_code = _build_metastasis_detection_code(safe_t1_id, safe_t2_stir_id, sub_region)
+            python_code = _build_metastasis_detection_code(
+                safe_t1_id, safe_t2_stir_id, sub_region, safe_seg_id
+            )
             try:
-                exec_result = client.exec_python(python_code, timeout=MRI_ANALYSIS_TIMEOUT)
+                exec_result = client.exec_python(python_code, timeout=timeout)
                 sub_result = _parse_json_result(
                     exec_result.get("result", ""), f"metastatic lesion detection ({sub_region})"
                 )
@@ -1318,10 +1385,10 @@ def detect_metastatic_lesions_mri(
         )
         return result_data
 
-    python_code = _build_metastasis_detection_code(safe_t1_id, safe_t2_stir_id, region)
+    python_code = _build_metastasis_detection_code(safe_t1_id, safe_t2_stir_id, region, safe_seg_id)
 
     try:
-        exec_result = client.exec_python(python_code, timeout=MRI_ANALYSIS_TIMEOUT)
+        exec_result = client.exec_python(python_code, timeout=timeout)
         result_data = _parse_json_result(
             exec_result.get("result", ""), "metastatic lesion detection"
         )

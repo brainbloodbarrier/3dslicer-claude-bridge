@@ -11,6 +11,8 @@ from slicer_mcp import (
     diagnostic_tools_mri,
     diagnostic_tools_xray,
     instrumentation_tools,
+    registration_tools,
+    rendering_tools,
     resources,
     spine_tools,
     tools,
@@ -913,6 +915,7 @@ def classify_modic_changes(
     t1_node_id: str,
     t2_node_id: str,
     region: str = "lumbar",
+    segmentation_node_id: str | None = None,
 ) -> dict:
     """Classify Modic endplate changes using T1 and T2 MRI sequences.
 
@@ -930,12 +933,16 @@ def classify_modic_changes(
         t1_node_id: MRML node ID of T1-weighted volume
         t2_node_id: MRML node ID of T2-weighted volume
         region: Spine region - "cervical", "thoracic", or "lumbar"
+        segmentation_node_id: MRML node ID of existing segmentation (optional;
+            runs TotalSegmentator if not provided)
 
     Returns:
         Dict with per-level Modic type, signal ratios, mixed patterns, and summary counts
     """
     try:
-        return diagnostic_tools_mri.classify_modic_changes(t1_node_id, t2_node_id, region)
+        return diagnostic_tools_mri.classify_modic_changes(
+            t1_node_id, t2_node_id, region, segmentation_node_id
+        )
     except Exception as e:
         return _handle_tool_error(e, "classify_modic_changes")
 
@@ -944,6 +951,7 @@ def classify_modic_changes(
 def assess_disc_degeneration_mri(
     t2_node_id: str,
     region: str = "lumbar",
+    segmentation_node_id: str | None = None,
 ) -> dict:
     """Assess intervertebral disc degeneration using Pfirrmann grading on T2 MRI.
 
@@ -955,13 +963,17 @@ def assess_disc_degeneration_mri(
     Args:
         t2_node_id: MRML node ID of T2-weighted sagittal volume
         region: Spine region - "cervical", "thoracic", or "lumbar"
+        segmentation_node_id: MRML node ID of existing segmentation (optional;
+            runs TotalSegmentator if not provided)
 
     Returns:
         Dict with per-disc Pfirrmann grade, signal ratio to CSF,
             homogeneity, height loss, and grade summary
     """
     try:
-        return diagnostic_tools_mri.assess_disc_degeneration_mri(t2_node_id, region)
+        return diagnostic_tools_mri.assess_disc_degeneration_mri(
+            t2_node_id, region, segmentation_node_id
+        )
     except Exception as e:
         return _handle_tool_error(e, "assess_disc_degeneration_mri")
 
@@ -971,6 +983,7 @@ def detect_cord_compression_mri(
     t2_node_id: str,
     t1_node_id: str | None = None,
     region: str = "cervical",
+    segmentation_node_id: str | None = None,
 ) -> dict:
     """Detect spinal cord compression on MRI with optional myelopathy assessment.
 
@@ -984,13 +997,17 @@ def detect_cord_compression_mri(
         t2_node_id: MRML node ID of T2-weighted volume
         t1_node_id: MRML node ID of T1-weighted volume (optional, for reversibility)
         region: Spine region - "cervical", "thoracic", or "lumbar"
+        segmentation_node_id: MRML node ID of existing segmentation (optional;
+            runs TotalSegmentator if not provided)
 
     Returns:
         Dict with per-level compression metrics, stenosis grades,
             myelopathy status, and MSCC assessment
     """
     try:
-        return diagnostic_tools_mri.detect_cord_compression_mri(t2_node_id, t1_node_id, region)
+        return diagnostic_tools_mri.detect_cord_compression_mri(
+            t2_node_id, t1_node_id, region, segmentation_node_id
+        )
     except Exception as e:
         return _handle_tool_error(e, "detect_cord_compression_mri")
 
@@ -1000,6 +1017,7 @@ def detect_metastatic_lesions_mri(
     t1_node_id: str,
     t2_stir_node_id: str,
     region: str = "full",
+    segmentation_node_id: str | None = None,
 ) -> dict:
     """Detect metastatic lesions in the spine using T1 and T2/STIR MRI.
 
@@ -1017,6 +1035,8 @@ def detect_metastatic_lesions_mri(
         t1_node_id: MRML node ID of T1-weighted volume
         t2_stir_node_id: MRML node ID of T2/STIR-weighted volume
         region: Spine region - "cervical", "thoracic", "lumbar", or "full"
+        segmentation_node_id: MRML node ID of existing segmentation (optional;
+            runs TotalSegmentator if not provided)
 
     Returns:
         Dict with per-vertebra signal analysis, suspicious lesions,
@@ -1024,10 +1044,287 @@ def detect_metastatic_lesions_mri(
     """
     try:
         return diagnostic_tools_mri.detect_metastatic_lesions_mri(
-            t1_node_id, t2_stir_node_id, region
+            t1_node_id, t2_stir_node_id, region, segmentation_node_id
         )
     except Exception as e:
         return _handle_tool_error(e, "detect_metastatic_lesions_mri")
+
+
+# Registration & Landmark Tools
+# ==============================
+
+
+@mcp.tool()
+def place_landmarks(name: str, points: list[list[float]], labels: list[str] | None = None) -> dict:
+    """Create a markup fiducial node with named control points in 3D Slicer.
+
+    Places a set of RAS-coordinate landmarks as a vtkMRMLMarkupsFiducialNode.
+    Useful for defining anatomical landmarks for registration or measurement.
+
+    Args:
+        name: Display name for the markup node (non-empty, max 64 chars)
+        points: List of [x, y, z] RAS coordinates for each control point
+        labels: Optional list of labels for each point (must match points length).
+            Labels must match the pattern [A-Za-z0-9_-]+.
+
+    Returns:
+        Dict with success status, node_id, node_name, and point_count
+    """
+    try:
+        return registration_tools.place_landmarks(name, points, labels)
+    except Exception as e:
+        return _handle_tool_error(e, "place_landmarks")
+
+
+@mcp.tool()
+def get_landmarks(node_id: str) -> dict:
+    """Retrieve all control points from a markup fiducial node.
+
+    Args:
+        node_id: MRML node ID of the markups fiducial node
+            (e.g., "vtkMRMLMarkupsFiducialNode1")
+
+    Returns:
+        Dict with success status, node_id, node_name, point_count,
+            and points list (index, label, position_ras)
+    """
+    try:
+        return registration_tools.get_landmarks(node_id)
+    except Exception as e:
+        return _handle_tool_error(e, "get_landmarks")
+
+
+@mcp.tool()
+def register_volumes(
+    fixed_node_id: str,
+    moving_node_id: str,
+    transform_type: str = "Rigid",
+    init_mode: str = "useMomentsAlign",
+    sampling_percentage: float = 0.01,
+    histogram_match: bool = False,
+    create_resampled: bool = False,
+) -> dict:
+    """Perform intensity-based volume registration using BRAINSFit.
+
+    LONG OPERATION: May take up to 5 minutes depending on volume size and transform type.
+
+    Aligns a moving volume to a fixed volume using intensity-based optimization.
+    Supports rigid, affine, and deformable (BSpline) transforms.
+
+    Args:
+        fixed_node_id: MRML node ID of the fixed (reference) volume
+        moving_node_id: MRML node ID of the moving volume to be registered
+        transform_type: Registration transform - "Rigid", "ScaleVersor3D",
+            "ScaleSkewVersor3D", "Affine", or "BSpline"
+        init_mode: Initialization method - "useMomentsAlign",
+            "useCenterOfHeadAlign", "useGeometryAlign", or "Off"
+        sampling_percentage: Fraction of voxels to sample (0.0-1.0, default 0.01)
+        histogram_match: Whether to match histograms before registration
+        create_resampled: Whether to create a resampled output volume
+
+    Returns:
+        Dict with success status, transform_node_id, transform_node_name,
+            transform_type, and optional resampled_node_id
+    """
+    try:
+        return registration_tools.register_volumes(
+            fixed_node_id,
+            moving_node_id,
+            transform_type,
+            init_mode,
+            sampling_percentage,
+            histogram_match,
+            create_resampled,
+        )
+    except Exception as e:
+        return _handle_tool_error(e, "register_volumes")
+
+
+@mcp.tool()
+def register_landmarks(
+    fixed_landmarks_id: str,
+    moving_landmarks_id: str,
+    transform_type: str = "Rigid",
+) -> dict:
+    """Perform landmark-based registration using paired fiducial points.
+
+    Computes a spatial transform that aligns moving landmarks to fixed landmarks.
+    Requires matching control points in both markup nodes.
+
+    Args:
+        fixed_landmarks_id: MRML node ID of the fixed (reference) landmarks
+        moving_landmarks_id: MRML node ID of the moving landmarks
+        transform_type: Registration transform - "Rigid", "Similarity", or "Affine"
+
+    Returns:
+        Dict with success status, transform_node_id, transform_node_name,
+            and transform_type
+    """
+    try:
+        return registration_tools.register_landmarks(
+            fixed_landmarks_id, moving_landmarks_id, transform_type
+        )
+    except Exception as e:
+        return _handle_tool_error(e, "register_landmarks")
+
+
+@mcp.tool()
+def apply_transform(node_id: str, transform_node_id: str, harden: bool = False) -> dict:
+    """Apply a spatial transform to any transformable node.
+
+    Sets the transform on the node. If harden is True, bakes the transform
+    into the node's data so the node moves to its transformed position permanently.
+
+    Args:
+        node_id: MRML node ID of the node to transform
+        transform_node_id: MRML node ID of the transform to apply
+        harden: If True, permanently bake the transform into the node data
+
+    Returns:
+        Dict with success status, node_id, transform_node_id, and hardened flag
+    """
+    try:
+        return registration_tools.apply_transform(node_id, transform_node_id, harden)
+    except Exception as e:
+        return _handle_tool_error(e, "apply_transform")
+
+
+# ==============================
+# Volume Rendering & 3D Model Export Tools
+# ==============================
+
+
+@mcp.tool()
+def enable_volume_rendering(
+    node_id: str,
+    preset: str | None = None,
+    visible: bool = True,
+) -> dict:
+    """Enable volume rendering visualization on a volume node.
+
+    Creates or updates volume rendering display for the given volume.
+    Optionally applies a named preset (e.g., 'CT-Bone', 'MR-Default').
+
+    Args:
+        node_id: MRML node ID of the scalar volume to render
+        preset: Optional volume rendering preset name
+        visible: Whether the volume rendering should be visible (default: True)
+
+    Returns:
+        Dict with success status, volume_node_id, display_node_id, preset, visible
+    """
+    try:
+        return rendering_tools.enable_volume_rendering(node_id, preset, visible)
+    except Exception as e:
+        return _handle_tool_error(e, "enable_volume_rendering")
+
+
+@mcp.tool()
+def set_volume_rendering_property(
+    node_id: str,
+    opacity_scale: float | None = None,
+    window: float | None = None,
+    level: float | None = None,
+    visible: bool | None = None,
+) -> dict:
+    """Adjust volume rendering display properties on a volume node.
+
+    Modifies opacity, window/level, or visibility of an existing volume
+    rendering display. Volume rendering must be enabled first.
+
+    Args:
+        node_id: MRML node ID of the volume with active volume rendering
+        opacity_scale: Multiplier for all opacity values (0.0 to 10.0)
+        window: Window width for window/level adjustment
+        level: Center level for window/level adjustment
+        visible: Whether the volume rendering should be visible
+
+    Returns:
+        Dict with success status, volume_node_id, display_node_id, changes_applied
+    """
+    try:
+        return rendering_tools.set_volume_rendering_property(
+            node_id, opacity_scale, window, level, visible
+        )
+    except Exception as e:
+        return _handle_tool_error(e, "set_volume_rendering_property")
+
+
+@mcp.tool()
+def export_model(
+    node_id: str,
+    output_directory: str,
+    filename: str,
+    file_format: str = "STL",
+) -> dict:
+    """Export a model node to a 3D mesh file.
+
+    Saves the model's polygon data to STL, OBJ, PLY, or VTK format.
+
+    Args:
+        node_id: MRML node ID of the model node to export
+        output_directory: Directory where the file will be saved
+        filename: Output filename without extension
+        file_format: Export format - 'STL', 'OBJ', 'PLY', or 'VTK'
+
+    Returns:
+        Dict with success status, model_node_id, output_path, format,
+            file_size_bytes, point_count, cell_count
+    """
+    try:
+        return rendering_tools.export_model(node_id, output_directory, filename, file_format)
+    except Exception as e:
+        return _handle_tool_error(e, "export_model")
+
+
+@mcp.tool()
+def segmentation_to_models(
+    segmentation_node_id: str,
+    segment_ids: list[str] | None = None,
+) -> dict:
+    """Convert segmentation segments to individual model nodes.
+
+    Creates a vtkMRMLModelNode for each segment by extracting its closed
+    surface representation. Useful for exporting segmentations to 3D files.
+
+    Args:
+        segmentation_node_id: MRML node ID of the segmentation node
+        segment_ids: Optional list of specific segment IDs to convert.
+            If None, all visible segments are converted.
+
+    Returns:
+        Dict with success status, segmentation_node_id, models list, model_count
+    """
+    try:
+        return rendering_tools.segmentation_to_models(segmentation_node_id, segment_ids)
+    except Exception as e:
+        return _handle_tool_error(e, "segmentation_to_models")
+
+
+@mcp.tool()
+def capture_3d_view(
+    output_path: str,
+    width: int | None = None,
+    height: int | None = None,
+    view_index: int = 0,
+) -> dict:
+    """Capture a screenshot of a 3D view to an image file.
+
+    Renders the current 3D view and saves it as PNG, JPG, BMP, or TIFF.
+
+    Args:
+        output_path: Full output file path (supports .png, .jpg, .bmp, .tiff)
+        width: Optional capture width in pixels (default: current view size)
+        height: Optional capture height in pixels (default: current view size)
+        view_index: Index of the 3D view to capture (default: 0)
+
+    Returns:
+        Dict with success status, output_path, file_size_bytes, view_index
+    """
+    try:
+        return rendering_tools.capture_3d_view(output_path, width, height, view_index)
+    except Exception as e:
+        return _handle_tool_error(e, "capture_3d_view")
 
 
 # Register Resources
@@ -1075,7 +1372,7 @@ def main():
     """Run the MCP Slicer Bridge server with stdio transport."""
     logger.info("Starting MCP Slicer Bridge server")
     logger.info(
-        "Registered 34 tools: capture_screenshot, list_scene_nodes, "
+        "Registered 44 tools: capture_screenshot, list_scene_nodes, "
         "execute_python, measure_volume, list_sample_data, load_sample_data, "
         "set_layout, import_dicom, list_dicom_studies, list_dicom_series, "
         "load_dicom_series, run_brain_extraction, measure_sagittal_balance_xray, "
@@ -1088,7 +1385,11 @@ def main():
         "measure_ccj_angles, measure_spine_alignment, segment_spine, "
         "segment_vertebral_artery, analyze_bone_quality, "
         "classify_modic_changes, assess_disc_degeneration_mri, "
-        "detect_cord_compression_mri, detect_metastatic_lesions_mri"
+        "detect_cord_compression_mri, detect_metastatic_lesions_mri, "
+        "place_landmarks, get_landmarks, register_volumes, "
+        "register_landmarks, apply_transform, "
+        "enable_volume_rendering, set_volume_rendering_property, "
+        "export_model, segmentation_to_models, capture_3d_view"
     )
     logger.info("Registered 3 resources: slicer://scene, slicer://volumes, slicer://status")
 

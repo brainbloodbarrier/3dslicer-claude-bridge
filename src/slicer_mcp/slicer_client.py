@@ -246,7 +246,7 @@ class SlicerClient:
             details.update(extra_details)
 
         # Record failure with circuit breaker (for connection-related errors)
-        if isinstance(error, (Timeout, ConnectionError)):
+        if isinstance(error, Timeout | ConnectionError):
             _slicer_circuit_breaker.record_failure()
             update_circuit_breaker_state("slicer", _slicer_circuit_breaker.state.value)
 
