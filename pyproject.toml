@@ -43,6 +43,7 @@ Changelog = "https://github.com/brainbloodbarrier/3dslicer-claude-bridge/blob/ma
 dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.21",
+    "pytest-cov>=4.0",
     "httpx>=0.24",
     "black>=23.0",
     "ruff>=0.1",
@@ -89,14 +90,6 @@ target-version = "py310"
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP"]
 ignore = []
-
-[dependency-groups]
-dev = [
-    "httpx>=0.28.1",
-    "pytest>=9.0.1",
-    "pytest-asyncio>=1.3.0",
-    "pytest-cov>=4.0",
-]
 
 [project.scripts]
 slicer-mcp = "slicer_mcp:main"

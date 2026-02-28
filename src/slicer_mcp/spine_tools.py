@@ -593,6 +593,7 @@ def endplate_vector(vertebra_data):
 measurements = {}
 reference_ranges = {}
 statuses = {}
+    warnings = []
 
 def classify(value, normal_min, normal_max, name):
     if normal_min <= value <= normal_max:
@@ -707,6 +708,10 @@ if 'L5' in vertebrae_data:
     # PT from vertical offset of hip axis to sacral endplate midpoint
     # Simplified: use approximate PT based on L5 geometry
     pt = max(0, ss - 20)  # rough approximation
+    warnings.append(
+        "Pelvic Tilt (PT) and Pelvic Incidence (PI) are rough approximations "
+        "derived from L5 geometry because true femoral head segmentations are missing"
+    )
     measurements['pelvic_tilt_deg'] = round(pt, 1)
     reference_ranges['pelvic_tilt'] = {'min': 5.0, 'max': 25.0, 'unit': 'degrees'}
     classify(pt, 5.0, 25.0, 'pelvic_tilt')
@@ -786,6 +791,7 @@ result = {
     'reference_ranges': reference_ranges,
     'statuses': statuses
 }
+    result['warnings'] = warnings
 
 __execResult = result
 """

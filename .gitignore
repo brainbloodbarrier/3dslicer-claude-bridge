@@ -62,3 +62,9 @@ Exame_*/
 *.nii
 *.nii.gz
 *.dcm
+
+# Additional IDE and Tooling caches
+.coverage
+.idea/
+.qodo/
+.serena/

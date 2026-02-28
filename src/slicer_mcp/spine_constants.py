@@ -86,6 +86,7 @@ TOTALSEGMENTATOR_VERTEBRA_MAP: dict[str, str] = {
     "vertebrae_L3": "L3",
     "vertebrae_L4": "L4",
     "vertebrae_L5": "L5",
+    "vertebrae_S1": "S1",
 }
 
 # TotalSegmentator disc labels
