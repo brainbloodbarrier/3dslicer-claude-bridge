@@ -11,6 +11,7 @@ from slicer_mcp import (
     diagnostic_tools_mri,
     diagnostic_tools_xray,
     instrumentation_tools,
+    registration_tools,
     resources,
     spine_tools,
     tools,
@@ -1048,6 +1049,145 @@ def detect_metastatic_lesions_mri(
         return _handle_tool_error(e, "detect_metastatic_lesions_mri")
 
 
+# Registration & Landmark Tools
+# ==============================
+
+
+@mcp.tool()
+def place_landmarks(name: str, points: list[list[float]], labels: list[str] | None = None) -> dict:
+    """Create a markup fiducial node with named control points in 3D Slicer.
+
+    Places a set of RAS-coordinate landmarks as a vtkMRMLMarkupsFiducialNode.
+    Useful for defining anatomical landmarks for registration or measurement.
+
+    Args:
+        name: Display name for the markup node (non-empty, max 64 chars)
+        points: List of [x, y, z] RAS coordinates for each control point
+        labels: Optional list of labels for each point (must match points length).
+            Labels must match the pattern [A-Za-z0-9_-]+.
+
+    Returns:
+        Dict with success status, node_id, node_name, and point_count
+    """
+    try:
+        return registration_tools.place_landmarks(name, points, labels)
+    except Exception as e:
+        return _handle_tool_error(e, "place_landmarks")
+
+
+@mcp.tool()
+def get_landmarks(node_id: str) -> dict:
+    """Retrieve all control points from a markup fiducial node.
+
+    Args:
+        node_id: MRML node ID of the markups fiducial node
+            (e.g., "vtkMRMLMarkupsFiducialNode1")
+
+    Returns:
+        Dict with success status, node_id, node_name, point_count,
+            and points list (index, label, position_ras)
+    """
+    try:
+        return registration_tools.get_landmarks(node_id)
+    except Exception as e:
+        return _handle_tool_error(e, "get_landmarks")
+
+
+@mcp.tool()
+def register_volumes(
+    fixed_node_id: str,
+    moving_node_id: str,
+    transform_type: str = "Rigid",
+    init_mode: str = "useMomentsAlign",
+    sampling_percentage: float = 0.01,
+    histogram_match: bool = False,
+    create_resampled: bool = False,
+) -> dict:
+    """Perform intensity-based volume registration using BRAINSFit.
+
+    LONG OPERATION: May take up to 5 minutes depending on volume size and transform type.
+
+    Aligns a moving volume to a fixed volume using intensity-based optimization.
+    Supports rigid, affine, and deformable (BSpline) transforms.
+
+    Args:
+        fixed_node_id: MRML node ID of the fixed (reference) volume
+        moving_node_id: MRML node ID of the moving volume to be registered
+        transform_type: Registration transform - "Rigid", "ScaleVersor3D",
+            "ScaleSkewVersor3D", "Affine", or "BSpline"
+        init_mode: Initialization method - "useMomentsAlign",
+            "useCenterOfHeadAlign", "useGeometryAlign", or "Off"
+        sampling_percentage: Fraction of voxels to sample (0.0-1.0, default 0.01)
+        histogram_match: Whether to match histograms before registration
+        create_resampled: Whether to create a resampled output volume
+
+    Returns:
+        Dict with success status, transform_node_id, transform_node_name,
+            transform_type, and optional resampled_node_id
+    """
+    try:
+        return registration_tools.register_volumes(
+            fixed_node_id,
+            moving_node_id,
+            transform_type,
+            init_mode,
+            sampling_percentage,
+            histogram_match,
+            create_resampled,
+        )
+    except Exception as e:
+        return _handle_tool_error(e, "register_volumes")
+
+
+@mcp.tool()
+def register_landmarks(
+    fixed_landmarks_id: str,
+    moving_landmarks_id: str,
+    transform_type: str = "Rigid",
+) -> dict:
+    """Perform landmark-based registration using paired fiducial points.
+
+    Computes a spatial transform that aligns moving landmarks to fixed landmarks.
+    Requires matching control points in both markup nodes.
+
+    Args:
+        fixed_landmarks_id: MRML node ID of the fixed (reference) landmarks
+        moving_landmarks_id: MRML node ID of the moving landmarks
+        transform_type: Registration transform - "Rigid", "Similarity", or "Affine"
+
+    Returns:
+        Dict with success status, transform_node_id, transform_node_name,
+            and transform_type
+    """
+    try:
+        return registration_tools.register_landmarks(
+            fixed_landmarks_id, moving_landmarks_id, transform_type
+        )
+    except Exception as e:
+        return _handle_tool_error(e, "register_landmarks")
+
+
+@mcp.tool()
+def apply_transform(node_id: str, transform_node_id: str, harden: bool = False) -> dict:
+    """Apply a spatial transform to any transformable node.
+
+    Sets the transform on the node. If harden is True, bakes the transform
+    into the node's data so the node moves to its transformed position permanently.
+
+    Args:
+        node_id: MRML node ID of the node to transform
+        transform_node_id: MRML node ID of the transform to apply
+        harden: If True, permanently bake the transform into the node data
+
+    Returns:
+        Dict with success status, node_id, transform_node_id, and hardened flag
+    """
+    try:
+        return registration_tools.apply_transform(node_id, transform_node_id, harden)
+    except Exception as e:
+        return _handle_tool_error(e, "apply_transform")
+
+
 # Register Resources
 # ==================
 
@@ -1093,7 +1233,7 @@ def main():
     """Run the MCP Slicer Bridge server with stdio transport."""
     logger.info("Starting MCP Slicer Bridge server")
     logger.info(
-        "Registered 34 tools: capture_screenshot, list_scene_nodes, "
+        "Registered 39 tools: capture_screenshot, list_scene_nodes, "
         "execute_python, measure_volume, list_sample_data, load_sample_data, "
         "set_layout, import_dicom, list_dicom_studies, list_dicom_series, "
         "load_dicom_series, run_brain_extraction, measure_sagittal_balance_xray, "
@@ -1106,7 +1246,9 @@ def main():
         "measure_ccj_angles, measure_spine_alignment, segment_spine, "
         "segment_vertebral_artery, analyze_bone_quality, "
         "classify_modic_changes, assess_disc_degeneration_mri, "
-        "detect_cord_compression_mri, detect_metastatic_lesions_mri"
+        "detect_cord_compression_mri, detect_metastatic_lesions_mri, "
+        "place_landmarks, get_landmarks, register_volumes, "
+        "register_landmarks, apply_transform"
     )
     logger.info("Registered 3 resources: slicer://scene, slicer://volumes, slicer://status")
 

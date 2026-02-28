@@ -105,6 +105,47 @@ SEGMENTATION_TIMEOUT = 180  # 3 minutes for segmentation operations
 REGISTRATION_TIMEOUT = 300  # 5 minutes for registration operations
 
 # =============================================================================
+# Registration & Landmark Constants
+# =============================================================================
+VALID_TRANSFORM_TYPES: frozenset[str] = frozenset(
+    {
+        "Rigid",
+        "ScaleVersor3D",
+        "ScaleSkewVersor3D",
+        "Affine",
+        "BSpline",
+    }
+)
+VALID_INIT_MODES: frozenset[str] = frozenset(
+    {
+        "useMomentsAlign",
+        "useCenterOfHeadAlign",
+        "useGeometryAlign",
+        "Off",
+    }
+)
+VALID_INTERPOLATION_MODES: frozenset[str] = frozenset(
+    {
+        "Linear",
+        "BSpline",
+        "WindowedSinc",
+        "NearestNeighbor",
+    }
+)
+VALID_LANDMARK_TRANSFORM_TYPES: frozenset[str] = frozenset(
+    {
+        "Rigid",
+        "Similarity",
+        "Affine",
+    }
+)
+MIN_LANDMARK_PAIRS = 3
+MAX_LANDMARK_LABEL_LENGTH = 64
+LANDMARK_LABEL_PATTERN = r"^[a-zA-Z0-9_\-. ]+$"
+DEFAULT_SAMPLING_PERCENTAGE = 0.01
+MAX_LANDMARKS = 500
+
+# =============================================================================
 # Sample Data Configuration
 # =============================================================================
 # Fallback list of common sample datasets (used when dynamic discovery fails)
