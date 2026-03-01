@@ -6,6 +6,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from slicer_mcp.diagnostic_tools_ct import (
+    _build_sins_code,
     _classify_genant,
     _classify_meyerding,
     _classify_pickhardt,
@@ -1064,3 +1065,22 @@ class TestServerRegistration:
         assert hasattr(spine_constants, "MEYERDING_THRESHOLDS")
         assert hasattr(spine_constants, "TORG_PAVLOV_THRESHOLD")
         assert hasattr(spine_constants, "SPINAL_CANAL_AP_DIAMETER")
+
+
+class TestBuildSinsCode:
+    """Tests for _build_sins_code f-string interpolation."""
+
+    def test_lesion_thresholds_are_literal_values(self) -> None:
+        """Ensure HU threshold constants are interpolated as literal integers."""
+        code = _build_sins_code(
+            safe_volume_id='"TestVolume"',
+            safe_seg_id='"TestSeg"',
+            target_levels=["L1"],
+            pain_score=1,
+        )
+        # Must contain literal numeric values
+        assert "lytic_thresh = 100" in code
+        assert "blastic_thresh = 300" in code
+        # Must NOT contain the constant names (they don't exist in Slicer)
+        assert "LESION_LYTIC_HU_THRESHOLD" not in code
+        assert "LESION_BLASTIC_HU_THRESHOLD" not in code

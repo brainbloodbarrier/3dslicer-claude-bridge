@@ -532,13 +532,14 @@ class SlicerClient:
 
         with track_request("get_screenshot"):
             try:
-                url = f"{self.base_url}/slicer/slice?view={view}"
+                url = f"{self.base_url}/slicer/slice"
+                params = {"view": view}
                 if scroll_to is not None:
-                    url += f"&scrollTo={scroll_to}"
+                    params["scrollTo"] = scroll_to
 
                 logger.debug(f"Capturing screenshot: view={view}, scroll_to={scroll_to}")
 
-                response = requests.get(url, timeout=self.timeout)
+                response = requests.get(url, params=params, timeout=self.timeout)
                 response.raise_for_status()
 
                 image_bytes = response.content
@@ -578,12 +579,13 @@ class SlicerClient:
         with track_request("get_3d_screenshot"):
             try:
                 url = f"{self.base_url}/slicer/threeD"
+                params = {}
                 if look_from_axis:
-                    url += f"?lookFromAxis={look_from_axis}"
+                    params["lookFromAxis"] = look_from_axis
 
                 logger.debug(f"Capturing 3D screenshot: look_from_axis={look_from_axis}")
 
-                response = requests.get(url, timeout=self.timeout)
+                response = requests.get(url, params=params, timeout=self.timeout)
                 response.raise_for_status()
 
                 image_bytes = response.content

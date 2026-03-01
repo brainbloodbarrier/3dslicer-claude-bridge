@@ -19,6 +19,8 @@ from slicer_mcp.constants import (
 from slicer_mcp.slicer_client import SlicerConnectionError, get_client
 from slicer_mcp.spine_constants import (
     GENANT_THRESHOLDS,
+    LESION_BLASTIC_HU_THRESHOLD,
+    LESION_LYTIC_HU_THRESHOLD,
     MEYERDING_THRESHOLDS,
     REGION_VERTEBRAE,
     SINS_RANGES,
@@ -1259,8 +1261,8 @@ for level in target_levels:
         pain_source = "missing"
 
     # Component 3: Lesion type from HU analysis
-    lytic_thresh = LESION_LYTIC_HU_THRESHOLD
-    blastic_thresh = LESION_BLASTIC_HU_THRESHOLD
+    lytic_thresh = {LESION_LYTIC_HU_THRESHOLD}
+    blastic_thresh = {LESION_BLASTIC_HU_THRESHOLD}
     lytic_count = int(np.sum(hu_values < lytic_thresh))
     blastic_count = int(np.sum(hu_values > blastic_thresh))
     total_voxels = len(hu_values)

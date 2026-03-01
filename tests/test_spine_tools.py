@@ -517,6 +517,17 @@ class TestSagittalAlignmentCodeGeneration:
         assert "classify(" in code
 
 
+class TestSagittalAlignmentCodeCompiles:
+    """Verify generated sagittal alignment code is syntactically valid."""
+
+    def test_generated_code_compiles(self):
+        """compile() must succeed on the code string returned by _build_sagittal_alignment_code."""
+        safe_id = json.dumps("vtkMRMLSegmentationNode1")
+        safe_region = json.dumps("full")
+        code = _build_sagittal_alignment_code(safe_id, safe_region)
+        # Must not raise SyntaxError or IndentationError
+        compile(code, "<test_sagittal_alignment>", "exec")
+
 # =============================================================================
 # Full Tool Execution Tests with Mocked Slicer
 # =============================================================================

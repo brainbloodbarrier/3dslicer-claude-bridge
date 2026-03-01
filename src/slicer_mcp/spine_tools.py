@@ -596,7 +596,7 @@ def endplate_vector(vertebra_data):
 measurements = {}
 reference_ranges = {}
 statuses = {}
-    warnings = []
+warnings = []
 
 def classify(value, normal_min, normal_max, name):
     if normal_min <= value <= normal_max:
@@ -794,7 +794,7 @@ result = {
     'reference_ranges': reference_ranges,
     'statuses': statuses
 }
-    result['warnings'] = warnings
+result['warnings'] = warnings
 
 __execResult = result
 """
