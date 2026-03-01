@@ -1203,13 +1203,15 @@ for i in range(seg.GetNumberOfSegments()):
     seg_id = seg.GetNthSegmentID(i)
     seg_name = seg.GetNthSegment(i).GetName()
 
-    if seg_name in VERTEBRA_MAP:
-        label = VERTEBRA_MAP[seg_name]
+    # Match by segment ID (e.g. "vertebrae_L5") — TotalSegmentator sets IDs
+    # matching VERTEBRA_MAP keys, while display names differ (e.g. "L5 vertebra")
+    if seg_id in VERTEBRA_MAP:
+        label = VERTEBRA_MAP[seg_id]
         found_vertebrae.append({{"segment_id": seg_id, "label": label, "name": seg_name}})
-    elif seg_name in DISC_MAP:
-        disc_label = DISC_MAP[seg_name]
+    elif seg_id in DISC_MAP:
+        disc_label = DISC_MAP[seg_id]
         found_discs.append({{"segment_id": seg_id, "label": disc_label, "name": seg_name}})
-    elif seg_name == "spinal_cord":
+    elif seg_id == "spinal_cord" or seg_name == "spinal_cord":
         found_other.append({{"segment_id": seg_id, "label": "spinal_cord", "name": seg_name}})
 
 # Sort vertebrae by anatomical order
