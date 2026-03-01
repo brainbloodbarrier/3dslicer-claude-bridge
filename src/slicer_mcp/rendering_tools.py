@@ -520,7 +520,7 @@ def enable_volume_rendering(
 
     safe_node_id = json.dumps(node_id)
     safe_preset = json.dumps(preset) if preset is not None else "None"
-    safe_visible = json.dumps(visible)
+    safe_visible = str(visible)
 
     python_code = _build_enable_volume_rendering_code(safe_node_id, safe_preset, safe_visible)
 
@@ -593,7 +593,7 @@ def set_volume_rendering_property(
     safe_opacity_scale = json.dumps(opacity_scale) if opacity_scale is not None else "None"
     safe_window = json.dumps(window) if window is not None else "None"
     safe_level = json.dumps(level) if level is not None else "None"
-    safe_visible = json.dumps(visible) if visible is not None else "None"
+    safe_visible = str(visible) if visible is not None else "None"
 
     python_code = _build_set_volume_rendering_property_code(
         safe_node_id, safe_opacity_scale, safe_window, safe_level, safe_visible

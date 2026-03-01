@@ -377,7 +377,8 @@ def _build_apply_transform_code(safe_node_id: str, safe_transform_id: str, harde
     Returns:
         Python code string for execution in Slicer
     """
-    safe_harden = json.dumps(harden)
+    # json.dumps(bool) -> "true"/"false" (JSON), but Python needs "True"/"False"
+    safe_harden = str(harden)
     return f"""
 import slicer
 import json
@@ -587,8 +588,9 @@ def register_volumes(
     safe_transform_type = json.dumps(transform_type)
     safe_init_mode = json.dumps(init_mode)
     safe_sampling = json.dumps(sampling_percentage)
-    safe_histogram = json.dumps(histogram_match)
-    safe_create_resampled = json.dumps(create_resampled)
+    # json.dumps(bool) -> "true"/"false" (JSON), but Python needs "True"/"False"
+    safe_histogram = str(histogram_match)
+    safe_create_resampled = str(create_resampled)
 
     python_code = _build_register_volumes_code(
         safe_fixed_id,
