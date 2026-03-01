@@ -461,25 +461,20 @@ region_vertebrae = {json.dumps(dict(REGION_VERTEBRAE))}
 
 target_vertebrae = region_vertebrae.get(region, region_vertebrae['full'])
 
-# Collect available segment names
-available_segments = {{}}
+# Collect available segment IDs (TotalSegmentator sets IDs like "vertebrae_L5",
+# while display names differ e.g. "L5 vertebra")
+available_segment_ids = set()
 for i in range(segmentation.GetNumberOfSegments()):
-    seg = segmentation.GetNthSegment(i)
-    available_segments[seg.GetName()] = segmentation.GetNthSegmentID(i)
+    available_segment_ids.add(segmentation.GetNthSegmentID(i))
 
 import vtk
 
-def get_vertebra_geometry(seg_node, segment_name):
-    \"\"\"Extract centroid, superior/inferior endplate centers for a vertebra.\"\"\"
+def get_vertebra_geometry(seg_node, segment_id):
+    \"\"\"Extract centroid, superior/inferior endplate centers for a vertebra by segment ID.\"\"\"
     seg = seg_node.GetSegmentation()
-    seg_id = None
-    for i in range(seg.GetNumberOfSegments()):
-        s = seg.GetNthSegment(i)
-        if s.GetName() == segment_name:
-            seg_id = seg.GetNthSegmentID(i)
-            break
-    if seg_id is None:
+    if not seg.GetSegment(segment_id):
         return None
+    seg_id = segment_id
 
     labelmapNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLLabelMapVolumeNode')
     slicer.modules.segmentations.logic().ExportSegmentsToLabelmapNode(
@@ -543,9 +538,9 @@ for vert_name in target_vertebrae:
             break
 
     geom = None
-    if ts_label and ts_label in available_segments:
+    if ts_label and ts_label in available_segment_ids:
         geom = get_vertebra_geometry(segNode, ts_label)
-    elif vert_name in available_segments:
+    elif vert_name in available_segment_ids:
         geom = get_vertebra_geometry(segNode, vert_name)
 
     if geom is not None:
@@ -2079,4 +2074,309 @@ def analyze_bone_quality(
 
     except SlicerConnectionError as e:
         logger.error(f"Bone quality analysis failed: {e.message}")
+        raise
+
+
+# =============================================================================
+# Clinical Spine Visualization
+# =============================================================================
+
+
+def _build_clinical_spine_visualization_code(
+    safe_seg_node_id: str,
+    safe_volume_node_id: str,
+    safe_output_path: str,
+    safe_region: str,
+) -> str:
+    """Build Python code to create clinical spine visualization in Slicer.
+
+    Generates a sagittal screenshot with:
+    - Distinct color per vertebra (gradient from yellow to red)
+    - Segmentation in outline mode (thick contour, no fill)
+    - CT bone window (W:2000 L:400)
+    - Navigation to median sagittal plane of vertebral bodies
+    - Markup fiducial labels at each vertebra centroid
+    - High resolution capture (3x)
+
+    Args:
+        safe_seg_node_id: JSON-escaped segmentation node ID
+        safe_volume_node_id: JSON-escaped volume node ID for background CT
+        safe_output_path: JSON-escaped output file path
+        safe_region: JSON-escaped region string
+
+    Returns:
+        Python code string for Slicer execution
+    """
+    return f"""
+import slicer
+import json
+import numpy as np
+
+seg_node_id = {safe_seg_node_id}
+volume_node_id = {safe_volume_node_id}
+output_path = {safe_output_path}
+region = {safe_region}
+
+segNode = slicer.mrmlScene.GetNodeByID(seg_node_id)
+if not segNode:
+    raise ValueError('Segmentation node not found: ' + seg_node_id)
+
+volNode = slicer.mrmlScene.GetNodeByID(volume_node_id)
+if not volNode:
+    raise ValueError('Volume node not found: ' + volume_node_id)
+
+segmentation = segNode.GetSegmentation()
+if not segmentation:
+    raise ValueError('No segmentation data in node: ' + seg_node_id)
+
+# TotalSegmentator vertebra label map
+ts_map = {json.dumps(TOTALSEGMENTATOR_VERTEBRA_MAP)}
+region_vertebrae = {json.dumps(dict(REGION_VERTEBRAE))}
+
+target_vertebrae = region_vertebrae.get(region, region_vertebrae['full'])
+
+# --- Vertebra Color Gradient (yellow -> red) ---
+n_verts = len(target_vertebrae)
+vertebra_colors = {{}}
+for i, vert_name in enumerate(target_vertebrae):
+    t = i / max(n_verts - 1, 1)
+    r = 1.0
+    g = 1.0 - t
+    b = 0.0
+    vertebra_colors[vert_name] = (r, g, b)
+
+# --- Apply colors and collect centroids ---
+centroids = {{}}
+available_segment_ids = set()
+for i in range(segmentation.GetNumberOfSegments()):
+    available_segment_ids.add(segmentation.GetNthSegmentID(i))
+
+for vert_name in target_vertebrae:
+    # Find segment ID (TotalSegmentator format or direct name)
+    seg_id = None
+    for ts_key, std_name in ts_map.items():
+        if std_name == vert_name and ts_key in available_segment_ids:
+            seg_id = ts_key
+            break
+    if seg_id is None and vert_name in available_segment_ids:
+        seg_id = vert_name
+    if seg_id is None:
+        continue
+
+    segment = segmentation.GetSegment(seg_id)
+    if not segment:
+        continue
+
+    # Apply color
+    color = vertebra_colors.get(vert_name, (1.0, 1.0, 0.0))
+    segment.SetColor(color[0], color[1], color[2])
+
+    # Extract centroid via labelmap
+    import vtk
+    labelmapNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLLabelMapVolumeNode')
+    slicer.modules.segmentations.logic().ExportSegmentsToLabelmapNode(
+        segNode, [seg_id], labelmapNode, None
+    )
+    ijkToRas = vtk.vtkMatrix4x4()
+    labelmapNode.GetIJKToRASMatrix(ijkToRas)
+    imageData = labelmapNode.GetImageData()
+    dims = imageData.GetDimensions()
+
+    points_ras = []
+    for k in range(dims[2]):
+        for j in range(dims[1]):
+            for ii in range(dims[0]):
+                val = imageData.GetScalarComponentAsFloat(ii, j, k, 0)
+                if val > 0:
+                    ijk = [ii, j, k, 1]
+                    ras = [0, 0, 0, 1]
+                    ijkToRas.MultiplyPoint(ijk, ras)
+                    points_ras.append(ras[:3])
+
+    slicer.mrmlScene.RemoveNode(labelmapNode)
+
+    if points_ras:
+        pts = np.array(points_ras)
+        centroid = pts.mean(axis=0).tolist()
+        centroids[vert_name] = centroid
+
+# --- Configure segmentation display: outline mode ---
+displayNode = segNode.GetDisplayNode()
+if displayNode:
+    # 2D outline with thick border
+    displayNode.SetVisibility2DOutline(True)
+    displayNode.SetVisibility2DFill(False)
+    displayNode.SetSliceIntersectionThickness(3)
+    # 2D visibility ON
+    displayNode.SetVisibility2D(True)
+
+# --- CT bone window (W:2000 L:400) ---
+volDisplayNode = volNode.GetDisplayNode()
+if volDisplayNode:
+    volDisplayNode.SetAutoWindowLevel(False)
+    volDisplayNode.SetWindow(2000)
+    volDisplayNode.SetLevel(400)
+
+# --- Navigate to sagittal view at median R coordinate ---
+if centroids:
+    r_values = [c[0] for c in centroids.values()]
+    median_r = float(np.median(r_values))
+else:
+    median_r = 0.0
+
+lm = slicer.app.layoutManager()
+
+# Switch to sagittal-only layout for clean capture
+lm.setLayout(slicer.vtkMRMLLayoutNode.SlicerLayoutOneUpYellowSliceView)
+slicer.app.processEvents()
+
+sliceWidget = lm.sliceWidget('Yellow')
+sliceLogic = sliceWidget.sliceLogic()
+sliceNode = sliceLogic.GetSliceNode()
+compositeNode = sliceLogic.GetSliceCompositeNode()
+
+# Set background volume
+compositeNode.SetBackgroundVolumeID(volume_node_id)
+
+# Set sagittal orientation
+sliceNode.SetOrientation('Sagittal')
+
+# Navigate to median R coordinate
+sliceNode.SetSliceOffset(median_r)
+
+# Set FOV ~300mm for L1-S1 coverage with margin
+sliceNode.SetFieldOfView(300, 300, 1)
+
+# --- Create fiducial labels at centroids ---
+fiducialNodes = []
+if centroids:
+    fidNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLMarkupsFiducialNode')
+    fidNode.SetName('SpineLabels')
+    fidNode.GetDisplayNode().SetTextScale(4.0)
+    fidNode.GetDisplayNode().SetGlyphScale(2.0)
+    fidNode.GetDisplayNode().SetColor(1.0, 1.0, 1.0)
+    fidNode.GetDisplayNode().SetSelectedColor(1.0, 1.0, 1.0)
+    fidNode.GetDisplayNode().SetActiveColor(1.0, 1.0, 1.0)
+    # Offset labels slightly anterior for visibility
+    for vert_name, centroid in centroids.items():
+        n = fidNode.AddControlPoint(centroid[0], centroid[1] + 15, centroid[2])
+        fidNode.SetNthControlPointLabel(n, vert_name)
+    fiducialNodes.append(fidNode)
+
+# Force render
+slicer.util.forceRenderAllViews()
+slicer.app.processEvents()
+
+# --- Capture at 3x resolution ---
+import vtk as vtk_lib
+
+renderWindow = sliceWidget.sliceView().renderWindow()
+windowToImage = vtk_lib.vtkWindowToImageFilter()
+windowToImage.SetInput(renderWindow)
+windowToImage.SetScale(3)
+windowToImage.Update()
+
+import os
+writer = vtk_lib.vtkPNGWriter()
+writer.SetFileName(output_path)
+writer.SetInputConnection(windowToImage.GetOutputPort())
+writer.Write()
+
+if not os.path.exists(output_path):
+    raise ValueError('Screenshot was not saved: ' + output_path)
+
+file_size = os.path.getsize(output_path)
+
+# --- Cleanup: remove fiducials ---
+cleanup_ids = []
+for fid in fiducialNodes:
+    cleanup_ids.append(fid.GetID())
+
+result = {{
+    'success': True,
+    'output_path': output_path,
+    'file_size_bytes': file_size,
+    'vertebrae_colored': list(centroids.keys()),
+    'centroids': centroids,
+    'median_r_mm': median_r,
+    'view': 'sagittal',
+    'window_width': 2000,
+    'window_level': 400,
+    'resolution_scale': 3,
+    'fiducial_node_ids': cleanup_ids,
+}}
+
+__execResult = result
+"""
+
+
+def visualize_spine_segmentation(
+    segmentation_node_id: str,
+    volume_node_id: str,
+    output_path: str,
+    region: str = "lumbar",
+) -> dict[str, Any]:
+    """Create clinical visualization of spine segmentation.
+
+    Generates a high-quality sagittal screenshot with distinct colors
+    per vertebra, outline-mode segmentation overlay, bone-window CT,
+    and anatomical labels at each vertebra centroid.
+
+    Args:
+        segmentation_node_id: MRML node ID of the segmentation containing
+            vertebral segments (e.g., from TotalSegmentator)
+        volume_node_id: MRML node ID of the background CT volume
+        output_path: File path for the output PNG screenshot
+        region: Spine region to visualize - "cervical", "thoracic",
+            "lumbar", or "full"
+
+    Returns:
+        Dict with success status, output_path, file_size_bytes,
+        vertebrae_colored, centroids, and view parameters
+
+    Raises:
+        ValidationError: If inputs are invalid
+        SlicerConnectionError: If Slicer is not reachable
+    """
+    segmentation_node_id = validate_mrml_node_id(segmentation_node_id)
+    volume_node_id = validate_mrml_node_id(volume_node_id)
+
+    if region not in SPINE_REGIONS:
+        raise ValidationError(
+            f"Invalid region '{region}'. Must be one of: {', '.join(sorted(SPINE_REGIONS))}",
+            "region",
+            region,
+        )
+
+    if not output_path or not output_path.strip():
+        raise ValidationError("Output path cannot be empty", "output_path", "")
+
+    client = get_client()
+
+    safe_seg_id = json.dumps(segmentation_node_id)
+    safe_vol_id = json.dumps(volume_node_id)
+    safe_output = json.dumps(output_path)
+    safe_region = json.dumps(region)
+
+    python_code = _build_clinical_spine_visualization_code(
+        safe_seg_id, safe_vol_id, safe_output, safe_region
+    )
+
+    try:
+        exec_result = client.exec_python(python_code, timeout=SPINE_SEGMENTATION_TIMEOUT)
+
+        result_data = _parse_json_result(
+            exec_result.get("result", ""), "spine visualization"
+        )
+
+        logger.info(
+            f"Spine visualization completed: region={region}, "
+            f"vertebrae={len(result_data.get('vertebrae_colored', []))}, "
+            f"output={output_path}"
+        )
+
+        return result_data
+
+    except SlicerConnectionError as e:
+        logger.error(f"Spine visualization failed: {e.message}")
         raise

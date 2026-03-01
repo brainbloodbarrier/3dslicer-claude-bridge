@@ -17,12 +17,14 @@ from slicer_mcp.spine_tools import (
     _build_spine_segmentation_code,
     _build_totalseg_subprocess_block,
     _build_vertebral_centroid_extraction_code,
+    _build_clinical_spine_visualization_code,
     _validate_seed_points,
     analyze_bone_quality,
     measure_ccj_angles,
     measure_spine_alignment,
     segment_spine,
     segment_vertebral_artery,
+    visualize_spine_segmentation,
 )
 from slicer_mcp.tools import ValidationError
 
@@ -405,6 +407,20 @@ class TestSagittalAlignmentCodeGeneration:
 
         assert "superior_endplate" in code
         assert "inferior_endplate" in code
+
+    def test_centroid_code_uses_segment_ids_not_display_names(self):
+        """Test centroid code matches segments by ID, not display name."""
+        safe_id = json.dumps("vtkMRMLSegmentationNode1")
+        safe_region = json.dumps("lumbar")
+        code = _build_vertebral_centroid_extraction_code(safe_id, safe_region)
+
+        # Must use segment IDs (TotalSegmentator sets IDs like "vertebrae_L5",
+        # while display names differ e.g. "L5 vertebra")
+        assert "available_segment_ids" in code
+        assert "available_segments" not in code
+        # get_vertebra_geometry should accept segment_id, not segment_name
+        assert "def get_vertebra_geometry(seg_node, segment_id)" in code
+        assert "def get_vertebra_geometry(seg_node, segment_name)" not in code
 
     def test_alignment_code_computes_cervical_lordosis(self):
         """Test alignment code computes cervical lordosis (C2-C7)."""
@@ -1793,6 +1809,171 @@ class TestSpineConstantsIntegration:
 # =============================================================================
 
 
+
+# =============================================================================
+# Clinical Spine Visualization Tests
+# =============================================================================
+
+
+class TestVisualizeSpineSegmentationValidation:
+    """Tests for visualize_spine_segmentation input validation."""
+
+    def test_empty_segmentation_node_id_rejected(self):
+        """Empty segmentation_node_id raises ValidationError."""
+        with pytest.raises(ValidationError):
+            visualize_spine_segmentation("", "vtkMRMLScalarVolumeNode1", "/tmp/out.png")
+
+    def test_empty_volume_node_id_rejected(self):
+        """Empty volume_node_id raises ValidationError."""
+        with pytest.raises(ValidationError):
+            visualize_spine_segmentation(
+                "vtkMRMLSegmentationNode1", "", "/tmp/out.png"
+            )
+
+    def test_invalid_region_rejected(self):
+        """Invalid region raises ValidationError."""
+        with pytest.raises(ValidationError):
+            visualize_spine_segmentation(
+                "vtkMRMLSegmentationNode1",
+                "vtkMRMLScalarVolumeNode1",
+                "/tmp/out.png",
+                region="invalid",
+            )
+
+    def test_empty_output_path_rejected(self):
+        """Empty output_path raises ValidationError."""
+        with pytest.raises(ValidationError):
+            visualize_spine_segmentation(
+                "vtkMRMLSegmentationNode1",
+                "vtkMRMLScalarVolumeNode1",
+                "",
+            )
+
+    def test_valid_regions_accepted(self):
+        """All valid spine regions are accepted (validation only)."""
+        for region in ["cervical", "thoracic", "lumbar", "full"]:
+            with patch("slicer_mcp.spine_tools.get_client") as mock_get_client:
+                mock_client = Mock()
+                mock_client.exec_python.return_value = {
+                    "success": True,
+                    "result": (
+                        '{"success": true, "output_path": "/tmp/out.png",'
+                        ' "file_size_bytes": 1000, "vertebrae_colored": [],'
+                        ' "centroids": {}, "median_r_mm": 0.0,'
+                        ' "view": "sagittal", "window_width": 2000,'
+                        ' "window_level": 400, "resolution_scale": 3,'
+                        ' "fiducial_node_ids": []}'
+                    ),
+                }
+                mock_get_client.return_value = mock_client
+
+                result = visualize_spine_segmentation(
+                    "vtkMRMLSegmentationNode1",
+                    "vtkMRMLScalarVolumeNode1",
+                    "/tmp/out.png",
+                    region=region,
+                )
+                assert result["success"] is True
+
+
+class TestClinicalSpineVisualizationCodeGeneration:
+    """Tests for _build_clinical_spine_visualization_code output."""
+
+    def test_code_uses_json_escaped_ids(self):
+        """Generated code uses JSON-escaped node IDs."""
+        code = _build_clinical_spine_visualization_code(
+            json.dumps("vtkMRMLSegmentationNode1"),
+            json.dumps("vtkMRMLScalarVolumeNode1"),
+            json.dumps("/tmp/spine.png"),
+            json.dumps("lumbar"),
+        )
+        assert 'seg_node_id = "vtkMRMLSegmentationNode1"' in code
+        assert 'volume_node_id = "vtkMRMLScalarVolumeNode1"' in code
+
+    def test_code_applies_bone_window(self):
+        """Generated code sets bone window W:2000 L:400."""
+        code = _build_clinical_spine_visualization_code(
+            json.dumps("vtkMRMLSegmentationNode1"),
+            json.dumps("vtkMRMLScalarVolumeNode1"),
+            json.dumps("/tmp/spine.png"),
+            json.dumps("lumbar"),
+        )
+        assert "SetWindow(2000)" in code
+        assert "SetLevel(400)" in code
+
+    def test_code_uses_outline_mode(self):
+        """Generated code enables outline mode without fill."""
+        code = _build_clinical_spine_visualization_code(
+            json.dumps("vtkMRMLSegmentationNode1"),
+            json.dumps("vtkMRMLScalarVolumeNode1"),
+            json.dumps("/tmp/spine.png"),
+            json.dumps("lumbar"),
+        )
+        assert "SetVisibility2DOutline(True)" in code
+        assert "SetVisibility2DFill(False)" in code
+
+    def test_code_creates_fiducial_labels(self):
+        """Generated code creates markup fiducials for labels."""
+        code = _build_clinical_spine_visualization_code(
+            json.dumps("vtkMRMLSegmentationNode1"),
+            json.dumps("vtkMRMLScalarVolumeNode1"),
+            json.dumps("/tmp/spine.png"),
+            json.dumps("lumbar"),
+        )
+        assert "vtkMRMLMarkupsFiducialNode" in code
+        assert "SetNthControlPointLabel" in code
+
+    def test_code_captures_at_3x_resolution(self):
+        """Generated code captures at 3x resolution."""
+        code = _build_clinical_spine_visualization_code(
+            json.dumps("vtkMRMLSegmentationNode1"),
+            json.dumps("vtkMRMLScalarVolumeNode1"),
+            json.dumps("/tmp/spine.png"),
+            json.dumps("lumbar"),
+        )
+        assert "SetScale(3)" in code
+
+    def test_code_uses_sagittal_orientation(self):
+        """Generated code sets sagittal orientation."""
+        code = _build_clinical_spine_visualization_code(
+            json.dumps("vtkMRMLSegmentationNode1"),
+            json.dumps("vtkMRMLScalarVolumeNode1"),
+            json.dumps("/tmp/spine.png"),
+            json.dumps("lumbar"),
+        )
+        assert "SetOrientation('Sagittal')" in code
+
+    def test_code_uses_segment_ids_not_display_names(self):
+        """Generated code matches segments by ID, not display name."""
+        code = _build_clinical_spine_visualization_code(
+            json.dumps("vtkMRMLSegmentationNode1"),
+            json.dumps("vtkMRMLScalarVolumeNode1"),
+            json.dumps("/tmp/spine.png"),
+            json.dumps("lumbar"),
+        )
+        assert "available_segment_ids" in code
+
+    def test_code_sets_fov_300mm(self):
+        """Generated code sets FOV to 300mm for spine coverage."""
+        code = _build_clinical_spine_visualization_code(
+            json.dumps("vtkMRMLSegmentationNode1"),
+            json.dumps("vtkMRMLScalarVolumeNode1"),
+            json.dumps("/tmp/spine.png"),
+            json.dumps("lumbar"),
+        )
+        assert "SetFieldOfView(300" in code
+
+    def test_generated_code_compiles(self):
+        """Generated visualization code is valid Python."""
+        code = _build_clinical_spine_visualization_code(
+            json.dumps("vtkMRMLSegmentationNode1"),
+            json.dumps("vtkMRMLScalarVolumeNode1"),
+            json.dumps("/tmp/spine.png"),
+            json.dumps("lumbar"),
+        )
+        compile(code, "<visualization>", "exec")
+
+
 class TestServerRegistration:
     """Tests that spine tools are properly registered in the MCP server."""
 
@@ -1860,3 +2041,10 @@ class TestServerRegistration:
 
         tool_names = [t.name for t in mcp._tool_manager.list_tools()]
         assert "analyze_bone_quality" in tool_names
+
+    def test_visualize_spine_segmentation_registered(self):
+        """visualize_spine_segmentation is registered as an MCP tool."""
+        from slicer_mcp.server import mcp
+
+        tool_names = [t.name for t in mcp._tool_manager.list_tools()]
+        assert "visualize_spine_segmentation" in tool_names

@@ -843,6 +843,39 @@ def segment_spine(
 
 
 @mcp.tool()
+def visualize_spine_segmentation(
+    segmentation_node_id: str,
+    volume_node_id: str,
+    output_path: str,
+    region: str = "lumbar",
+) -> dict:
+    """Create clinical visualization of spine segmentation.
+
+    Generates a high-quality sagittal screenshot with distinct colors
+    per vertebra (yellow-to-red gradient), outline-mode segmentation
+    overlay, bone-window CT (W:2000 L:400), and anatomical labels
+    at each vertebra centroid.
+
+    Args:
+        segmentation_node_id: MRML node ID of segmentation with vertebral
+            segments (e.g., from segment_spine or TotalSegmentator)
+        volume_node_id: MRML node ID of background CT volume
+        output_path: File path for the output PNG screenshot
+        region: Spine region - "cervical", "thoracic", "lumbar", or "full"
+
+    Returns:
+        Dict with output_path, file_size_bytes, vertebrae_colored,
+        centroids (RAS), view parameters, and fiducial_node_ids
+    """
+    try:
+        return spine_tools.visualize_spine_segmentation(
+            segmentation_node_id, volume_node_id, output_path, region
+        )
+    except Exception as e:
+        return _handle_tool_error(e, "visualize_spine_segmentation")
+
+
+@mcp.tool()
 def segment_vertebral_artery(
     input_node_id: str,
     side: str = "both",
