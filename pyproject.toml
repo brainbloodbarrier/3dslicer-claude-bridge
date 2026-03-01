@@ -1,6 +1,6 @@
 [project]
 name = "slicer-mcp"
-version = "1.0.0"
+version = "0.9.0"
 description = "MCP server bridging Claude Code to 3D Slicer for AI-assisted medical image analysis"
 readme = "README.md"
 license = {text = "MIT"}
@@ -27,9 +27,6 @@ dependencies = [
     "requests>=2.31.0",
     "pydantic>=2.0",
     "packaging>=21.0",
-    "urllib3>=2.6.3",
-    "cryptography>=46.0.5",
-    "python-multipart>=0.0.22",
 ]
 
 [project.urls]

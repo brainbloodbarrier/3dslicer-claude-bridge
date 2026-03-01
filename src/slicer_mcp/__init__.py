@@ -1,6 +1,6 @@
 """MCP server bridging Claude Code to 3D Slicer."""
 
-__version__ = "1.0.0"
+__version__ = "0.9.0"
 
 from slicer_mcp.circuit_breaker import CircuitOpenError
 from slicer_mcp.server import main
