@@ -144,6 +144,7 @@ MAX_LANDMARK_LABEL_LENGTH = 64
 LANDMARK_LABEL_PATTERN = r"^[a-zA-Z0-9_\-. ]+$"
 DEFAULT_SAMPLING_PERCENTAGE = 0.01
 MAX_LANDMARKS = 500
+MAX_XRAY_LANDMARKS = 100  # per-tool safety limit for X-ray landmark measurements
 
 # =============================================================================
 # Sample Data Configuration
@@ -169,6 +170,15 @@ SEGMENT_STATISTICS_VOLUME_KEY = "SegmentStatistics.volume_cc"
 # =============================================================================
 VOLUME_RENDERING_TIMEOUT = 60  # seconds for volume rendering setup
 MODEL_EXPORT_TIMEOUT = 120  # seconds for model export (large meshes)
+CAPTURE_3D_VIEW_TIMEOUT = 120  # seconds for high-res 3D view captures
+
+# Volume rendering property ranges
+VR_OPACITY_SCALE_MIN = 0.0
+VR_OPACITY_SCALE_MAX = 10.0
+
+# 3D view capture dimension limits
+CAPTURE_MIN_DIMENSION = 1
+CAPTURE_MAX_DIMENSION = 8192
 
 VALID_VR_PRESETS: frozenset[str] = frozenset(
     {

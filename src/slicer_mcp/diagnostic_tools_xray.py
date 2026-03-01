@@ -21,6 +21,7 @@ import math
 import re
 from typing import Any
 
+from slicer_mcp.constants import MAX_XRAY_LANDMARKS
 from slicer_mcp.slicer_client import SlicerConnectionError, get_client
 from slicer_mcp.spine_constants import (
     CORONAL_C7_CSVL_THRESHOLD_MM,
@@ -47,8 +48,8 @@ logger = logging.getLogger("slicer-mcp")
 # Valid X-ray view types
 VALID_XRAY_VIEWS = frozenset(["lateral", "ap"])
 
-# Maximum number of landmarks per tool (safety limit)
-MAX_LANDMARKS = 100
+# Per-tool landmark limit (imported from constants)
+MAX_LANDMARKS = MAX_XRAY_LANDMARKS
 
 # Magnification disclaimer for distance measurements
 MAGNIFICATION_DISCLAIMER = (

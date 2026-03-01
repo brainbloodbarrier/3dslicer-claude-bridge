@@ -6,6 +6,9 @@ import os
 import re
 
 from slicer_mcp.constants import (
+    CAPTURE_3D_VIEW_TIMEOUT,
+    CAPTURE_MAX_DIMENSION,
+    CAPTURE_MIN_DIMENSION,
     EXPORT_FILENAME_PATTERN,
     EXPORT_FORMAT_EXTENSIONS,
     MAX_EXPORT_FILENAME_LENGTH,
@@ -14,9 +17,16 @@ from slicer_mcp.constants import (
     VALID_EXPORT_FORMATS,
     VALID_VR_PRESETS,
     VOLUME_RENDERING_TIMEOUT,
+    VR_OPACITY_SCALE_MAX,
+    VR_OPACITY_SCALE_MIN,
 )
 from slicer_mcp.slicer_client import get_client
-from slicer_mcp.tools import ValidationError, _parse_json_result, validate_mrml_node_id
+from slicer_mcp.tools import (
+    ValidationError,
+    _parse_json_result,
+    validate_folder_path,
+    validate_mrml_node_id,
+)
 
 logger = logging.getLogger("slicer-mcp")
 
@@ -64,6 +74,9 @@ def validate_export_filename(filename: str) -> str:
 def validate_export_directory(directory: str) -> str:
     """Validate an export directory path.
 
+    Delegates to validate_folder_path() which checks emptiness, length,
+    path traversal, forbidden system directories, existence, and is-directory.
+
     Args:
         directory: Directory path to validate
 
@@ -73,35 +86,11 @@ def validate_export_directory(directory: str) -> str:
     Raises:
         ValidationError: If path is empty, too long, contains traversal, or doesn't exist
     """
-    if not directory:
-        raise ValidationError("Export directory cannot be empty", "directory", directory or "")
-
-    if len(directory) > MAX_FOLDER_PATH_LENGTH:
-        raise ValidationError(
-            f"Directory path exceeds maximum length ({MAX_FOLDER_PATH_LENGTH})",
-            "directory",
-            directory[:50] + "...",
-        )
-
-    # Check for path traversal
-    path_parts = directory.replace("\\", "/").split("/")
-    for part in path_parts:
-        if part == "..":
-            raise ValidationError(
-                "Directory path contains forbidden component: '..'",
-                "directory",
-                directory,
-            )
-
-    abs_path = os.path.realpath(os.path.expanduser(directory))
-
-    if not os.path.exists(abs_path):
-        raise ValidationError(f"Directory does not exist: {abs_path}", "directory", directory)
-
-    if not os.path.isdir(abs_path):
-        raise ValidationError(f"Path is not a directory: {abs_path}", "directory", directory)
-
-    return abs_path
+    try:
+        return validate_folder_path(directory)
+    except ValidationError as e:
+        # Re-raise with "directory" field name for consistency with rendering API
+        raise ValidationError(e.message, "directory", e.value) from e
 
 
 # =============================================================================
@@ -268,11 +257,6 @@ if not modelNode:
 polydata = modelNode.GetPolyData()
 if not polydata or polydata.GetNumberOfPoints() == 0:
     raise ValueError('Model node has no mesh data: ' + node_id)
-
-# Ensure directory exists
-output_dir = os.path.dirname(output_path)
-if output_dir and not os.path.exists(output_dir):
-    os.makedirs(output_dir, exist_ok=True)
 
 success = slicer.util.exportNode(modelNode, output_path)
 if not success:
@@ -449,12 +433,19 @@ import vtk
 windowToImage = vtk.vtkWindowToImageFilter()
 windowToImage.SetInput(renderWindow)
 
+orig_size = None
 if width is not None and height is not None:
+    orig_size = renderWindow.GetSize()
     windowToImage.SetScale(1)
     renderWindow.SetSize(width, height)
     slicer.util.forceRenderAllViews()
 
 windowToImage.Update()
+
+# Restore original window size if it was changed
+if orig_size is not None:
+    renderWindow.SetSize(orig_size[0], orig_size[1])
+    slicer.util.forceRenderAllViews()
 
 # Determine writer from extension
 ext = os.path.splitext(output_path)[1].lower()
@@ -470,11 +461,6 @@ else:
     writer = vtk.vtkPNGWriter()
     if not output_path.endswith('.png'):
         output_path = output_path + '.png'
-
-# Ensure directory exists
-output_dir = os.path.dirname(output_path)
-if output_dir and not os.path.exists(output_dir):
-    os.makedirs(output_dir, exist_ok=True)
 
 writer.SetFileName(output_path)
 writer.SetInputConnection(windowToImage.GetOutputPort())
@@ -577,9 +563,12 @@ def set_volume_rendering_property(
     """
     node_id = validate_mrml_node_id(node_id)
 
-    if opacity_scale is not None and not (0.0 <= opacity_scale <= 10.0):
+    if opacity_scale is not None and not (
+        VR_OPACITY_SCALE_MIN <= opacity_scale <= VR_OPACITY_SCALE_MAX
+    ):
         raise ValidationError(
-            f"opacity_scale must be in range [0.0, 10.0], got {opacity_scale}",
+            f"opacity_scale must be in range [{VR_OPACITY_SCALE_MIN}, {VR_OPACITY_SCALE_MAX}], "
+            f"got {opacity_scale}",
             "opacity_scale",
             str(opacity_scale),
         )
@@ -765,15 +754,13 @@ def capture_3d_view(
             output_path[:50] + "...",
         )
 
-    # Check for path traversal
-    path_parts = output_path.replace("\\", "/").split("/")
-    for part in path_parts:
-        if part == "..":
-            raise ValidationError(
-                "Output path contains forbidden component: '..'",
-                "output_path",
-                output_path,
-            )
+    # Validate directory portion using full security checks (forbidden dirs, symlink resolution)
+    output_dir = os.path.dirname(output_path)
+    if output_dir:
+        try:
+            validate_folder_path(output_dir)
+        except ValidationError as e:
+            raise ValidationError(e.message, "output_path", output_path) from e
 
     if (width is None) != (height is None):
         raise ValidationError(
@@ -783,15 +770,17 @@ def capture_3d_view(
         )
 
     if width is not None:
-        if not (1 <= width <= 8192):
+        if not (CAPTURE_MIN_DIMENSION <= width <= CAPTURE_MAX_DIMENSION):
             raise ValidationError(
-                f"width must be in range [1, 8192], got {width}",
+                f"width must be in range [{CAPTURE_MIN_DIMENSION}, {CAPTURE_MAX_DIMENSION}], "
+                f"got {width}",
                 "width",
                 str(width),
             )
-        if not (1 <= height <= 8192):  # type: ignore[operator]
+        if not (CAPTURE_MIN_DIMENSION <= height <= CAPTURE_MAX_DIMENSION):  # type: ignore[operator]
             raise ValidationError(
-                f"height must be in range [1, 8192], got {height}",
+                f"height must be in range [{CAPTURE_MIN_DIMENSION}, {CAPTURE_MAX_DIMENSION}], "
+                f"got {height}",
                 "height",
                 str(height),
             )
@@ -815,7 +804,7 @@ def capture_3d_view(
     )
 
     try:
-        exec_result = client.exec_python(python_code, timeout=VOLUME_RENDERING_TIMEOUT)
+        exec_result = client.exec_python(python_code, timeout=CAPTURE_3D_VIEW_TIMEOUT)
 
         result = _parse_json_result(exec_result.get("result", ""), "capture 3D view")
 

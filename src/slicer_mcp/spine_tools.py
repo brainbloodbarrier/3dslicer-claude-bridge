@@ -25,6 +25,9 @@ from slicer_mcp.spine_constants import (
     TOTALSEG_TASK_FULL,
     TOTALSEGMENTATOR_DISC_MAP,
     TOTALSEGMENTATOR_VERTEBRA_MAP,
+    VA_CENTERLINE_SAMPLE_POINTS,
+    VA_LEVEL_SET_ITERATION_COUNT,
+    VA_VESSELNESS_CONTRAST_MEASURE,
 )
 from slicer_mcp.tools import ValidationError, _parse_json_result, validate_mrml_node_id
 
@@ -1288,7 +1291,7 @@ vesselnessLogic.computeVesselnessVolume(
     maximumDiameterMm=6.0,
     alpha=0.3,
     beta=0.3,
-    contrastMeasure=200
+    contrastMeasure={VA_VESSELNESS_CONTRAST_MEASURE}
 )
 
 # --- Step 2: Level set segmentation ---
@@ -1305,7 +1308,7 @@ lsLogic.performEvolution(
     inflationWeight=1.0,
     curvatureWeight=0.7,
     attractionWeight=1.0,
-    iterationCount=20
+    iterationCount={VA_LEVEL_SET_ITERATION_COUNT}
 )
 
 # --- Step 3: Centerline extraction ---
@@ -1326,7 +1329,7 @@ if centerlineModel.GetPolyData():
     radiusArray = pd.GetPointData().GetArray("Radius")
     if radiusArray:
         n_points = radiusArray.GetNumberOfTuples()
-        step = max(1, n_points // 20)  # Sample ~20 points
+        step = max(1, n_points // {VA_CENTERLINE_SAMPLE_POINTS})  # Sample ~N points
         for i in range(0, n_points, step):
             r = radiusArray.GetValue(i)
             diameters.append(round(r * 2.0, 2))  # diameter = 2 * radius
@@ -1404,7 +1407,7 @@ vesselnessLogic.computeVesselnessVolume(
     maximumDiameterMm=6.0,
     alpha=0.3,
     beta=0.3,
-    contrastMeasure=200
+    contrastMeasure={VA_VESSELNESS_CONTRAST_MEASURE}
 )
 
 # --- Step 2: Create seed fiducials ---
@@ -1426,7 +1429,7 @@ lsLogic.performEvolution(
     inflationWeight=1.0,
     curvatureWeight=0.7,
     attractionWeight=1.0,
-    iterationCount=20
+    iterationCount={VA_LEVEL_SET_ITERATION_COUNT}
 )
 
 # --- Step 4: Centerline extraction ---

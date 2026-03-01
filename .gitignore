@@ -68,3 +68,6 @@ Exame_*/
 .idea/
 .qodo/
 .serena/
+
+# Temporary diff files
+diff*.txt

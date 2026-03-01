@@ -1259,8 +1259,8 @@ for level in target_levels:
         pain_source = "missing"
 
     # Component 3: Lesion type from HU analysis
-    lytic_thresh = 100
-    blastic_thresh = 300
+    lytic_thresh = LESION_LYTIC_HU_THRESHOLD
+    blastic_thresh = LESION_BLASTIC_HU_THRESHOLD
     lytic_count = int(np.sum(hu_values < lytic_thresh))
     blastic_count = int(np.sum(hu_values > blastic_thresh))
     total_voxels = len(hu_values)

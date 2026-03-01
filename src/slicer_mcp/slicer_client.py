@@ -215,6 +215,18 @@ class SlicerClient:
                     f"Using default: {DEFAULT_TIMEOUT_SECONDS}s"
                 )
                 timeout = DEFAULT_TIMEOUT_SECONDS
+        # Validate URL scheme
+        from urllib.parse import urlparse
+
+        parsed = urlparse(base_url)
+        if parsed.scheme not in ("http", "https"):
+            raise ValueError(f"SLICER_URL must use http or https scheme, got '{parsed.scheme}'")
+        if parsed.hostname not in ("localhost", "127.0.0.1", "::1"):
+            logger.warning(
+                f"SLICER_URL points to non-localhost host '{parsed.hostname}'. "
+                "Ensure this is intentional and the connection is secure."
+            )
+
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         # Note: We use direct requests.get/post instead of Session to avoid

@@ -695,3 +695,17 @@ METASTASIS_T2_LOW_THRESHOLD = 0.70
 
 # Supported regions for disc analysis (Pfirrmann)
 DISC_SUPPORTED_REGIONS = frozenset(["lumbar"])
+
+# =============================================================================
+# Lesion HU Thresholds (SINS Component 3 — CT)
+# =============================================================================
+LESION_LYTIC_HU_THRESHOLD = 100  # HU below which tissue is considered lytic
+LESION_BLASTIC_HU_THRESHOLD = 300  # HU above which tissue is considered blastic
+
+# =============================================================================
+# Vertebral Artery / Spine Registration Defaults
+# =============================================================================
+VA_VESSELNESS_CONTRAST_MEASURE = 200
+VA_LEVEL_SET_ITERATION_COUNT = 20
+VA_CENTERLINE_SAMPLE_POINTS = 20  # ~N points sampled along centerline
+TRAJECTORY_SAMPLE_POINTS = 20  # sample points along screw trajectory for distance check

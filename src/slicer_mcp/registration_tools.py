@@ -9,6 +9,7 @@ from slicer_mcp.constants import (
     LANDMARK_LABEL_PATTERN,
     MAX_LANDMARK_LABEL_LENGTH,
     MAX_LANDMARKS,
+    MIN_LANDMARK_PAIRS,
     REGISTRATION_TIMEOUT,
     VALID_INIT_MODES,
     VALID_LANDMARK_TRANSFORM_TYPES,
@@ -322,34 +323,46 @@ movingFids = slicer.mrmlScene.GetNodeByID(moving_fids_id)
 if not movingFids:
     raise ValueError('Moving landmarks not found: ' + moving_fids_id)
 
-# Create output transform
-transformNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLLinearTransformNode')
-transformNode.SetName(f'{{movingFids.GetName()}}_to_{{fixedFids.GetName()}}_{{transform_type}}')
+# Validate minimum landmark pairs (registration is geometrically underdetermined with fewer)
+min_pairs = {MIN_LANDMARK_PAIRS}
+n_fixed = fixedFids.GetNumberOfControlPoints()
+n_moving = movingFids.GetNumberOfControlPoints()
+if n_fixed < min_pairs:
+    err = f"Fixed landmarks: {{n_fixed}} pts, need >= {{min_pairs}}"
+    __execResult = {{"success": False, "error": err}}
+elif n_moving < min_pairs:
+    err = f"Moving landmarks: {{n_moving}} pts, need >= {{min_pairs}}"
+    __execResult = {{"success": False, "error": err}}
+else:
+    # Create output transform
+    # All current types (Rigid/Similarity/Affine) produce a linear transform matrix
+    transformNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLLinearTransformNode')
+    transformNode.SetName(f'{{movingFids.GetName()}}_to_{{fixedFids.GetName()}}_{{transform_type}}')
 
-parameters = {{
-    'fixedLandmarks': fixedFids.GetID(),
-    'movingLandmarks': movingFids.GetID(),
-    'saveTransform': transformNode.GetID(),
-    'transformType': transform_type,
-}}
+    parameters = {{
+        'fixedLandmarks': fixedFids.GetID(),
+        'movingLandmarks': movingFids.GetID(),
+        'saveTransform': transformNode.GetID(),
+        'transformType': transform_type,
+    }}
 
-cliNode = slicer.cli.runSync(slicer.modules.fiducialregistration, None, parameters)
+    cliNode = slicer.cli.runSync(slicer.modules.fiducialregistration, None, parameters)
 
-if cliNode.GetStatus() & cliNode.ErrorsMask:
-    error_text = cliNode.GetErrorText()
+    if cliNode.GetStatus() & cliNode.ErrorsMask:
+        error_text = cliNode.GetErrorText()
+        slicer.mrmlScene.RemoveNode(cliNode)
+        raise ValueError('Fiducial registration failed: ' + error_text)
+
     slicer.mrmlScene.RemoveNode(cliNode)
-    raise ValueError('Fiducial registration failed: ' + error_text)
 
-slicer.mrmlScene.RemoveNode(cliNode)
+    result = {{
+        'success': True,
+        'transform_node_id': transformNode.GetID(),
+        'transform_node_name': transformNode.GetName(),
+        'transform_type': transform_type,
+    }}
 
-result = {{
-    'success': True,
-    'transform_node_id': transformNode.GetID(),
-    'transform_node_name': transformNode.GetName(),
-    'transform_type': transform_type,
-}}
-
-__execResult = result
+    __execResult = result
 """
 
 
@@ -432,6 +445,14 @@ def place_landmarks(
             f"Landmark name exceeds maximum length ({MAX_LANDMARK_LABEL_LENGTH})",
             "name",
             name[:50] + "...",
+        )
+
+    if not LANDMARK_LABEL_COMPILED.match(name):
+        raise ValidationError(
+            f"Invalid landmark name format. Must match pattern {LANDMARK_LABEL_PATTERN}. "
+            f"Got: '{name[:50]}'",
+            "name",
+            name,
         )
 
     # Validate points

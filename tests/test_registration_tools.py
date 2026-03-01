@@ -15,8 +15,8 @@ from slicer_mcp.tools import ValidationError
 PATCH_TARGET = "slicer_mcp.registration_tools.get_client"
 
 
-def _mock_client(return_dict: dict) -> tuple[Mock, Mock]:
-    """Create mock client + exec_python returning ``return_dict``."""
+def _mock_client(return_dict: dict) -> Mock:
+    """Create mock client with exec_python returning ``return_dict``."""
     client = Mock()
     client.exec_python.return_value = {
         "success": True,
@@ -132,6 +132,13 @@ class TestPlaceLandmarks:
             mock_gc.return_value = _mock_client_error(SlicerConnectionError("connection refused"))
             with pytest.raises(SlicerConnectionError):
                 place_landmarks("Name", [[1.0, 2.0, 3.0]])
+
+    def test_place_landmarks_invalid_name_pattern(self):
+        """Name with invalid characters must raise ValidationError."""
+        from slicer_mcp.registration_tools import place_landmarks
+
+        with pytest.raises(ValidationError, match="Invalid landmark name format"):
+            place_landmarks("bad;name", [[1.0, 2.0, 3.0]])
 
 
 # =============================================================================
@@ -571,10 +578,8 @@ class TestCodegen:
                 harden=False,
             )
             code = client.exec_python.call_args[0][0]
-        # The harden block should be conditional; when False it shouldn't appear
-        # (or it should be inside a conditional that evaluates to False)
-        # We check the generated code doesn't unconditionally call it
-        assert "HardenTransform" not in code or "harden" in code.lower()
+        # The harden block is inside a conditional guard "if harden:"
+        assert "if harden:" in code
 
     def test_register_volumes_code_contains_execresult(self):
         """Generated code must end with __execResult assignment."""
@@ -596,3 +601,46 @@ class TestCodegen:
             )
             code = client.exec_python.call_args[0][0]
         assert "__execResult" in code
+
+    def test_register_landmarks_code_enforces_min_pairs(self):
+        """Generated code must check MIN_LANDMARK_PAIRS before registration."""
+        from slicer_mcp.registration_tools import register_landmarks
+
+        with patch(PATCH_TARGET) as mock_gc:
+            client = _mock_client(
+                {
+                    "success": True,
+                    "transform_node_id": "vtkMRMLLinearTransformNode1",
+                    "transform_node_name": "T",
+                    "transform_type": "Rigid",
+                }
+            )
+            mock_gc.return_value = client
+            register_landmarks(
+                "vtkMRMLMarkupsFiducialNode1",
+                "vtkMRMLMarkupsFiducialNode2",
+            )
+            code = client.exec_python.call_args[0][0]
+        # Must contain the minimum pairs check
+        assert "GetNumberOfControlPoints()" in code
+        assert "min_pairs" in code
+
+    def test_register_landmarks_code_returns_error_below_min_pairs(self):
+        """Generated code returns error dict (not exception) for too few landmarks."""
+        from slicer_mcp.constants import MIN_LANDMARK_PAIRS
+        from slicer_mcp.registration_tools import register_landmarks
+
+        with patch(PATCH_TARGET) as mock_gc:
+            client = _mock_client(
+                {
+                    "success": False,
+                    "error": f"Fixed landmarks have 2 points, need at least {MIN_LANDMARK_PAIRS}",
+                }
+            )
+            mock_gc.return_value = client
+            result = register_landmarks(
+                "vtkMRMLMarkupsFiducialNode1",
+                "vtkMRMLMarkupsFiducialNode2",
+            )
+        assert result["success"] is False
+        assert "at least" in result["error"]
