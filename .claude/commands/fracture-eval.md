@@ -102,20 +102,33 @@ CLINICAL SUMMARY:
 
 ### 3. X-ray Pipeline
 
-#### 3a. Detect fractures
+#### 3a. Place landmarks on vertebral endplates
+
+X-ray fracture detection requires manual landmark placement (6 points per vertebra: anterior/middle/posterior superior and inferior endplate corners).
+
+```
+place_landmarks(name="xray_fracture_landmarks", points=<endplate_points>, labels=<point_labels>)
+```
+
+Retrieve the structured landmark data:
+```
+get_landmarks(node_id=<landmarks_node_id>)
+```
+
+#### 3b. Detect fractures
 ```
 detect_vertebral_fractures_xray(
     volume_node_id=<xray_id>,
-    region="thoracolumbar"
+    landmarks_per_vertebra=<landmarks_dict>
 )
 ```
 
-#### 3b. Screenshots
+#### 3c. Screenshots
 ```
 capture_screenshot(view_type="sagittal")
 ```
 
-#### 3c. X-ray Report
+#### 3d. X-ray Report
 ```
 VERTEBRAL FRACTURE EVALUATION (X-ray)
 

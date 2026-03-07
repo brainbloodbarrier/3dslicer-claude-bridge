@@ -32,18 +32,21 @@ Please identify which loaded volume corresponds to each position:
 [list loaded volumes]
 ```
 
-### 2. Measure dynamic listhesis
+### 2. Place landmarks on each X-ray position
+
+Place anatomical landmarks on each X-ray (neutral, flexion, extension) using `place_landmarks()`, then retrieve them with `get_landmarks()`. Each level requires landmarks for superior and inferior endplate corners.
+
+### 3. Measure dynamic listhesis
 
 ```
 measure_listhesis_dynamic_xray(
-    neutral_volume_id=<neutral_id>,
-    flexion_volume_id=<flexion_id>,
-    extension_volume_id=<extension_id>,
-    levels=<levels_if_specified>
+    volume_node_ids={"neutral": <neutral_id>, "flexion": <flexion_id>, "extension": <extension_id>},
+    landmarks_per_position=<landmarks_dict>,
+    levels=<levels_list>
 )
 ```
 
-### 3. CT correlation (if available)
+### 4. CT correlation (if available)
 
 If CT is loaded:
 ```
@@ -70,13 +73,13 @@ And capture axial screenshots at the pars level:
 capture_screenshot(view_type="axial")
 ```
 
-### 4. Documentation
+### 5. Documentation
 
 ```
 capture_screenshot(view_type="sagittal")   # Each position if possible
 ```
 
-### 5. Generate instability report
+### 6. Generate instability report
 
 ```
 SEGMENTAL INSTABILITY ASSESSMENT

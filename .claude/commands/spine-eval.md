@@ -55,7 +55,7 @@ Analyze the image to orient yourself anatomically.
 ### 4. Measure alignment
 
 ```
-measure_spine_alignment(segmentation_id=<seg_id>, region=<region>)
+measure_spine_alignment(segmentation_node_id=<seg_id>, region=<region>)
 ```
 
 ### 5. CCJ assessment (if cervical)

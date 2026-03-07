@@ -57,8 +57,7 @@ This measures:
 If CTA volume is available:
 ```
 segment_vertebral_artery(
-    volume_node_id=<cta_volume_id>,
-    segmentation_node_id=<seg_id>
+    input_node_id=<cta_volume_id>
 )
 ```
 

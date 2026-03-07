@@ -40,8 +40,7 @@ segment_spine(input_node_id=<ct_id>, region="cervical")
 If levels include C1 or C2:
 ```
 segment_vertebral_artery(
-    volume_node_id=<cta_volume_id>,
-    segmentation_node_id=<seg_id>
+    input_node_id=<cta_volume_id>
 )
 ```
 
@@ -72,6 +71,7 @@ plan_cervical_screws(
 analyze_bone_quality(
     volume_node_id=<ct_id>,
     segmentation_node_id=<seg_id>,
+    region="cervical",
     levels=<levels_list>
 )
 ```

@@ -80,7 +80,12 @@ measure_spinal_canal_ct(volume_node_id=<ct_id>, segmentation_node_id=<seg_id>)
 
 ```
 measure_sagittal_balance_xray(volume_node_id=<xray_lat_id>)
-detect_vertebral_fractures_xray(volume_node_id=<xray_lat_id>)
+```
+
+Place landmarks on vertebral endplates using `place_landmarks()` and retrieve with `get_landmarks()` before running X-ray fracture detection.
+
+```
+detect_vertebral_fractures_xray(volume_node_id=<xray_lat_id>, landmarks_per_vertebra=<landmarks_dict>)
 ```
 
 ### 4. X-ray AP Pipeline (if AP X-ray available)
@@ -92,11 +97,13 @@ measure_cobb_angle_xray(volume_node_id=<xray_ap_id>)
 
 ### 5. Dynamic X-ray Pipeline (if flex/ext available)
 
+Place landmarks on each X-ray position (neutral, flexion, extension) using `place_landmarks()` and retrieve with `get_landmarks()`.
+
 ```
 measure_listhesis_dynamic_xray(
-    neutral_volume_id=<neutral_id>,
-    flexion_volume_id=<flexion_id>,
-    extension_volume_id=<extension_id>
+    volume_node_ids={"neutral": <neutral_id>, "flexion": <flexion_id>, "extension": <extension_id>},
+    landmarks_per_position=<landmarks_dict>,
+    levels=<levels_list>
 )
 ```
 

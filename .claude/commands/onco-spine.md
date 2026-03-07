@@ -40,8 +40,7 @@ segment_spine(input_node_id=<ct_id>, region=<region_or_full>)
 detect_metastatic_lesions_ct(
     volume_node_id=<ct_id>,
     segmentation_node_id=<seg_id>,
-    include_posterior_elements=true,
-    include_sins=true
+    include_posterior_elements=true
 )
 ```
 
