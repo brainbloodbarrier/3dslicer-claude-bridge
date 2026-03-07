@@ -216,3 +216,16 @@ All three workflow implementations are independent and can be developed in paral
 - Existing 3 resources remain unchanged
 - Tier 2 Claude commands continue to work (with fixed docs)
 - `server.py` error handling pattern (`_handle_tool_error`) is reused by workflow tools
+
+## 6. Recommended Branch Protection for `main`
+
+These settings require repository admin access and should be configured through
+the GitHub UI (Settings > Branches > Branch protection rules) or the GitHub API.
+
+- **Require status checks to pass before merging**: enable for the `lint` and
+  `test` jobs (from `.github/workflows/lint.yml` and `.github/workflows/test.yml`).
+- **Require at least 1 approving review** before merge.
+- **Do not allow force pushes** to `main`.
+
+These rules are intentionally not automated -- they must be set by a repository
+admin.

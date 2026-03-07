@@ -11,6 +11,7 @@ from slicer_mcp.resources import (
     get_scene_resource,
     get_status_resource,
     get_volumes_resource,
+    get_workflows_resource,
 )
 from slicer_mcp.slicer_client import SlicerConnectionError
 
@@ -171,3 +172,72 @@ class TestGetStatusResource:
             result = json.loads(get_status_resource())
             assert result["connected"] is False
             assert result["error"] == "fail"
+
+
+class TestGetWorkflowsResource:
+    """Test get_workflows_resource function."""
+
+    def test_returns_valid_json(self):
+        """get_workflows_resource should return valid JSON."""
+        result = json.loads(get_workflows_resource())
+        assert "workflows" in result
+
+    def test_contains_three_workflows(self):
+        """get_workflows_resource should list all three Tier 1 workflows."""
+        result = json.loads(get_workflows_resource())
+        assert len(result["workflows"]) == 3
+
+    def test_workflow_names(self):
+        """get_workflows_resource should list the correct workflow names."""
+        result = json.loads(get_workflows_resource())
+        names = [w["name"] for w in result["workflows"]]
+        assert "workflow_modic_eval" in names
+        assert "workflow_ccj_protocol" in names
+        assert "workflow_onco_spine" in names
+
+    def test_each_workflow_has_required_fields(self):
+        """Each workflow entry should have all required descriptor fields."""
+        result = json.loads(get_workflows_resource())
+        required_fields = {
+            "name",
+            "status",
+            "description",
+            "required_modalities",
+            "clinical_indication",
+            "tools_orchestrated",
+            "estimated_runtime",
+        }
+        for workflow in result["workflows"]:
+            missing = required_fields - set(workflow.keys())
+            assert not missing, f"Workflow {workflow['name']} missing fields: {missing}"
+
+    def test_all_workflows_have_planned_status(self):
+        """All workflows should currently have 'planned' status."""
+        result = json.loads(get_workflows_resource())
+        for workflow in result["workflows"]:
+            assert workflow["status"] == "planned", (
+                f"Expected 'planned' status for {workflow['name']}, " f"got '{workflow['status']}'"
+            )
+
+    def test_does_not_require_slicer_connection(self):
+        """get_workflows_resource should work without any Slicer connection."""
+        # No mocking needed — the function is purely static
+        result = get_workflows_resource()
+        assert isinstance(result, str)
+        parsed = json.loads(result)
+        assert len(parsed["workflows"]) > 0
+
+    def test_modic_eval_tools_orchestrated(self):
+        """workflow_modic_eval should list its expected orchestrated tools."""
+        result = json.loads(get_workflows_resource())
+        modic = next(w for w in result["workflows"] if w["name"] == "workflow_modic_eval")
+        assert "segment_spine" in modic["tools_orchestrated"]
+        assert "classify_modic_changes" in modic["tools_orchestrated"]
+        assert "capture_screenshot" in modic["tools_orchestrated"]
+
+    def test_modic_eval_required_modalities(self):
+        """workflow_modic_eval should require T1 and T2 MRI."""
+        result = json.loads(get_workflows_resource())
+        modic = next(w for w in result["workflows"] if w["name"] == "workflow_modic_eval")
+        assert "T1 MRI" in modic["required_modalities"]
+        assert "T2 MRI" in modic["required_modalities"]

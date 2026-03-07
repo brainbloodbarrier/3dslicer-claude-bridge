@@ -199,3 +199,82 @@ __execResult = result
         }
 
         return json.dumps(status_data, indent=2)
+
+
+# Static workflow catalog — does not require a Slicer connection.
+_WORKFLOW_CATALOG: list[dict] = [
+    {
+        "name": "workflow_modic_eval",
+        "status": "planned",
+        "description": "Modic endplate and disc degeneration assessment from MRI",
+        "required_modalities": ["T1 MRI", "T2 MRI"],
+        "clinical_indication": "Endplate changes, disc degeneration, cord screening",
+        "tools_orchestrated": [
+            "segment_spine",
+            "classify_modic_changes",
+            "assess_disc_degeneration_mri",
+            "detect_cord_compression_mri",
+            "capture_screenshot",
+        ],
+        "estimated_runtime": "3-5 minutes",
+    },
+    {
+        "name": "workflow_ccj_protocol",
+        "status": "planned",
+        "description": (
+            "Craniocervical junction protocol: craniometry, vertebral artery "
+            "assessment, and bone quality analysis"
+        ),
+        "required_modalities": ["CT"],
+        "optional_modalities": ["CTA"],
+        "clinical_indication": (
+            "CCJ instability evaluation, craniometry measurements, " "vertebral artery assessment"
+        ),
+        "tools_orchestrated": [
+            "segment_spine",
+            "measure_ccj_angles",
+            "segment_vertebral_artery",
+            "analyze_bone_quality",
+            "capture_screenshot",
+        ],
+        "estimated_runtime": "3-5 minutes",
+    },
+    {
+        "name": "workflow_onco_spine",
+        "status": "planned",
+        "description": (
+            "Oncologic spine assessment: lesion detection, SINS scoring, " "and stability analysis"
+        ),
+        "required_modalities": ["CT"],
+        "optional_modalities": ["T1 MRI", "T2 MRI"],
+        "clinical_indication": (
+            "Metastatic lesion detection, SINS scoring, spinal stability, "
+            "canal compromise, bone quality"
+        ),
+        "tools_orchestrated": [
+            "segment_spine",
+            "detect_metastatic_lesions_ct",
+            "calculate_sins_score",
+            "measure_listhesis_ct",
+            "measure_spinal_canal_ct",
+            "assess_osteoporosis_ct",
+            "detect_metastatic_lesions_mri",
+            "capture_screenshot",
+        ],
+        "estimated_runtime": "5-10 minutes",
+    },
+]
+
+
+def get_workflows_resource() -> str:
+    """List available workflow tools with required inputs and clinical use cases.
+
+    This is a static catalog of planned and available high-level workflow tools.
+    It does not require a connection to Slicer.
+
+    Returns:
+        JSON string with a list of workflow descriptors
+    """
+    data = {"workflows": _WORKFLOW_CATALOG}
+    logger.info(f"Workflows resource retrieved: {len(_WORKFLOW_CATALOG)} workflows")
+    return json.dumps(data, indent=2)

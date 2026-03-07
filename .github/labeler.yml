@@ -1,0 +1,64 @@
+# Configuration for actions/labeler@v5
+# See: https://github.com/actions/labeler
+#
+# Labels that must be created before this workflow works:
+#   gh label create core --color "0e8a16" --description "Changes to core infrastructure"
+#   gh label create registration --color "1d76db" --description "Registration tools"
+#   gh label create rendering --color "5319e7" --description "Rendering tools"
+#   gh label create workflow --color "fbca04" --description "Workflow orchestration"
+#   gh label create testing --color "bfd4f2" --description "Test changes"
+#   gh label create spine-core --color "d93f0b" --description "Spine feature tools"
+#   gh label create diagnostics-ct --color "c5def5" --description "CT diagnostic tools"
+#   gh label create diagnostics-mri --color "c5def5" --description "MRI diagnostic tools"
+#   gh label create diagnostics-xray --color "c5def5" --description "X-ray diagnostic tools"
+#   gh label create automation-skills --color "e99695" --description "Claude command automation"
+#   gh label create documentation --color "0075ca" --description "Documentation changes"
+#   gh label create ci/cd --color "ededed" --description "CI/CD workflow changes"
+
+core:
+  - changed-files:
+      - any-glob-to-any-file: "src/slicer_mcp/core/**"
+
+spine-core:
+  - changed-files:
+      - any-glob-to-any-file: "src/slicer_mcp/features/spine/**"
+
+diagnostics-ct:
+  - changed-files:
+      - any-glob-to-any-file: "src/slicer_mcp/features/diagnostics/ct.py"
+
+diagnostics-mri:
+  - changed-files:
+      - any-glob-to-any-file: "src/slicer_mcp/features/diagnostics/mri.py"
+
+diagnostics-xray:
+  - changed-files:
+      - any-glob-to-any-file: "src/slicer_mcp/features/diagnostics/xray.py"
+
+registration:
+  - changed-files:
+      - any-glob-to-any-file: "src/slicer_mcp/features/registration*"
+
+rendering:
+  - changed-files:
+      - any-glob-to-any-file: "src/slicer_mcp/features/rendering*"
+
+workflow:
+  - changed-files:
+      - any-glob-to-any-file: "src/slicer_mcp/features/workflows/**"
+
+automation-skills:
+  - changed-files:
+      - any-glob-to-any-file: ".claude/commands/**"
+
+documentation:
+  - changed-files:
+      - any-glob-to-any-file: "docs/**"
+
+ci/cd:
+  - changed-files:
+      - any-glob-to-any-file: ".github/**"
+
+testing:
+  - changed-files:
+      - any-glob-to-any-file: "tests/**"

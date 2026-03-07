@@ -63,6 +63,28 @@ Add the shared server definition, save the file, then restart Cursor. If Cursor
 was already open, a full restart is the safest way to force it to reload the MCP
 config.
 
+### Discovering Available Capabilities
+
+The server exposes four MCP resources that Cursor can read to discover what is
+available without calling any tools:
+
+| Resource | Description |
+|----------|-------------|
+| `slicer://scene` | Current MRML scene structure and loaded nodes |
+| `slicer://volumes` | All loaded imaging volumes with dimensions, spacing, and metadata |
+| `slicer://status` | Connection health, Slicer version, and WebServer response time |
+| `slicer://workflows` | Catalog of high-level workflow tools with required modalities and clinical indications |
+
+To read a resource in Cursor, ask the agent to fetch it:
+
+```text
+Read the slicer://workflows resource and tell me which workflows are available.
+```
+
+The `slicer://workflows` resource is especially useful for finding multi-step
+clinical pipelines (such as Modic evaluation or oncologic spine assessment) and
+understanding which imaging modalities each workflow requires.
+
 ## Verification Checklist
 
 After saving the client config:
