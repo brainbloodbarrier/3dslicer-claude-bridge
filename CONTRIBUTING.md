@@ -4,6 +4,9 @@ Thank you for your interest in contributing to the MCP Slicer Bridge!
 
 ## Development Setup
 
+For Claude Code and Cursor MCP client configuration, see
+[`docs/guides/setup-mcp-clients.md`](docs/guides/setup-mcp-clients.md).
+
 ### Prerequisites
 
 - Python 3.10+
@@ -72,7 +75,13 @@ Follow [Conventional Commits](https://www.conventionalcommits.org/):
 - `chore:` Maintenance tasks
 
 ## Development Guidelines
+
 Please refer directly to the `CLAUDE.md` file in the root of the project. It is the single source of truth for architectural invariants, error handling paradigms, tool building instructions, and validation requirements.
+
+For the current lightweight v2 direction, also check:
+
+- `docs/plans/2026-03-07-v2-roadmap.md`
+- `TODO.md`
 
 ## Questions?
 

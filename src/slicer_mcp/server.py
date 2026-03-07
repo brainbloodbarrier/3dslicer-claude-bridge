@@ -5,20 +5,21 @@ import sys
 
 from mcp.server.fastmcp import FastMCP
 
-# Import tools and resources
-from slicer_mcp import (
-    diagnostic_tools_ct,
-    diagnostic_tools_mri,
-    diagnostic_tools_xray,
-    instrumentation_tools,
-    registration_tools,
-    rendering_tools,
-    resources,
-    spine_tools,
-    tools,
-)
-from slicer_mcp.circuit_breaker import CircuitOpenError
-from slicer_mcp.slicer_client import SlicerConnectionError, SlicerTimeoutError
+from slicer_mcp.core import resources
+
+# Import tools and resources from canonical locations
+from slicer_mcp.core.circuit_breaker import CircuitOpenError
+from slicer_mcp.core.slicer_client import SlicerConnectionError, SlicerTimeoutError
+from slicer_mcp.features import base_tools as tools
+from slicer_mcp.features import registration as registration_tools
+from slicer_mcp.features import rendering as rendering_tools
+from slicer_mcp.features.base_tools import ValidationError
+from slicer_mcp.features.diagnostics import ct as diagnostic_tools_ct
+from slicer_mcp.features.diagnostics import mri as diagnostic_tools_mri
+from slicer_mcp.features.diagnostics import xray as diagnostic_tools_xray
+from slicer_mcp.features.spine import instrumentation as instrumentation_tools
+from slicer_mcp.features.spine import tools as spine_tools
+from slicer_mcp.features.workflows import modic as workflow_modic
 
 # Configure logging to stderr (stdout reserved for MCP protocol)
 logging.basicConfig(
@@ -48,7 +49,16 @@ def _handle_tool_error(error: Exception, tool_name: str) -> dict:
     Returns:
         Dict with error information
     """
-    if isinstance(error, CircuitOpenError):
+    if isinstance(error, ValidationError):
+        logger.warning(f"Tool {tool_name}: Validation error - {error.message}")
+        return {
+            "success": False,
+            "error": error.message,
+            "error_type": "validation",
+            "field": error.field,
+            "value": error.value,
+        }
+    elif isinstance(error, CircuitOpenError):
         logger.warning(f"Tool {tool_name}: Circuit breaker open - {error}")
         return {"success": False, "error": str(error), "error_type": "circuit_open"}
     elif isinstance(error, SlicerTimeoutError):
@@ -939,6 +949,54 @@ def analyze_bone_quality(
         return _handle_tool_error(e, "analyze_bone_quality")
 
 
+# Workflow Tools
+# ==============
+
+
+@mcp.tool()
+def workflow_modic_eval(
+    t1_volume_id: str,
+    t2_volume_id: str,
+    region: str = "lumbar",
+    segmentation_node_id: str | None = None,
+    include_cord_screening: bool = True,
+) -> dict:
+    """Run Modic endplate and disc degeneration assessment from MRI.
+
+    LONG OPERATION: May take 2-10 minutes depending on hardware and whether
+    segmentation is pre-computed.
+
+    Orchestrates: segment_spine, classify_modic_changes, assess_disc_degeneration_mri,
+    detect_cord_compression_mri (if cervical/thoracic), capture_screenshot.
+
+    Requires both T1 and T2 weighted MRI sequences loaded in the scene.
+
+    Args:
+        t1_volume_id: MRML node ID of T1-weighted MRI volume
+        t2_volume_id: MRML node ID of T2-weighted MRI volume
+        region: Spine region - "cervical", "thoracic", or "lumbar"
+        segmentation_node_id: MRML node ID of existing segmentation (optional;
+            runs segment_spine on T2 volume if not provided)
+        include_cord_screening: If True, run cord compression detection for
+            cervical/thoracic regions (default: True)
+
+    Returns:
+        Dict with segmentation_node_id, modic_changes (per level/endplate),
+        pfirrmann_grades, cord_compression (if screened), screenshots,
+        region, and steps_completed
+    """
+    try:
+        return workflow_modic.workflow_modic_eval(
+            t1_volume_id=t1_volume_id,
+            t2_volume_id=t2_volume_id,
+            region=region,
+            segmentation_node_id=segmentation_node_id,
+            include_cord_screening=include_cord_screening,
+        )
+    except Exception as e:
+        return _handle_tool_error(e, "workflow_modic_eval")
+
+
 # MRI Diagnostic Protocol Tools
 # ==============================
 
@@ -1397,6 +1455,18 @@ def get_status() -> str:
     return resources.get_status_resource()
 
 
+@mcp.resource("slicer://workflows")
+def get_workflows() -> str:
+    """List available workflow tools with required inputs and clinical use cases.
+
+    Returns:
+        JSON string with workflows list containing name, status,
+            description, required_modalities, clinical_indication,
+            tools_orchestrated, and estimated_runtime for each workflow
+    """
+    return resources.get_workflows_resource()
+
+
 # Main Entry Point
 # ================
 
@@ -1405,7 +1475,7 @@ def main():
     """Run the MCP Slicer Bridge server with stdio transport."""
     logger.info("Starting MCP Slicer Bridge server")
     logger.info(
-        "Registered 44 tools: capture_screenshot, list_scene_nodes, "
+        "Registered 46 tools: capture_screenshot, list_scene_nodes, "
         "execute_python, measure_volume, list_sample_data, load_sample_data, "
         "set_layout, import_dicom, list_dicom_studies, list_dicom_series, "
         "load_dicom_series, run_brain_extraction, measure_sagittal_balance_xray, "
@@ -1414,8 +1484,11 @@ def main():
         "classify_disc_degeneration_xray, "
         "detect_vertebral_fractures_ct, assess_osteoporosis_ct, "
         "detect_metastatic_lesions_ct, calculate_sins_score, "
-        "measure_listhesis_ct, measure_spinal_canal_ct, plan_cervical_screws, "
+        "measure_listhesis_ct, measure_spinal_canal_ct, "
+        "workflow_modic_eval, "
+        "plan_cervical_screws, "
         "measure_ccj_angles, measure_spine_alignment, segment_spine, "
+        "visualize_spine_segmentation, "
         "segment_vertebral_artery, analyze_bone_quality, "
         "classify_modic_changes, assess_disc_degeneration_mri, "
         "detect_cord_compression_mri, detect_metastatic_lesions_mri, "
@@ -1424,7 +1497,10 @@ def main():
         "enable_volume_rendering, set_volume_rendering_property, "
         "export_model, segmentation_to_models, capture_3d_view"
     )
-    logger.info("Registered 3 resources: slicer://scene, slicer://volumes, slicer://status")
+    logger.info(
+        "Registered 4 resources: slicer://scene, slicer://volumes, "
+        "slicer://status, slicer://workflows"
+    )
 
     try:
         mcp.run(transport="stdio")

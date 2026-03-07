@@ -57,7 +57,7 @@ class TestMeasureCCJAnglesValidation:
 
     def test_accepts_adult_population(self):
         """Test adult population is accepted and proceeds to Slicer call."""
-        with patch("slicer_mcp.spine_tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.spine.tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
@@ -86,7 +86,7 @@ class TestMeasureCCJAnglesValidation:
 
     def test_accepts_child_population(self):
         """Test child population is accepted and proceeds to Slicer call."""
-        with patch("slicer_mcp.spine_tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.spine.tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
@@ -114,7 +114,7 @@ class TestMeasureCCJAnglesValidation:
 
     def test_defaults_to_adult_population(self):
         """Test population defaults to adult when not specified."""
-        with patch("slicer_mcp.spine_tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.spine.tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
@@ -169,7 +169,7 @@ class TestMeasureSpineAlignmentValidation:
 
     def test_accepts_cervical_region(self):
         """Test cervical region is accepted."""
-        with patch("slicer_mcp.spine_tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.spine.tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
@@ -198,7 +198,7 @@ class TestMeasureSpineAlignmentValidation:
     def test_accepts_all_valid_regions(self):
         """Test all valid regions are accepted."""
         for region in VALID_ALIGNMENT_REGIONS:
-            with patch("slicer_mcp.spine_tools.get_client") as mock_get_client:
+            with patch("slicer_mcp.features.spine.tools.get_client") as mock_get_client:
                 mock_client = Mock()
                 mock_client.exec_python.return_value = {
                     "success": True,
@@ -224,7 +224,7 @@ class TestMeasureSpineAlignmentValidation:
 
     def test_defaults_to_full_region(self):
         """Test region defaults to full when not specified."""
-        with patch("slicer_mcp.spine_tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.spine.tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
@@ -600,7 +600,7 @@ class TestMeasureCCJAnglesExecution:
 
     def test_successful_ccj_measurement(self, ccj_result):
         """Test successful CCJ measurement returns all expected fields."""
-        with patch("slicer_mcp.spine_tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.spine.tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
@@ -619,7 +619,7 @@ class TestMeasureCCJAnglesExecution:
 
     def test_ccj_returns_all_measurements(self, ccj_result):
         """Test CCJ returns all expected measurement keys."""
-        with patch("slicer_mcp.spine_tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.spine.tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
@@ -641,7 +641,7 @@ class TestMeasureCCJAnglesExecution:
 
     def test_ccj_uses_extended_timeout(self, ccj_result):
         """Test CCJ measurement uses extended timeout."""
-        with patch("slicer_mcp.spine_tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.spine.tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
@@ -656,7 +656,7 @@ class TestMeasureCCJAnglesExecution:
 
     def test_ccj_connection_error_propagates(self):
         """Test SlicerConnectionError is re-raised."""
-        with patch("slicer_mcp.spine_tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.spine.tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.side_effect = SlicerConnectionError("Connection refused")
             mock_get_client.return_value = mock_client
@@ -666,7 +666,7 @@ class TestMeasureCCJAnglesExecution:
 
     def test_ccj_empty_result_raises_error(self):
         """Test empty Slicer result raises SlicerConnectionError."""
-        with patch("slicer_mcp.spine_tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.spine.tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
@@ -679,7 +679,7 @@ class TestMeasureCCJAnglesExecution:
 
     def test_ccj_null_result_raises_error(self):
         """Test null Slicer result raises SlicerConnectionError."""
-        with patch("slicer_mcp.spine_tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.spine.tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
@@ -692,7 +692,7 @@ class TestMeasureCCJAnglesExecution:
 
     def test_ccj_malformed_json_raises_error(self):
         """Test malformed JSON result raises SlicerConnectionError."""
-        with patch("slicer_mcp.spine_tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.spine.tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
@@ -779,7 +779,7 @@ class TestMeasureSpineAlignmentExecution:
 
     def test_successful_alignment_measurement(self, alignment_result):
         """Test successful alignment measurement returns all expected fields."""
-        with patch("slicer_mcp.spine_tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.spine.tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
@@ -799,7 +799,7 @@ class TestMeasureSpineAlignmentExecution:
 
     def test_alignment_returns_all_sagittal_parameters(self, alignment_result):
         """Test alignment returns all expected sagittal parameters."""
-        with patch("slicer_mcp.spine_tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.spine.tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
@@ -825,7 +825,7 @@ class TestMeasureSpineAlignmentExecution:
 
     def test_alignment_returns_vertebrae_data(self, alignment_result):
         """Test alignment returns per-vertebra geometry data."""
-        with patch("slicer_mcp.spine_tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.spine.tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
@@ -844,7 +844,7 @@ class TestMeasureSpineAlignmentExecution:
 
     def test_alignment_uses_extended_timeout(self, alignment_result):
         """Test alignment measurement uses extended timeout."""
-        with patch("slicer_mcp.spine_tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.spine.tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
@@ -859,7 +859,7 @@ class TestMeasureSpineAlignmentExecution:
 
     def test_alignment_connection_error_propagates(self):
         """Test SlicerConnectionError is re-raised."""
-        with patch("slicer_mcp.spine_tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.spine.tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.side_effect = SlicerConnectionError("Connection refused")
             mock_get_client.return_value = mock_client
@@ -869,7 +869,7 @@ class TestMeasureSpineAlignmentExecution:
 
     def test_alignment_empty_result_raises_error(self):
         """Test empty Slicer result raises SlicerConnectionError."""
-        with patch("slicer_mcp.spine_tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.spine.tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
@@ -882,7 +882,7 @@ class TestMeasureSpineAlignmentExecution:
 
     def test_alignment_null_result_raises_error(self):
         """Test null Slicer result raises SlicerConnectionError."""
-        with patch("slicer_mcp.spine_tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.spine.tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
@@ -895,7 +895,7 @@ class TestMeasureSpineAlignmentExecution:
 
     def test_alignment_cervical_region_passes_region(self):
         """Test cervical region is correctly passed to Slicer code."""
-        with patch("slicer_mcp.spine_tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.spine.tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
@@ -953,7 +953,7 @@ class TestSegmentSpineValidation:
         """All valid regions must not raise ValidationError on the region check."""
         for region in ["cervical", "thoracic", "lumbar", "full"]:
             # Will fail at client.exec_python, but should not fail at region validation
-            with patch("slicer_mcp.spine_tools.get_client") as mock_get_client:
+            with patch("slicer_mcp.features.spine.tools.get_client") as mock_get_client:
                 mock_client = Mock()
                 mock_client.exec_python.return_value = {
                     "success": True,
@@ -1160,7 +1160,7 @@ class TestSegmentSpineExecution:
 
     def test_successful_segmentation(self):
         """Successful segmentation must return structured result."""
-        with patch("slicer_mcp.spine_tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.spine.tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = self._mock_exec_result()
             mock_get_client.return_value = mock_client
@@ -1176,7 +1176,7 @@ class TestSegmentSpineExecution:
         """segment_spine must use SPINE_SEGMENTATION_TIMEOUT."""
         from slicer_mcp.spine_constants import SPINE_SEGMENTATION_TIMEOUT
 
-        with patch("slicer_mcp.spine_tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.spine.tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = self._mock_exec_result()
             mock_get_client.return_value = mock_client
@@ -1189,7 +1189,7 @@ class TestSegmentSpineExecution:
 
     def test_adds_long_operation_metadata(self):
         """Result must include long_operation metadata."""
-        with patch("slicer_mcp.spine_tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.spine.tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = self._mock_exec_result(region="cervical")
             mock_get_client.return_value = mock_client
@@ -1203,7 +1203,7 @@ class TestSegmentSpineExecution:
 
     def test_connection_error_propagated(self):
         """SlicerConnectionError must propagate from exec_python."""
-        with patch("slicer_mcp.spine_tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.spine.tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.side_effect = SlicerConnectionError("Connection refused")
             mock_get_client.return_value = mock_client
@@ -1213,7 +1213,7 @@ class TestSegmentSpineExecution:
 
     def test_empty_result_raises_error(self):
         """Empty result from Slicer must raise SlicerConnectionError."""
-        with patch("slicer_mcp.spine_tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.spine.tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {"success": True, "result": ""}
             mock_get_client.return_value = mock_client
@@ -1223,7 +1223,7 @@ class TestSegmentSpineExecution:
 
     def test_malformed_json_raises_error(self):
         """Malformed JSON result must raise SlicerConnectionError."""
-        with patch("slicer_mcp.spine_tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.spine.tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
@@ -1236,7 +1236,7 @@ class TestSegmentSpineExecution:
 
     def test_cervical_region_passed_to_code(self):
         """Region parameter must be passed to generated Python code."""
-        with patch("slicer_mcp.spine_tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.spine.tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = self._mock_exec_result(
                 region="cervical", vertebrae_count=7
@@ -1269,7 +1269,7 @@ class TestSegmentSpineRegistration:
         """Server wrapper must catch exceptions via _handle_tool_error."""
         from slicer_mcp.server import segment_spine as server_segment_spine
 
-        with patch("slicer_mcp.spine_tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.spine.tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.side_effect = SlicerConnectionError(
                 "Connection failed", details={"url": "http://localhost:2016"}
@@ -1282,13 +1282,13 @@ class TestSegmentSpineRegistration:
             assert result["error_type"] == "connection"
 
     def test_server_wrapper_handles_validation_error(self):
-        """Server wrapper must catch ValidationError."""
+        """Server wrapper must catch ValidationError with structured response."""
         from slicer_mcp.server import segment_spine as server_segment_spine
 
         result = server_segment_spine("", region="full")
 
         assert result["success"] is False
-        assert result["error_type"] == "unexpected"
+        assert result["error_type"] == "validation"
 
 
 # =============================================================================
@@ -1392,7 +1392,7 @@ class TestSegmentVertebralArteryExecution:
 
     def test_successful_segmentation_without_seeds(self):
         """Successful segmentation returns expected result structure."""
-        with patch("slicer_mcp.spine_tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.spine.tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
@@ -1424,7 +1424,7 @@ class TestSegmentVertebralArteryExecution:
 
     def test_successful_segmentation_with_seeds(self):
         """Segmentation with seed points uses seeded code path."""
-        with patch("slicer_mcp.spine_tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.spine.tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
@@ -1462,7 +1462,7 @@ class TestSegmentVertebralArteryExecution:
         """Tool uses SEGMENTATION_TIMEOUT for exec_python call."""
         from slicer_mcp.constants import SEGMENTATION_TIMEOUT
 
-        with patch("slicer_mcp.spine_tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.spine.tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
@@ -1482,7 +1482,7 @@ class TestSegmentVertebralArteryExecution:
 
     def test_connection_error_propagated(self):
         """SlicerConnectionError from client is propagated."""
-        with patch("slicer_mcp.spine_tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.spine.tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.side_effect = SlicerConnectionError("Connection refused")
             mock_get_client.return_value = mock_client
@@ -1492,7 +1492,7 @@ class TestSegmentVertebralArteryExecution:
 
     def test_empty_result_raises_error(self):
         """Empty result from Slicer raises SlicerConnectionError."""
-        with patch("slicer_mcp.spine_tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.spine.tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
@@ -1505,7 +1505,7 @@ class TestSegmentVertebralArteryExecution:
 
     def test_left_side_parameter_passed(self):
         """Side parameter 'left' is included in generated Python code."""
-        with patch("slicer_mcp.spine_tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.spine.tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
@@ -1605,7 +1605,7 @@ class TestAnalyzeBoneQualityExecution:
 
     def test_successful_analysis(self):
         """Successful bone quality analysis returns expected structure."""
-        with patch("slicer_mcp.spine_tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.spine.tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
@@ -1630,7 +1630,7 @@ class TestAnalyzeBoneQualityExecution:
 
     def test_vertebra_classification_values(self):
         """Per-vertebra classification values match Pickhardt thresholds."""
-        with patch("slicer_mcp.spine_tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.spine.tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
@@ -1655,7 +1655,7 @@ class TestAnalyzeBoneQualityExecution:
         """Tool uses SPINE_SEGMENTATION_TIMEOUT for exec_python call."""
         from slicer_mcp.spine_constants import SPINE_SEGMENTATION_TIMEOUT
 
-        with patch("slicer_mcp.spine_tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.spine.tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
@@ -1674,7 +1674,7 @@ class TestAnalyzeBoneQualityExecution:
 
     def test_region_parameter_passed_to_code(self):
         """Region parameter is embedded in generated Python code."""
-        with patch("slicer_mcp.spine_tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.spine.tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
@@ -1694,7 +1694,7 @@ class TestAnalyzeBoneQualityExecution:
 
     def test_connection_error_propagated(self):
         """SlicerConnectionError from client is propagated."""
-        with patch("slicer_mcp.spine_tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.spine.tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.side_effect = SlicerConnectionError("Connection refused")
             mock_get_client.return_value = mock_client
@@ -1707,7 +1707,7 @@ class TestAnalyzeBoneQualityExecution:
 
     def test_empty_result_raises_error(self):
         """Empty result from Slicer raises SlicerConnectionError."""
-        with patch("slicer_mcp.spine_tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.spine.tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
@@ -1723,7 +1723,7 @@ class TestAnalyzeBoneQualityExecution:
 
     def test_default_region_is_lumbar(self):
         """Default region parameter is lumbar."""
-        with patch("slicer_mcp.spine_tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.spine.tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
@@ -1850,7 +1850,7 @@ class TestVisualizeSpineSegmentationValidation:
     def test_valid_regions_accepted(self):
         """All valid spine regions are accepted (validation only)."""
         for region in ["cervical", "thoracic", "lumbar", "full"]:
-            with patch("slicer_mcp.spine_tools.get_client") as mock_get_client:
+            with patch("slicer_mcp.features.spine.tools.get_client") as mock_get_client:
                 mock_client = Mock()
                 mock_client.exec_python.return_value = {
                     "success": True,

@@ -75,25 +75,25 @@ class TestValidateExportDirectory:
         with pytest.raises(ValidationError, match="forbidden component"):
             validate_export_directory("/tmp/../etc")
 
-    @patch("slicer_mcp.tools.os.path.isdir", return_value=True)
-    @patch("slicer_mcp.tools.os.path.exists", return_value=True)
-    @patch("slicer_mcp.tools.os.path.realpath", return_value="/tmp/export")
-    @patch("slicer_mcp.tools.os.path.expanduser", return_value="/tmp/export")
+    @patch("slicer_mcp.features.base_tools.os.path.isdir", return_value=True)
+    @patch("slicer_mcp.features.base_tools.os.path.exists", return_value=True)
+    @patch("slicer_mcp.features.base_tools.os.path.realpath", return_value="/tmp/export")
+    @patch("slicer_mcp.features.base_tools.os.path.expanduser", return_value="/tmp/export")
     def test_valid_directory(self, mock_expand, mock_real, mock_exists, mock_isdir):
         result = validate_export_directory("/tmp/export")
         assert result == "/tmp/export"
 
-    @patch("slicer_mcp.tools.os.path.exists", return_value=False)
-    @patch("slicer_mcp.tools.os.path.realpath", return_value="/tmp/nonexistent")
-    @patch("slicer_mcp.tools.os.path.expanduser", return_value="/tmp/nonexistent")
+    @patch("slicer_mcp.features.base_tools.os.path.exists", return_value=False)
+    @patch("slicer_mcp.features.base_tools.os.path.realpath", return_value="/tmp/nonexistent")
+    @patch("slicer_mcp.features.base_tools.os.path.expanduser", return_value="/tmp/nonexistent")
     def test_directory_not_exists(self, mock_expand, mock_real, mock_exists):
         with pytest.raises(ValidationError, match="does not exist"):
             validate_export_directory("/tmp/nonexistent")
 
-    @patch("slicer_mcp.tools.os.path.isdir", return_value=False)
-    @patch("slicer_mcp.tools.os.path.exists", return_value=True)
-    @patch("slicer_mcp.tools.os.path.realpath", return_value="/tmp/file.txt")
-    @patch("slicer_mcp.tools.os.path.expanduser", return_value="/tmp/file.txt")
+    @patch("slicer_mcp.features.base_tools.os.path.isdir", return_value=False)
+    @patch("slicer_mcp.features.base_tools.os.path.exists", return_value=True)
+    @patch("slicer_mcp.features.base_tools.os.path.realpath", return_value="/tmp/file.txt")
+    @patch("slicer_mcp.features.base_tools.os.path.expanduser", return_value="/tmp/file.txt")
     def test_path_not_directory(self, mock_expand, mock_real, mock_exists, mock_isdir):
         with pytest.raises(ValidationError, match="not a directory"):
             validate_export_directory("/tmp/file.txt")
@@ -112,7 +112,7 @@ class TestValidateExportDirectory:
 class TestEnableVolumeRendering:
     """Tests for enable_volume_rendering."""
 
-    @patch("slicer_mcp.rendering_tools.get_client")
+    @patch("slicer_mcp.features.rendering.get_client")
     def test_success_no_preset(self, mock_get_client):
         mock_client = Mock()
         mock_get_client.return_value = mock_client
@@ -133,7 +133,7 @@ class TestEnableVolumeRendering:
         assert result["volume_node_id"] == "vtkMRMLScalarVolumeNode1"
         assert result["preset"] is None
 
-    @patch("slicer_mcp.rendering_tools.get_client")
+    @patch("slicer_mcp.features.rendering.get_client")
     def test_success_with_preset(self, mock_get_client):
         mock_client = Mock()
         mock_get_client.return_value = mock_client
@@ -161,7 +161,7 @@ class TestEnableVolumeRendering:
         with pytest.raises(ValidationError):
             enable_volume_rendering("")
 
-    @patch("slicer_mcp.rendering_tools.get_client")
+    @patch("slicer_mcp.features.rendering.get_client")
     def test_connection_error(self, mock_get_client):
         mock_client = Mock()
         mock_get_client.return_value = mock_client
@@ -179,7 +179,7 @@ class TestEnableVolumeRendering:
 class TestSetVolumeRenderingProperty:
     """Tests for set_volume_rendering_property."""
 
-    @patch("slicer_mcp.rendering_tools.get_client")
+    @patch("slicer_mcp.features.rendering.get_client")
     def test_opacity_success(self, mock_get_client):
         mock_client = Mock()
         mock_get_client.return_value = mock_client
@@ -198,7 +198,7 @@ class TestSetVolumeRenderingProperty:
         assert result["success"] is True
         assert "opacity_scale" in result["changes_applied"]
 
-    @patch("slicer_mcp.rendering_tools.get_client")
+    @patch("slicer_mcp.features.rendering.get_client")
     def test_window_level_success(self, mock_get_client):
         mock_client = Mock()
         mock_get_client.return_value = mock_client
@@ -216,7 +216,7 @@ class TestSetVolumeRenderingProperty:
         result = set_volume_rendering_property("vtkMRMLScalarVolumeNode1", window=400.0, level=40.0)
         assert result["success"] is True
 
-    @patch("slicer_mcp.rendering_tools.get_client")
+    @patch("slicer_mcp.features.rendering.get_client")
     def test_visibility_success(self, mock_get_client):
         mock_client = Mock()
         mock_get_client.return_value = mock_client
@@ -270,7 +270,7 @@ class TestSetVolumeRenderingProperty:
         with pytest.raises(ValidationError):
             set_volume_rendering_property("", opacity_scale=1.0)
 
-    @patch("slicer_mcp.rendering_tools.get_client")
+    @patch("slicer_mcp.features.rendering.get_client")
     def test_connection_error(self, mock_get_client):
         mock_client = Mock()
         mock_get_client.return_value = mock_client
@@ -288,8 +288,8 @@ class TestSetVolumeRenderingProperty:
 class TestExportModel:
     """Tests for export_model."""
 
-    @patch("slicer_mcp.rendering_tools.validate_export_directory", return_value="/tmp/export")
-    @patch("slicer_mcp.rendering_tools.get_client")
+    @patch("slicer_mcp.features.rendering.validate_export_directory", return_value="/tmp/export")
+    @patch("slicer_mcp.features.rendering.get_client")
     def test_stl_success(self, mock_get_client, mock_validate_dir):
         mock_client = Mock()
         mock_get_client.return_value = mock_client
@@ -313,8 +313,8 @@ class TestExportModel:
         assert result["format"] == "STL"
         assert result["point_count"] == 500
 
-    @patch("slicer_mcp.rendering_tools.validate_export_directory", return_value="/tmp/export")
-    @patch("slicer_mcp.rendering_tools.get_client")
+    @patch("slicer_mcp.features.rendering.validate_export_directory", return_value="/tmp/export")
+    @patch("slicer_mcp.features.rendering.get_client")
     def test_obj_success(self, mock_get_client, mock_validate_dir):
         mock_client = Mock()
         mock_get_client.return_value = mock_client
@@ -349,8 +349,8 @@ class TestExportModel:
         with pytest.raises(ValidationError):
             export_model("", "/tmp", "model", "STL")
 
-    @patch("slicer_mcp.rendering_tools.validate_export_directory", return_value="/tmp/export")
-    @patch("slicer_mcp.rendering_tools.get_client")
+    @patch("slicer_mcp.features.rendering.validate_export_directory", return_value="/tmp/export")
+    @patch("slicer_mcp.features.rendering.get_client")
     def test_connection_error(self, mock_get_client, mock_validate_dir):
         mock_client = Mock()
         mock_get_client.return_value = mock_client
@@ -375,7 +375,7 @@ class TestExportModel:
 class TestSegmentationToModels:
     """Tests for segmentation_to_models."""
 
-    @patch("slicer_mcp.rendering_tools.get_client")
+    @patch("slicer_mcp.features.rendering.get_client")
     def test_all_segments_success(self, mock_get_client):
         mock_client = Mock()
         mock_get_client.return_value = mock_client
@@ -405,7 +405,7 @@ class TestSegmentationToModels:
         assert result["model_count"] == 1
         assert len(result["models"]) == 1
 
-    @patch("slicer_mcp.rendering_tools.get_client")
+    @patch("slicer_mcp.features.rendering.get_client")
     def test_specific_segments(self, mock_get_client):
         mock_client = Mock()
         mock_get_client.return_value = mock_client
@@ -437,7 +437,7 @@ class TestSegmentationToModels:
         with pytest.raises(ValidationError):
             segmentation_to_models("")
 
-    @patch("slicer_mcp.rendering_tools.get_client")
+    @patch("slicer_mcp.features.rendering.get_client")
     def test_connection_error(self, mock_get_client):
         mock_client = Mock()
         mock_get_client.return_value = mock_client
@@ -455,7 +455,7 @@ class TestSegmentationToModels:
 class TestCapture3dView:
     """Tests for capture_3d_view."""
 
-    @patch("slicer_mcp.rendering_tools.get_client")
+    @patch("slicer_mcp.features.rendering.get_client")
     def test_success(self, mock_get_client):
         mock_client = Mock()
         mock_get_client.return_value = mock_client
@@ -474,7 +474,7 @@ class TestCapture3dView:
         assert result["success"] is True
         assert result["output_path"] == "/tmp/screenshot.png"
 
-    @patch("slicer_mcp.rendering_tools.get_client")
+    @patch("slicer_mcp.features.rendering.get_client")
     def test_with_dimensions(self, mock_get_client):
         mock_client = Mock()
         mock_get_client.return_value = mock_client
@@ -524,7 +524,7 @@ class TestCapture3dView:
         with pytest.raises(ValidationError, match="view_index"):
             capture_3d_view("/tmp/screenshot.png", view_index=11)
 
-    @patch("slicer_mcp.rendering_tools.get_client")
+    @patch("slicer_mcp.features.rendering.get_client")
     def test_connection_error(self, mock_get_client):
         mock_client = Mock()
         mock_get_client.return_value = mock_client

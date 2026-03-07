@@ -183,7 +183,7 @@ class TestMeasureVolumeValidation:
 
     def test_measure_volume_valid_inputs_proceeds(self):
         """Test measure_volume with valid inputs proceeds to Slicer call."""
-        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.base_tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
@@ -214,7 +214,7 @@ class TestMeasureVolumeCodeGeneration:
     def test_measure_volume_uses_json_escaped_node_id(self):
         """Test measure_volume uses json.dumps for node_id escaping."""
 
-        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.base_tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
@@ -243,7 +243,7 @@ class TestMeasureVolumeCodeGeneration:
     def test_measure_volume_uses_json_escaped_segment_name(self):
         """Test measure_volume uses json.dumps for segment_name escaping."""
 
-        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.base_tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
@@ -270,7 +270,7 @@ class TestMeasureVolumeCodeGeneration:
 
     def test_measure_volume_code_uses_variable_not_interpolation(self):
         """Test generated code uses variables instead of direct interpolation."""
-        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.base_tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
@@ -295,7 +295,7 @@ class TestMeasureVolumeCodeGeneration:
 
     def test_measure_volume_segment_code_uses_variable(self):
         """Test generated code for segment measurement uses variables."""
-        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.base_tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
@@ -442,7 +442,7 @@ class TestMalformedJsonHandling:
         """Test measure_volume handles malformed JSON gracefully."""
         from slicer_mcp.slicer_client import SlicerConnectionError
 
-        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.base_tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {"success": True, "result": "not valid json {"}
             mock_get_client.return_value = mock_client
@@ -456,7 +456,7 @@ class TestMalformedJsonHandling:
         """Test measure_volume handles empty result."""
         from slicer_mcp.slicer_client import SlicerConnectionError
 
-        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.base_tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {"success": True, "result": ""}
             mock_get_client.return_value = mock_client
@@ -470,7 +470,7 @@ class TestMalformedJsonHandling:
         """Test measure_volume handles null JSON result."""
         from slicer_mcp.slicer_client import SlicerConnectionError
 
-        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.base_tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {"success": True, "result": "null"}
             mock_get_client.return_value = mock_client
@@ -484,7 +484,7 @@ class TestMalformedJsonHandling:
         """Test list_sample_data handles malformed JSON gracefully."""
         from slicer_mcp.tools import list_sample_data
 
-        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.base_tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {"success": True, "result": "invalid json"}
             mock_get_client.return_value = mock_client
@@ -840,7 +840,7 @@ class TestBrainExtractionLongOperation:
         from slicer_mcp.constants import BRAIN_EXTRACTION_TIMEOUT
         from slicer_mcp.tools import run_brain_extraction
 
-        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.base_tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
@@ -863,7 +863,7 @@ class TestBrainExtractionLongOperation:
         """Tool should include long_operation metadata in result."""
         from slicer_mcp.tools import run_brain_extraction
 
-        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.base_tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
@@ -897,7 +897,7 @@ class TestExecutePythonCodeLengthValidation:
         # Create code exactly at the limit
         code = "x" * MAX_PYTHON_CODE_LENGTH
 
-        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.base_tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {"success": True, "result": "ok"}
             mock_get_client.return_value = mock_client
@@ -997,7 +997,7 @@ class TestCaptureScreenshotValidation:
         """Valid look_from_axis should pass validation."""
         from slicer_mcp.tools import capture_screenshot
 
-        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.base_tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.get_3d_screenshot.return_value = b"\x89PNG\r\n\x1a\n"
             mock_get_client.return_value = mock_client
@@ -1009,7 +1009,7 @@ class TestCaptureScreenshotValidation:
         """None look_from_axis should be allowed for 3d view."""
         from slicer_mcp.tools import capture_screenshot
 
-        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.base_tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.get_3d_screenshot.return_value = b"\x89PNG\r\n\x1a\n"
             mock_get_client.return_value = mock_client
@@ -1033,7 +1033,7 @@ class TestCaptureScreenshotTool:
         """Axial view screenshot should return success with base64 image."""
         from slicer_mcp.tools import capture_screenshot
 
-        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.base_tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.get_screenshot.return_value = b"\x89PNG\r\n\x1a\n"
             mock_get_client.return_value = mock_client
@@ -1046,7 +1046,7 @@ class TestCaptureScreenshotTool:
         """3D view screenshot should return success with look_from_axis."""
         from slicer_mcp.tools import capture_screenshot
 
-        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.base_tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.get_3d_screenshot.return_value = b"\x89PNG\r\n\x1a\n"
             mock_get_client.return_value = mock_client
@@ -1058,7 +1058,7 @@ class TestCaptureScreenshotTool:
         """Full layout screenshot should return success."""
         from slicer_mcp.tools import capture_screenshot
 
-        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.base_tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.get_full_screenshot.return_value = b"\x89PNG\r\n\x1a\n"
             mock_get_client.return_value = mock_client
@@ -1069,7 +1069,7 @@ class TestCaptureScreenshotTool:
         """Screenshot with scroll_position should include it in result."""
         from slicer_mcp.tools import capture_screenshot
 
-        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.base_tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.get_screenshot.return_value = b"\x89PNG\r\n\x1a\n"
             mock_get_client.return_value = mock_client
@@ -1080,7 +1080,7 @@ class TestCaptureScreenshotTool:
         """SlicerConnectionError should propagate from capture_screenshot."""
         from slicer_mcp.tools import capture_screenshot
 
-        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.base_tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.get_screenshot.side_effect = SlicerConnectionError("fail")
             mock_get_client.return_value = mock_client
@@ -1095,7 +1095,7 @@ class TestSetLayoutTool:
         """Valid layout name should return success."""
         from slicer_mcp.tools import set_layout
 
-        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.base_tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.set_layout.return_value = {"success": True}
             mock_get_client.return_value = mock_client
@@ -1126,7 +1126,7 @@ class TestDICOMTools:
         """list_dicom_studies should return parsed JSON result."""
         from slicer_mcp.tools import list_dicom_studies
 
-        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.base_tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
@@ -1140,7 +1140,7 @@ class TestDICOMTools:
         """list_dicom_series should return parsed JSON result."""
         from slicer_mcp.tools import list_dicom_series
 
-        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.base_tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
@@ -1154,7 +1154,7 @@ class TestDICOMTools:
         """load_dicom_series should return parsed JSON result."""
         from slicer_mcp.tools import load_dicom_series
 
-        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.base_tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
@@ -1173,7 +1173,7 @@ class TestDICOMTools:
 
         dicom_dir = tmp_path / "dicoms"
         dicom_dir.mkdir()
-        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.base_tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,

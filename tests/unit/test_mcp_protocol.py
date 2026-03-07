@@ -99,7 +99,8 @@ class TestToolParameterValidation:
 
     def test_load_sample_data_validates_dataset(self):
         """Test load_sample_data rejects invalid dataset names."""
-        from slicer_mcp.tools import FALLBACK_SAMPLE_DATASETS, load_sample_data
+        from slicer_mcp.constants import FALLBACK_SAMPLE_DATASETS
+        from slicer_mcp.tools import load_sample_data
 
         with pytest.raises(ValueError) as exc_info:
             load_sample_data(dataset_name="InvalidDataset")
@@ -136,7 +137,7 @@ class TestToolResponseFormat:
         """Test capture_screenshot returns expected response structure."""
         from slicer_mcp.tools import capture_screenshot
 
-        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.base_tools.get_client") as mock_get_client:
             mock_client = Mock()
             # Return PNG magic bytes
             mock_client.get_screenshot.return_value = b"\x89PNG\r\n\x1a\n" + b"\x00" * 100
@@ -156,7 +157,7 @@ class TestToolResponseFormat:
         """Test list_scene_nodes returns expected response structure."""
         from slicer_mcp.tools import list_scene_nodes
 
-        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.base_tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.get_scene_nodes.return_value = [
                 {
@@ -178,7 +179,7 @@ class TestToolResponseFormat:
         """Test execute_python returns expected response structure."""
         from slicer_mcp.tools import execute_python
 
-        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.base_tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
@@ -201,7 +202,7 @@ class TestToolResponseFormat:
 
         reset_client()
 
-        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.base_tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
@@ -237,12 +238,13 @@ class TestToolResponseFormat:
 
     def test_list_sample_data_fallback_on_connection_error(self):
         """Test list_sample_data falls back to static list when Slicer disconnected."""
+        from slicer_mcp.constants import FALLBACK_SAMPLE_DATASETS
         from slicer_mcp.slicer_client import SlicerConnectionError, reset_client
-        from slicer_mcp.tools import FALLBACK_SAMPLE_DATASETS, list_sample_data
+        from slicer_mcp.tools import list_sample_data
 
         reset_client()
 
-        with patch("slicer_mcp.tools.get_client") as mock_get_client:
+        with patch("slicer_mcp.features.base_tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.side_effect = SlicerConnectionError("Connection failed")
             mock_get_client.return_value = mock_client
@@ -267,7 +269,7 @@ class TestAuditLogging:
         reset_client()
 
         with (
-            patch("slicer_mcp.tools.get_client") as mock_get_client,
+            patch("slicer_mcp.features.base_tools.get_client") as mock_get_client,
             patch.object(audit_logger, "info") as mock_audit,
         ):
             mock_client = Mock()
@@ -300,7 +302,7 @@ class TestAuditLogging:
         reset_client()
 
         with (
-            patch("slicer_mcp.tools.get_client") as mock_get_client,
+            patch("slicer_mcp.features.base_tools.get_client") as mock_get_client,
             patch.object(audit_logger, "info") as mock_audit,
         ):
             mock_client = Mock()
@@ -361,7 +363,7 @@ class TestResourceResponseFormat:
         # Reset client to ensure fresh state
         reset_client()
 
-        with patch("slicer_mcp.resources.get_client") as mock_get_client:
+        with patch("slicer_mcp.core.resources.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.health_check.side_effect = SlicerConnectionError("Connection failed")
             mock_client.base_url = "http://localhost:2016"
@@ -382,7 +384,7 @@ class TestResourceResponseFormat:
 
         reset_client()
 
-        with patch("slicer_mcp.resources.get_client") as mock_get_client:
+        with patch("slicer_mcp.core.resources.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.get_scene_nodes.return_value = []
             mock_get_client.return_value = mock_client
@@ -409,7 +411,7 @@ class TestServerToolErrorHandling:
         from slicer_mcp.server import capture_screenshot
         from slicer_mcp.slicer_client import SlicerConnectionError
 
-        with patch("slicer_mcp.tools.capture_screenshot") as mock_tool:
+        with patch("slicer_mcp.server.tools.capture_screenshot") as mock_tool:
             mock_tool.side_effect = SlicerConnectionError("Connection failed")
 
             result = capture_screenshot(view_type="axial")
@@ -423,7 +425,7 @@ class TestServerToolErrorHandling:
         from slicer_mcp.server import capture_screenshot
         from slicer_mcp.slicer_client import SlicerTimeoutError
 
-        with patch("slicer_mcp.tools.capture_screenshot") as mock_tool:
+        with patch("slicer_mcp.server.tools.capture_screenshot") as mock_tool:
             mock_tool.side_effect = SlicerTimeoutError("Timeout occurred")
 
             result = capture_screenshot(view_type="axial")
@@ -436,7 +438,7 @@ class TestServerToolErrorHandling:
         from slicer_mcp.circuit_breaker import CircuitOpenError
         from slicer_mcp.server import capture_screenshot
 
-        with patch("slicer_mcp.tools.capture_screenshot") as mock_tool:
+        with patch("slicer_mcp.server.tools.capture_screenshot") as mock_tool:
             mock_tool.side_effect = CircuitOpenError("Circuit open", "slicer", 30)
 
             result = capture_screenshot(view_type="axial")
@@ -449,7 +451,7 @@ class TestServerToolErrorHandling:
         from slicer_mcp.server import list_scene_nodes
         from slicer_mcp.slicer_client import SlicerConnectionError
 
-        with patch("slicer_mcp.tools.list_scene_nodes") as mock_tool:
+        with patch("slicer_mcp.server.tools.list_scene_nodes") as mock_tool:
             mock_tool.side_effect = SlicerConnectionError("Connection failed")
 
             result = list_scene_nodes()
@@ -462,7 +464,7 @@ class TestServerToolErrorHandling:
         from slicer_mcp.server import execute_python
         from slicer_mcp.slicer_client import SlicerConnectionError
 
-        with patch("slicer_mcp.tools.execute_python") as mock_tool:
+        with patch("slicer_mcp.server.tools.execute_python") as mock_tool:
             mock_tool.side_effect = SlicerConnectionError("Connection failed")
 
             result = execute_python(code="print('hello')")
@@ -475,7 +477,7 @@ class TestServerToolErrorHandling:
         from slicer_mcp.server import measure_volume
         from slicer_mcp.slicer_client import SlicerConnectionError
 
-        with patch("slicer_mcp.tools.measure_volume") as mock_tool:
+        with patch("slicer_mcp.server.tools.measure_volume") as mock_tool:
             mock_tool.side_effect = SlicerConnectionError("Connection failed")
 
             result = measure_volume(node_id="vtkMRMLSegmentationNode1")
@@ -488,7 +490,7 @@ class TestServerToolErrorHandling:
         from slicer_mcp.server import list_sample_data
         from slicer_mcp.slicer_client import SlicerConnectionError
 
-        with patch("slicer_mcp.tools.list_sample_data") as mock_tool:
+        with patch("slicer_mcp.server.tools.list_sample_data") as mock_tool:
             mock_tool.side_effect = SlicerConnectionError("Connection failed")
 
             result = list_sample_data()
@@ -501,7 +503,7 @@ class TestServerToolErrorHandling:
         from slicer_mcp.server import load_sample_data
         from slicer_mcp.slicer_client import SlicerConnectionError
 
-        with patch("slicer_mcp.tools.load_sample_data") as mock_tool:
+        with patch("slicer_mcp.server.tools.load_sample_data") as mock_tool:
             mock_tool.side_effect = SlicerConnectionError("Connection failed")
 
             result = load_sample_data(dataset_name="MRHead")
@@ -514,7 +516,7 @@ class TestServerToolErrorHandling:
         from slicer_mcp.server import set_layout
         from slicer_mcp.slicer_client import SlicerConnectionError
 
-        with patch("slicer_mcp.tools.set_layout") as mock_tool:
+        with patch("slicer_mcp.server.tools.set_layout") as mock_tool:
             mock_tool.side_effect = SlicerConnectionError("Connection failed")
 
             result = set_layout(layout="FourUp")
@@ -526,7 +528,7 @@ class TestServerToolErrorHandling:
         """Test _handle_tool_error handles unexpected exceptions."""
         from slicer_mcp.server import capture_screenshot
 
-        with patch("slicer_mcp.tools.capture_screenshot") as mock_tool:
+        with patch("slicer_mcp.server.tools.capture_screenshot") as mock_tool:
             mock_tool.side_effect = RuntimeError("Unexpected error")
 
             result = capture_screenshot(view_type="axial")
