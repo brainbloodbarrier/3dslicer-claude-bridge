@@ -1282,13 +1282,13 @@ class TestSegmentSpineRegistration:
             assert result["error_type"] == "connection"
 
     def test_server_wrapper_handles_validation_error(self):
-        """Server wrapper must catch ValidationError."""
+        """Server wrapper must catch ValidationError with structured response."""
         from slicer_mcp.server import segment_spine as server_segment_spine
 
         result = server_segment_spine("", region="full")
 
         assert result["success"] is False
-        assert result["error_type"] == "unexpected"
+        assert result["error_type"] == "validation"
 
 
 # =============================================================================

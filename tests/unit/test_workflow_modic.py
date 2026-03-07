@@ -4,13 +4,14 @@ from unittest.mock import patch
 
 import pytest
 
+from slicer_mcp.core.circuit_breaker import CircuitOpenError
+from slicer_mcp.core.constants import CORD_SCREENING_REGIONS
+from slicer_mcp.core.slicer_client import SlicerConnectionError, SlicerTimeoutError
+from slicer_mcp.features.base_tools import ValidationError
 from slicer_mcp.features.workflows.modic import (
-    CORD_SCREENING_REGIONS,
     _validate_region,
     workflow_modic_eval,
 )
-from slicer_mcp.slicer_client import SlicerConnectionError
-from slicer_mcp.tools import ValidationError
 
 # =============================================================================
 # Region Validation Tests
@@ -467,6 +468,50 @@ class TestWorkflowModicEvalErrors:
 
         assert result["modic_changes"] == MOCK_MODIC_RESULT
         assert len(result["screenshots"]) == 0
+
+    @patch("slicer_mcp.features.workflows.modic.capture_screenshot")
+    @patch("slicer_mcp.features.workflows.modic.assess_disc_degeneration_mri")
+    @patch("slicer_mcp.features.workflows.modic.classify_modic_changes")
+    @patch("slicer_mcp.features.workflows.modic.segment_spine")
+    def test_screenshot_timeout_is_nonfatal(
+        self, mock_segment, mock_modic, mock_pfirrmann, mock_screenshot
+    ):
+        """SlicerTimeoutError from screenshot does not abort the workflow."""
+        mock_segment.return_value = MOCK_SEGMENT_RESULT
+        mock_modic.return_value = MOCK_MODIC_RESULT
+        mock_pfirrmann.return_value = MOCK_PFIRRMANN_RESULT
+        mock_screenshot.side_effect = SlicerTimeoutError("Screenshot timed out")
+
+        result = workflow_modic_eval(
+            t1_volume_id="vtkMRMLScalarVolumeNode1",
+            t2_volume_id="vtkMRMLScalarVolumeNode2",
+        )
+
+        assert result["modic_changes"] == MOCK_MODIC_RESULT
+        assert len(result["screenshots"]) == 0
+        assert "capture_screenshot" not in result["steps_completed"]
+
+    @patch("slicer_mcp.features.workflows.modic.capture_screenshot")
+    @patch("slicer_mcp.features.workflows.modic.assess_disc_degeneration_mri")
+    @patch("slicer_mcp.features.workflows.modic.classify_modic_changes")
+    @patch("slicer_mcp.features.workflows.modic.segment_spine")
+    def test_screenshot_circuit_open_is_nonfatal(
+        self, mock_segment, mock_modic, mock_pfirrmann, mock_screenshot
+    ):
+        """CircuitOpenError from screenshot does not abort the workflow."""
+        mock_segment.return_value = MOCK_SEGMENT_RESULT
+        mock_modic.return_value = MOCK_MODIC_RESULT
+        mock_pfirrmann.return_value = MOCK_PFIRRMANN_RESULT
+        mock_screenshot.side_effect = CircuitOpenError("Circuit breaker is open", "slicer", 30.0)
+
+        result = workflow_modic_eval(
+            t1_volume_id="vtkMRMLScalarVolumeNode1",
+            t2_volume_id="vtkMRMLScalarVolumeNode2",
+        )
+
+        assert result["modic_changes"] == MOCK_MODIC_RESULT
+        assert len(result["screenshots"]) == 0
+        assert "capture_screenshot" not in result["steps_completed"]
 
     @patch("slicer_mcp.features.workflows.modic.classify_modic_changes")
     def test_validation_error_from_underlying_tool_propagates(self, mock_modic):

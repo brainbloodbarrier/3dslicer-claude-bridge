@@ -13,6 +13,7 @@ from slicer_mcp.core.slicer_client import SlicerConnectionError, SlicerTimeoutEr
 from slicer_mcp.features import base_tools as tools
 from slicer_mcp.features import registration as registration_tools
 from slicer_mcp.features import rendering as rendering_tools
+from slicer_mcp.features.base_tools import ValidationError
 from slicer_mcp.features.diagnostics import ct as diagnostic_tools_ct
 from slicer_mcp.features.diagnostics import mri as diagnostic_tools_mri
 from slicer_mcp.features.diagnostics import xray as diagnostic_tools_xray
@@ -48,7 +49,16 @@ def _handle_tool_error(error: Exception, tool_name: str) -> dict:
     Returns:
         Dict with error information
     """
-    if isinstance(error, CircuitOpenError):
+    if isinstance(error, ValidationError):
+        logger.warning(f"Tool {tool_name}: Validation error - {error.message}")
+        return {
+            "success": False,
+            "error": error.message,
+            "error_type": "validation",
+            "field": error.field,
+            "value": error.value,
+        }
+    elif isinstance(error, CircuitOpenError):
         logger.warning(f"Tool {tool_name}: Circuit breaker open - {error}")
         return {"success": False, "error": str(error), "error_type": "circuit_open"}
     elif isinstance(error, SlicerTimeoutError):
@@ -1465,7 +1475,7 @@ def main():
     """Run the MCP Slicer Bridge server with stdio transport."""
     logger.info("Starting MCP Slicer Bridge server")
     logger.info(
-        "Registered 45 tools: capture_screenshot, list_scene_nodes, "
+        "Registered 46 tools: capture_screenshot, list_scene_nodes, "
         "execute_python, measure_volume, list_sample_data, load_sample_data, "
         "set_layout, import_dicom, list_dicom_studies, list_dicom_series, "
         "load_dicom_series, run_brain_extraction, measure_sagittal_balance_xray, "
@@ -1478,6 +1488,7 @@ def main():
         "workflow_modic_eval, "
         "plan_cervical_screws, "
         "measure_ccj_angles, measure_spine_alignment, segment_spine, "
+        "visualize_spine_segmentation, "
         "segment_vertebral_artery, analyze_bone_quality, "
         "classify_modic_changes, assess_disc_degeneration_mri, "
         "detect_cord_compression_mri, detect_metastatic_lesions_mri, "

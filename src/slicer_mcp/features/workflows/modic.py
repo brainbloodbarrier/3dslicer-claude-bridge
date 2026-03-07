@@ -13,7 +13,9 @@ References:
 import logging
 from typing import Any
 
-from slicer_mcp.core.slicer_client import SlicerConnectionError
+from slicer_mcp.core.circuit_breaker import CircuitOpenError
+from slicer_mcp.core.constants import CORD_SCREENING_REGIONS
+from slicer_mcp.core.slicer_client import SlicerConnectionError, SlicerTimeoutError
 from slicer_mcp.features.base_tools import (
     ValidationError,
     capture_screenshot,
@@ -28,9 +30,6 @@ from slicer_mcp.features.diagnostics.mri import (
 from slicer_mcp.features.spine.tools import segment_spine
 
 logger = logging.getLogger("slicer-mcp")
-
-# Regions where cord compression screening is clinically relevant
-CORD_SCREENING_REGIONS = frozenset(["cervical", "thoracic"])
 
 
 def _validate_region(region: str) -> str:
@@ -154,8 +153,8 @@ def workflow_modic_eval(
         screenshot = capture_screenshot(view_type="sagittal")
         screenshots.append(screenshot)
         steps_completed.append("capture_screenshot")
-    except (SlicerConnectionError, ValueError) as e:
-        logger.warning("workflow_modic_eval: screenshot failed: %s", e)
+    except (SlicerConnectionError, SlicerTimeoutError, CircuitOpenError, ValueError) as e:
+        logger.warning("workflow_modic_eval: screenshot failed (non-fatal): %s", e)
         # Screenshot failure is non-fatal for the workflow
 
     # ── Assemble result ──────────────────────────────────────────────────

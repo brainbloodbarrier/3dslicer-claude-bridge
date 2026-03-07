@@ -147,6 +147,12 @@ MAX_LANDMARKS = 500
 MAX_XRAY_LANDMARKS = 100  # per-tool safety limit for X-ray landmark measurements
 
 # =============================================================================
+# Workflow Configuration
+# =============================================================================
+# Regions where cord compression screening is clinically relevant
+CORD_SCREENING_REGIONS = frozenset(["cervical", "thoracic"])
+
+# =============================================================================
 # Sample Data Configuration
 # =============================================================================
 # Fallback list of common sample datasets (used when dynamic discovery fails)
