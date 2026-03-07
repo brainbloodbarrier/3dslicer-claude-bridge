@@ -105,6 +105,48 @@ SEGMENTATION_TIMEOUT = 180  # 3 minutes for segmentation operations
 REGISTRATION_TIMEOUT = 300  # 5 minutes for registration operations
 
 # =============================================================================
+# Registration & Landmark Constants
+# =============================================================================
+VALID_TRANSFORM_TYPES: frozenset[str] = frozenset(
+    {
+        "Rigid",
+        "ScaleVersor3D",
+        "ScaleSkewVersor3D",
+        "Affine",
+        "BSpline",
+    }
+)
+VALID_INIT_MODES: frozenset[str] = frozenset(
+    {
+        "useMomentsAlign",
+        "useCenterOfHeadAlign",
+        "useGeometryAlign",
+        "Off",
+    }
+)
+VALID_INTERPOLATION_MODES: frozenset[str] = frozenset(
+    {
+        "Linear",
+        "BSpline",
+        "WindowedSinc",
+        "NearestNeighbor",
+    }
+)
+VALID_LANDMARK_TRANSFORM_TYPES: frozenset[str] = frozenset(
+    {
+        "Rigid",
+        "Similarity",
+        "Affine",
+    }
+)
+MIN_LANDMARK_PAIRS = 3
+MAX_LANDMARK_LABEL_LENGTH = 64
+LANDMARK_LABEL_PATTERN = r"^[a-zA-Z0-9_\-. ]+$"
+DEFAULT_SAMPLING_PERCENTAGE = 0.01
+MAX_LANDMARKS = 500
+MAX_XRAY_LANDMARKS = 100  # per-tool safety limit for X-ray landmark measurements
+
+# =============================================================================
 # Sample Data Configuration
 # =============================================================================
 # Fallback list of common sample datasets (used when dynamic discovery fails)
@@ -121,3 +163,68 @@ FALLBACK_SAMPLE_DATASETS = (
 # Segment Statistics Keys
 # =============================================================================
 SEGMENT_STATISTICS_VOLUME_KEY = "SegmentStatistics.volume_cc"
+
+
+# =============================================================================
+# Volume Rendering & 3D Model Export Constants
+# =============================================================================
+VOLUME_RENDERING_TIMEOUT = 60  # seconds for volume rendering setup
+MODEL_EXPORT_TIMEOUT = 120  # seconds for model export (large meshes)
+CAPTURE_3D_VIEW_TIMEOUT = 120  # seconds for high-res 3D view captures
+
+# Volume rendering property ranges
+VR_OPACITY_SCALE_MIN = 0.0
+VR_OPACITY_SCALE_MAX = 10.0
+
+# 3D view capture dimension limits
+CAPTURE_MIN_DIMENSION = 1
+CAPTURE_MAX_DIMENSION = 8192
+
+VALID_VR_PRESETS: frozenset[str] = frozenset(
+    {
+        "CT-AAA",
+        "CT-AAA2",
+        "CT-Bone",
+        "CT-Bones",
+        "CT-Cardiac",
+        "CT-Cardiac2",
+        "CT-Cardiac3",
+        "CT-Chest-Contrast-Enhanced",
+        "CT-Chest-Vasculature",
+        "CT-Coronary-Arteries",
+        "CT-Coronary-Arteries-2",
+        "CT-Coronary-Arteries-3",
+        "CT-Cropped-Volume-Bone",
+        "CT-Fat",
+        "CT-Liver-Vasculature",
+        "CT-Lung",
+        "CT-MIP",
+        "CT-Muscle",
+        "CT-Pulmonary-Arteries",
+        "CT-Soft-Tissue",
+        "CT-Air",
+        "MR-Angio",
+        "MR-Default",
+        "MR-MIP",
+        "MR-T2-Brain",
+    }
+)
+
+VALID_EXPORT_FORMATS: frozenset[str] = frozenset(
+    {
+        "STL",
+        "OBJ",
+        "PLY",
+        "VTK",
+    }
+)
+
+EXPORT_FORMAT_EXTENSIONS: dict[str, str] = {
+    "STL": ".stl",
+    "OBJ": ".obj",
+    "PLY": ".ply",
+    "VTK": ".vtk",
+}
+
+MAX_EXPORT_FILENAME_LENGTH = 255
+EXPORT_FILENAME_PATTERN = r"^[a-zA-Z0-9_\-. ()]+$"

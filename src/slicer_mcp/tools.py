@@ -700,7 +700,7 @@ def measure_volume(node_id: str, segment_name: str | None = None) -> dict[str, A
 
     # Build Python code to calculate volumes using SegmentStatistics
     if segment_name:
-        python_code = _build_single_segment_volume_code(safe_node_id, safe_segment_name)
+        python_code = _build_single_segment_volume_code(safe_node_id, safe_segment_name or "")
     else:
         python_code = _build_all_segments_volume_code(safe_node_id)
 

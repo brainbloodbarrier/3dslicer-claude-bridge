@@ -84,10 +84,11 @@ class TestTotalSegmentatorMappings:
     """Tests for TotalSegmentator label mappings."""
 
     def test_vertebra_map_covers_all_vertebrae(self):
-        """Map must cover all 24 vertebrae from C1-L5."""
-        assert len(TOTALSEGMENTATOR_VERTEBRA_MAP) == 24
+        """Map must cover all 25 vertebrae from C1-S1."""
+        assert len(TOTALSEGMENTATOR_VERTEBRA_MAP) == 25
         assert "vertebrae_C1" in TOTALSEGMENTATOR_VERTEBRA_MAP
         assert "vertebrae_L5" in TOTALSEGMENTATOR_VERTEBRA_MAP
+        assert "vertebrae_S1" in TOTALSEGMENTATOR_VERTEBRA_MAP
 
     def test_vertebra_map_values_match_labels(self):
         """Map values must match expected anatomical labels."""

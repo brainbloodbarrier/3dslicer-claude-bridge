@@ -215,6 +215,18 @@ class SlicerClient:
                     f"Using default: {DEFAULT_TIMEOUT_SECONDS}s"
                 )
                 timeout = DEFAULT_TIMEOUT_SECONDS
+        # Validate URL scheme
+        from urllib.parse import urlparse
+
+        parsed = urlparse(base_url)
+        if parsed.scheme not in ("http", "https"):
+            raise ValueError(f"SLICER_URL must use http or https scheme, got '{parsed.scheme}'")
+        if parsed.hostname not in ("localhost", "127.0.0.1", "::1"):
+            logger.warning(
+                f"SLICER_URL points to non-localhost host '{parsed.hostname}'. "
+                "Ensure this is intentional and the connection is secure."
+            )
+
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         # Note: We use direct requests.get/post instead of Session to avoid
@@ -246,7 +258,7 @@ class SlicerClient:
             details.update(extra_details)
 
         # Record failure with circuit breaker (for connection-related errors)
-        if isinstance(error, (Timeout, ConnectionError)):
+        if isinstance(error, Timeout | ConnectionError):
             _slicer_circuit_breaker.record_failure()
             update_circuit_breaker_state("slicer", _slicer_circuit_breaker.state.value)
 
@@ -520,13 +532,14 @@ class SlicerClient:
 
         with track_request("get_screenshot"):
             try:
-                url = f"{self.base_url}/slicer/slice?view={view}"
+                url = f"{self.base_url}/slicer/slice"
+                params: dict[str, str | float] = {"view": view}
                 if scroll_to is not None:
-                    url += f"&scrollTo={scroll_to}"
+                    params["scrollTo"] = scroll_to
 
                 logger.debug(f"Capturing screenshot: view={view}, scroll_to={scroll_to}")
 
-                response = requests.get(url, timeout=self.timeout)
+                response = requests.get(url, params=params, timeout=self.timeout)
                 response.raise_for_status()
 
                 image_bytes = response.content
@@ -566,12 +579,13 @@ class SlicerClient:
         with track_request("get_3d_screenshot"):
             try:
                 url = f"{self.base_url}/slicer/threeD"
+                params = {}
                 if look_from_axis:
-                    url += f"?lookFromAxis={look_from_axis}"
+                    params["lookFromAxis"] = look_from_axis
 
                 logger.debug(f"Capturing 3D screenshot: look_from_axis={look_from_axis}")
 
-                response = requests.get(url, timeout=self.timeout)
+                response = requests.get(url, params=params, timeout=self.timeout)
                 response.raise_for_status()
 
                 image_bytes = response.content

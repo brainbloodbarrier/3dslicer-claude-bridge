@@ -204,6 +204,8 @@ class TestGetScreenshot:
 
             assert result.startswith(b"\x89PNG")
             mock_get.assert_called_once()
+            call_kwargs = mock_get.call_args[1]
+            assert call_kwargs["params"] == {"view": "Red"}
 
     def test_get_screenshot_with_scroll(self, slicer_client):
         """Test screenshot capture with scroll position."""
@@ -217,9 +219,9 @@ class TestGetScreenshot:
             result = slicer_client.get_screenshot(view="Yellow", scroll_to=0.5)
 
             assert result.startswith(b"\x89PNG")
-            call_args = mock_get.call_args
-            assert "view=Yellow" in call_args[0][0]
-            assert "scrollTo=0.5" in call_args[0][0]
+            call_kwargs = mock_get.call_args[1]
+            assert call_kwargs["params"]["view"] == "Yellow"
+            assert call_kwargs["params"]["scrollTo"] == 0.5
 
     def test_get_screenshot_connection_error(self, slicer_client):
         """Test screenshot capture with connection error."""
@@ -247,7 +249,9 @@ class TestGet3DScreenshot:
             result = slicer_client.get_3d_screenshot()
 
             assert result.startswith(b"\x89PNG")
-            assert "/slicer/threeD" in mock_get.call_args[0][0]
+            call_url = mock_get.call_args[0][0]
+            assert call_url.endswith("/slicer/threeD")
+            assert mock_get.call_args[1]["params"] == {}
 
     def test_get_3d_screenshot_with_axis(self, slicer_client):
         """Test 3D screenshot capture with look_from_axis."""
@@ -261,7 +265,8 @@ class TestGet3DScreenshot:
             result = slicer_client.get_3d_screenshot(look_from_axis="left")
 
             assert result.startswith(b"\x89PNG")
-            assert "lookFromAxis=left" in mock_get.call_args[0][0]
+            call_kwargs = mock_get.call_args[1]
+            assert call_kwargs["params"] == {"lookFromAxis": "left"}
 
 
 class TestGetSceneNodes:

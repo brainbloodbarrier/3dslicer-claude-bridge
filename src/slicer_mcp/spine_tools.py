@@ -23,8 +23,11 @@ from slicer_mcp.spine_constants import (
     SPINE_REGIONS,
     SPINE_SEGMENTATION_TIMEOUT,
     TOTALSEG_TASK_FULL,
-    TOTALSEG_TASK_VERTEBRAE,
+    TOTALSEGMENTATOR_DISC_MAP,
     TOTALSEGMENTATOR_VERTEBRA_MAP,
+    VA_CENTERLINE_SAMPLE_POINTS,
+    VA_LEVEL_SET_ITERATION_COUNT,
+    VA_VESSELNESS_CONTRAST_MEASURE,
 )
 from slicer_mcp.tools import ValidationError, _parse_json_result, validate_mrml_node_id
 
@@ -458,25 +461,20 @@ region_vertebrae = {json.dumps(dict(REGION_VERTEBRAE))}
 
 target_vertebrae = region_vertebrae.get(region, region_vertebrae['full'])
 
-# Collect available segment names
-available_segments = {{}}
+# Collect available segment IDs (TotalSegmentator sets IDs like "vertebrae_L5",
+# while display names differ e.g. "L5 vertebra")
+available_segment_ids = set()
 for i in range(segmentation.GetNumberOfSegments()):
-    seg = segmentation.GetNthSegment(i)
-    available_segments[seg.GetName()] = segmentation.GetNthSegmentID(i)
+    available_segment_ids.add(segmentation.GetNthSegmentID(i))
 
 import vtk
 
-def get_vertebra_geometry(seg_node, segment_name):
-    \"\"\"Extract centroid, superior/inferior endplate centers for a vertebra.\"\"\"
+def get_vertebra_geometry(seg_node, segment_id):
+    \"\"\"Extract centroid, superior/inferior endplate centers for a vertebra by segment ID.\"\"\"
     seg = seg_node.GetSegmentation()
-    seg_id = None
-    for i in range(seg.GetNumberOfSegments()):
-        s = seg.GetNthSegment(i)
-        if s.GetName() == segment_name:
-            seg_id = seg.GetNthSegmentID(i)
-            break
-    if seg_id is None:
+    if not seg.GetSegment(segment_id):
         return None
+    seg_id = segment_id
 
     labelmapNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLLabelMapVolumeNode')
     slicer.modules.segmentations.logic().ExportSegmentsToLabelmapNode(
@@ -540,9 +538,9 @@ for vert_name in target_vertebrae:
             break
 
     geom = None
-    if ts_label and ts_label in available_segments:
+    if ts_label and ts_label in available_segment_ids:
         geom = get_vertebra_geometry(segNode, ts_label)
-    elif vert_name in available_segments:
+    elif vert_name in available_segment_ids:
         geom = get_vertebra_geometry(segNode, vert_name)
 
     if geom is not None:
@@ -593,6 +591,7 @@ def endplate_vector(vertebra_data):
 measurements = {}
 reference_ranges = {}
 statuses = {}
+warnings = []
 
 def classify(value, normal_min, normal_max, name):
     if normal_min <= value <= normal_max:
@@ -707,6 +706,10 @@ if 'L5' in vertebrae_data:
     # PT from vertical offset of hip axis to sacral endplate midpoint
     # Simplified: use approximate PT based on L5 geometry
     pt = max(0, ss - 20)  # rough approximation
+    warnings.append(
+        "Pelvic Tilt (PT) and Pelvic Incidence (PI) are rough approximations "
+        "derived from L5 geometry because true femoral head segmentations are missing"
+    )
     measurements['pelvic_tilt_deg'] = round(pt, 1)
     reference_ranges['pelvic_tilt'] = {'min': 5.0, 'max': 25.0, 'unit': 'degrees'}
     classify(pt, 5.0, 25.0, 'pelvic_tilt')
@@ -786,6 +789,7 @@ result = {
     'reference_ranges': reference_ranges,
     'statuses': statuses
 }
+result['warnings'] = warnings
 
 __execResult = result
 """
@@ -796,6 +800,179 @@ __execResult = result
 # =============================================================================
 # Code Generation Helpers (Spine Segmentation)
 # =============================================================================
+
+
+def _build_totalseg_subprocess_block(
+    volume_var: str = "volume_node",
+    seg_var: str = "seg_node",
+    task: str = "total",
+    timeout_s: int = SPINE_SEGMENTATION_TIMEOUT - 60,
+) -> str:
+    """Build Python code block for TotalSegmentator subprocess auto-segmentation.
+
+    Generates code that checks if ``seg_node_id`` is already set (reuse existing
+    segmentation) or runs TotalSegmentator as a subprocess with the
+    ``resource_tracker`` hang workaround (``start_new_session`` + ``killpg``).
+
+    The generated code assumes ``{volume_var}`` and ``seg_node_id`` are already
+    defined, and sets ``{seg_var}`` as the output segmentation node.
+
+    Args:
+        volume_var: Variable name of the input volume in the generated code.
+        seg_var: Variable name for the output segmentation node.
+        task: TotalSegmentator task name (e.g. ``"total"``, ``"total_mr"``).
+        timeout_s: Subprocess timeout in seconds (default: SPINE_SEGMENTATION_TIMEOUT - 60).
+
+    Returns:
+        Python code string for embedding in Slicer exec code.
+    """
+    safe_task = json.dumps(task)
+
+    return f"""
+# --- Segmentation: reuse existing or auto-segment via subprocess ---
+_seg_was_provided = seg_node_id is not None
+if seg_node_id:
+    {seg_var} = slicer.mrmlScene.GetNodeByID(seg_node_id)
+    if not {seg_var}:
+        raise ValueError("Segmentation node not found: " + seg_node_id)
+else:
+    import time as _ts_time
+    import os as _ts_os
+    import subprocess as _ts_subprocess
+    import signal as _ts_signal
+    import shutil as _ts_shutil
+    import sysconfig as _ts_sysconfig
+
+    {seg_var} = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLSegmentationNode')
+    {seg_var}.SetName({volume_var}.GetName() + '_auto_seg')
+
+    _ts_proc = None
+    _ts_tempFolder = None
+
+    try:
+        _ts_tempFolder = slicer.util.tempDirectory()
+        _ts_inputFile = _ts_os.path.join(_ts_tempFolder, "ts-input.nii")
+        _ts_outputFile = _ts_os.path.join(_ts_tempFolder, "segmentation.nii")
+        _ts_outputFolder = _ts_os.path.join(_ts_tempFolder, "segmentation")
+
+        # Export volume to NIfTI
+        _ts_storageNode = slicer.mrmlScene.CreateNodeByClass("vtkMRMLVolumeArchetypeStorageNode")
+        _ts_storageNode.SetFileName(_ts_inputFile)
+        _ts_storageNode.UseCompressionOff()
+        _ts_writeOk = _ts_storageNode.WriteData({volume_var})
+        _ts_storageNode.UnRegister(None)
+        if not _ts_writeOk:
+            raise RuntimeError(f"Failed to export volume to NIfTI: {{_ts_inputFile}}")
+
+        # Build TotalSegmentator CLI command
+        _ts_pythonSlicer = _ts_shutil.which('PythonSlicer')
+        if not _ts_pythonSlicer:
+            raise RuntimeError("PythonSlicer not found in PATH")
+
+        from TotalSegmentator import TotalSegmentatorLogic as _ts_Logic
+        _ts_exec = _ts_os.path.join(
+            _ts_sysconfig.get_path('scripts'),
+            _ts_Logic.executableName("TotalSegmentator"),
+        )
+
+        _ts_cmd = [_ts_pythonSlicer, _ts_exec,
+                    "-i", _ts_inputFile, "-o", _ts_outputFolder,
+                    "--device", "cpu", "--ml", "--task", {safe_task}, "--fast"]
+
+        # Run as subprocess in new process group (resource_tracker hang workaround)
+        _ts_proc = _ts_subprocess.Popen(
+            _ts_cmd, stdout=_ts_subprocess.DEVNULL, stderr=_ts_subprocess.PIPE,
+            start_new_session=True,
+        )
+        _ts_timeout = {timeout_s}
+        _ts_poll_interval = 5
+        _ts_elapsed = 0
+        _ts_prev_size = 0
+
+        while _ts_elapsed < _ts_timeout:
+            _ts_ret = _ts_proc.poll()
+            if _ts_ret is not None:
+                if _ts_ret != 0:
+                    _ts_err = _ts_proc.stderr.read(8192).decode(errors='replace')[-500:]
+                    raise RuntimeError(
+                        f"TotalSegmentator exited with code {{_ts_ret}}: {{_ts_err}}"
+                    )
+                break
+            if _ts_os.path.exists(_ts_outputFile):
+                _ts_curr_size = _ts_os.path.getsize(_ts_outputFile)
+                if _ts_curr_size > 1000 and _ts_curr_size == _ts_prev_size:
+                    _ts_time.sleep(3)
+                    break
+                _ts_prev_size = _ts_curr_size
+            _ts_time.sleep(_ts_poll_interval)
+            _ts_elapsed += _ts_poll_interval
+
+        # Kill process group if still running (resource_tracker hang)
+        if _ts_proc.poll() is None:
+            try:
+                _ts_os.killpg(_ts_os.getpgid(_ts_proc.pid), _ts_signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+            except PermissionError:
+                import logging as _ts_logging
+                _ts_logging.getLogger("slicer-mcp").warning(
+                    "Cannot kill TotalSegmentator process group"
+                    f" (PID {{_ts_proc.pid}}): permission denied"
+                )
+            except OSError:
+                pass
+            _ts_time.sleep(1)
+            if _ts_proc.poll() is None:
+                try:
+                    _ts_os.killpg(_ts_os.getpgid(_ts_proc.pid), _ts_signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                except PermissionError:
+                    import logging as _ts_logging
+                    _ts_logging.getLogger("slicer-mcp").warning(
+                        "Cannot kill TotalSegmentator process group"
+                        f" (PID {{_ts_proc.pid}}): permission denied"
+                    )
+                except OSError:
+                    pass
+
+        if not _ts_os.path.exists(_ts_outputFile):
+            raise RuntimeError("TotalSegmentator did not produce output within timeout")
+
+        # Import segmentation result
+        _ts_logic = _ts_Logic()
+        _ts_logic.readSegmentation({seg_var}, _ts_outputFile, {safe_task})
+
+        {seg_var}.SetNodeReferenceID(
+            {seg_var}.GetReferenceImageGeometryReferenceRole(), {volume_var}.GetID())
+        {seg_var}.SetReferenceImageGeometryParameterFromVolumeNode({volume_var})
+
+    except Exception as _ts_e:
+        slicer.mrmlScene.RemoveNode({seg_var})
+        raise ValueError(f"TotalSegmentator failed ({{type(_ts_e).__name__}}): {{_ts_e}}")
+    finally:
+        if _ts_proc is not None and _ts_proc.poll() is None:
+            try:
+                _ts_os.killpg(_ts_os.getpgid(_ts_proc.pid), _ts_signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            except PermissionError:
+                import logging as _ts_logging
+                _ts_logging.getLogger("slicer-mcp").warning(
+                    "Cannot kill TotalSegmentator process group"
+                    f" (PID {{_ts_proc.pid}}): permission denied"
+                )
+            except OSError:
+                pass
+        def _ts_rmtree_onerror(func, path, exc_info):
+            import logging as _ts_log
+            _ts_log.getLogger("slicer-mcp").warning(
+                f"Failed to clean up temp file {{path}}: {{exc_info[1]}}"
+            )
+
+        if _ts_tempFolder is not None and _ts_os.path.isdir(_ts_tempFolder):
+            _ts_shutil.rmtree(_ts_tempFolder, onerror=_ts_rmtree_onerror)
+"""
 
 
 def _build_spine_segmentation_code(
@@ -821,21 +998,47 @@ def _build_spine_segmentation_code(
     Returns:
         Python code string to execute in Slicer
     """
-    task = TOTALSEG_TASK_FULL if (include_discs or include_spinal_cord) else TOTALSEG_TASK_VERTEBRAE
-    safe_task = json.dumps(task)
     safe_include_discs = str(include_discs)
     safe_include_spinal_cord = str(include_spinal_cord)
+
+    # Build subset list based on region to avoid segmenting all 117 structures.
+    # Using subset makes TotalSegmentator output only the requested segments,
+    # which is dramatically faster for import back into Slicer.
+    region_verts = REGION_VERTEBRAE.get(safe_region.strip('"'), ())
+    # Filter to only labels that TotalSegmentator can actually segment (excludes S1)
+    vertebrae_labels = [
+        v for v in region_verts if f"vertebrae_{v}" in TOTALSEGMENTATOR_VERTEBRA_MAP
+    ]
+    subset_items = [f"vertebrae_{v}" for v in vertebrae_labels]
+    if include_discs:
+        disc_names = list(TOTALSEGMENTATOR_DISC_MAP.keys())
+        subset_items.extend(disc_names)
+    if include_spinal_cord:
+        subset_items.append("spinal_cord")
+    safe_subset = json.dumps(subset_items)
+
+    # Inject constants into generated code via json.dumps() (codegen pattern)
+    safe_vertebra_map = json.dumps(TOTALSEGMENTATOR_VERTEBRA_MAP)
+    safe_disc_map = json.dumps(TOTALSEGMENTATOR_DISC_MAP)
+    safe_task = json.dumps(TOTALSEG_TASK_FULL)
+    safe_timeout = SPINE_SEGMENTATION_TIMEOUT - 60  # reserve 60s for cleanup/import
+    anatomical_order = json.dumps(list(TOTALSEGMENTATOR_VERTEBRA_MAP.values()))
 
     return f"""
 import slicer
 import time
 import json
+import os
+import subprocess
+import signal
+import shutil
+import sysconfig
 
 input_node_id = {safe_node_id}
 region = {safe_region}
-task = {safe_task}
 include_discs = {safe_include_discs}
 include_spinal_cord = {safe_include_spinal_cord}
+subset = {safe_subset}
 
 inputVolume = slicer.mrmlScene.GetNodeByID(input_node_id)
 if not inputVolume:
@@ -845,87 +1048,170 @@ if not inputVolume:
 outputSeg = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLSegmentationNode')
 outputSeg.SetName(inputVolume.GetName() + "_spine_seg")
 
-# Run TotalSegmentator
 start_time = time.time()
+proc = None
+tempFolder = None
 
 try:
-    import TotalSegmentator
-    logic = TotalSegmentator.TotalSegmentatorLogic()
-    logic.process(
-        inputVolume=inputVolume,
-        outputSegmentation=outputSeg,
-        task=task,
+    # Create temp directory for TotalSegmentator I/O
+    tempFolder = slicer.util.tempDirectory()
+    inputFile = os.path.join(tempFolder, "ts-input.nii")
+    outputFile = os.path.join(tempFolder, "segmentation.nii")
+    outputFolder = os.path.join(tempFolder, "segmentation")
+
+    # Export volume to NIfTI
+    storageNode = slicer.mrmlScene.CreateNodeByClass("vtkMRMLVolumeArchetypeStorageNode")
+    storageNode.SetFileName(inputFile)
+    storageNode.UseCompressionOff()
+    _writeOk = storageNode.WriteData(inputVolume)
+    storageNode.UnRegister(None)
+    if not _writeOk:
+        raise RuntimeError(f"Failed to export volume to NIfTI: {{inputFile}}")
+
+    # Build TotalSegmentator CLI command
+    pythonSlicer = shutil.which('PythonSlicer')
+    if not pythonSlicer:
+        raise RuntimeError("PythonSlicer not found")
+
+    from TotalSegmentator import TotalSegmentatorLogic
+    tsExec = os.path.join(
+        sysconfig.get_path('scripts'),
+        TotalSegmentatorLogic.executableName("TotalSegmentator"),
     )
+
+    cmd = [pythonSlicer, tsExec, "-i", inputFile, "-o", outputFolder,
+           "--device", "cpu", "--ml", "--task", {safe_task}, "--fast",
+           "--roi_subset"] + subset
+
+    # Run as subprocess in new session; poll for output file instead of waiting
+    # (workaround: TotalSegmentator hangs on multiprocessing.resource_tracker after saving)
+    proc = subprocess.Popen(
+        cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+        start_new_session=True,  # critical: own process group so killpg won't kill Slicer
+    )
+    timeout_s = {safe_timeout}
+    poll_interval = 5
+    elapsed_wait = 0
+    _prev_size = 0
+
+    while elapsed_wait < timeout_s:
+        # Check if process finished normally
+        ret = proc.poll()
+        if ret is not None:
+            if ret != 0:
+                stderr_out = proc.stderr.read(8192).decode(errors='replace')[-500:]
+                raise RuntimeError(f"TotalSegmentator exited with code {{ret}}: {{stderr_out}}")
+            break
+        # Check if output file exists and size is stable (fully written)
+        if os.path.exists(outputFile):
+            _curr_size = os.path.getsize(outputFile)
+            if _curr_size > 1000 and _curr_size == _prev_size:
+                time.sleep(3)
+                break
+            _prev_size = _curr_size
+        time.sleep(poll_interval)
+        elapsed_wait += poll_interval
+
+    # Kill the process group if still running (resource_tracker hang workaround)
+    # Safe because start_new_session=True gives it its own process group
+    if proc.poll() is None:
+        try:
+            os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+        except PermissionError:
+            import logging as _seg_logging
+            _seg_logging.getLogger("slicer-mcp").warning(
+                "Cannot kill TotalSegmentator process group"
+                f" (PID {{proc.pid}}): permission denied"
+            )
+        except OSError:
+            pass
+        time.sleep(1)
+        if proc.poll() is None:
+            try:
+                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            except PermissionError:
+                import logging as _seg_logging
+                _seg_logging.getLogger("slicer-mcp").warning(
+                    "Cannot kill TotalSegmentator process group"
+                    f" (PID {{proc.pid}}): permission denied"
+                )
+            except OSError:
+                pass
+
+    if not os.path.exists(outputFile):
+        raise RuntimeError("TotalSegmentator did not produce output file within timeout")
+
+    # Import segmentation result into Slicer using TotalSegmentator module
+    logic = TotalSegmentatorLogic()
+    logic.readSegmentation(outputSeg, outputFile, {safe_task})
+
+    # Set source volume reference
+    outputSeg.SetNodeReferenceID(
+        outputSeg.GetReferenceImageGeometryReferenceRole(), inputVolume.GetID())
+    outputSeg.SetReferenceImageGeometryParameterFromVolumeNode(inputVolume)
+
 except Exception as e:
     slicer.mrmlScene.RemoveNode(outputSeg)
-    raise ValueError(f"TotalSegmentator failed: {{e}}")
+    raise ValueError(f"TotalSegmentator failed ({{type(e).__name__}}): {{e}}")
+finally:
+    # Kill subprocess if still alive (handles exception during poll loop)
+    if proc is not None and proc.poll() is None:
+        try:
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        except PermissionError:
+            import logging as _seg_logging
+            _seg_logging.getLogger("slicer-mcp").warning(
+                "Cannot kill TotalSegmentator process group"
+                f" (PID {{proc.pid}}): permission denied"
+            )
+        except OSError:
+            pass
+    # Clean up temp files (both success and failure paths)
+    def _seg_rmtree_onerror(func, path, exc_info):
+        import logging as _seg_log
+        _seg_log.getLogger("slicer-mcp").warning(
+            f"Failed to clean up temp file {{path}}: {{exc_info[1]}}"
+        )
+
+    if tempFolder is not None and os.path.isdir(tempFolder):
+        shutil.rmtree(tempFolder, onerror=_seg_rmtree_onerror)
 
 elapsed = time.time() - start_time
 
-# Region vertebrae mapping
-REGION_VERTEBRAE = {{
-    "cervical": ["C1","C2","C3","C4","C5","C6","C7"],
-    "thoracic": ["T1","T2","T3","T4","T5","T6","T7","T8","T9","T10","T11","T12"],
-    "lumbar": ["L1","L2","L3","L4","L5"],
-    "full": [
-        "C1","C2","C3","C4","C5","C6","C7",
-        "T1","T2","T3","T4","T5","T6","T7","T8","T9","T10","T11","T12",
-        "L1","L2","L3","L4","L5",
-    ],
-}}
+VERTEBRA_MAP = {safe_vertebra_map}
 
-VERTEBRA_MAP = {{
-    "vertebrae_C1":"C1","vertebrae_C2":"C2","vertebrae_C3":"C3",
-    "vertebrae_C4":"C4","vertebrae_C5":"C5","vertebrae_C6":"C6","vertebrae_C7":"C7",
-    "vertebrae_T1":"T1","vertebrae_T2":"T2","vertebrae_T3":"T3",
-    "vertebrae_T4":"T4","vertebrae_T5":"T5","vertebrae_T6":"T6",
-    "vertebrae_T7":"T7","vertebrae_T8":"T8","vertebrae_T9":"T9",
-    "vertebrae_T10":"T10","vertebrae_T11":"T11","vertebrae_T12":"T12",
-    "vertebrae_L1":"L1","vertebrae_L2":"L2","vertebrae_L3":"L3",
-    "vertebrae_L4":"L4","vertebrae_L5":"L5",
-}}
+DISC_MAP = {safe_disc_map}
 
-DISC_MAP = {{
-    "disc_L5_S1":"L5-S1","disc_L4_L5":"L4-L5","disc_L3_L4":"L3-L4",
-    "disc_L2_L3":"L2-L3","disc_L1_L2":"L1-L2","disc_T12_L1":"T12-L1",
-}}
-
-expected = set(REGION_VERTEBRAE.get(region, []))
 seg = outputSeg.GetSegmentation()
 found_vertebrae = []
 found_discs = []
 found_other = []
 
-# Iterate over all segments
+# All segments returned should be relevant (subset filters at segmentation time)
 for i in range(seg.GetNumberOfSegments()):
     seg_id = seg.GetNthSegmentID(i)
     seg_name = seg.GetNthSegment(i).GetName()
 
-    if seg_name in VERTEBRA_MAP:
-        label = VERTEBRA_MAP[seg_name]
-        if label in expected:
-            found_vertebrae.append({{"segment_id": seg_id, "label": label, "name": seg_name}})
-        else:
-            # Remove segments outside requested region
-            seg.RemoveSegment(seg_id)
-    elif seg_name in DISC_MAP:
-        if include_discs:
-            disc_label = DISC_MAP[seg_name]
-            found_discs.append({{"segment_id": seg_id, "label": disc_label, "name": seg_name}})
-        else:
-            seg.RemoveSegment(seg_id)
-    elif seg_name == "spinal_cord":
-        if include_spinal_cord:
-            found_other.append({{"segment_id": seg_id, "label": "spinal_cord", "name": seg_name}})
-        else:
-            seg.RemoveSegment(seg_id)
-    else:
-        # Remove non-spine segments
-        seg.RemoveSegment(seg_id)
+    # Match by segment ID (e.g. "vertebrae_L5") — TotalSegmentator sets IDs
+    # matching VERTEBRA_MAP keys, while display names differ (e.g. "L5 vertebra")
+    if seg_id in VERTEBRA_MAP:
+        label = VERTEBRA_MAP[seg_id]
+        found_vertebrae.append({{"segment_id": seg_id, "label": label, "name": seg_name}})
+    elif seg_id in DISC_MAP:
+        disc_label = DISC_MAP[seg_id]
+        found_discs.append({{"segment_id": seg_id, "label": disc_label, "name": seg_name}})
+    elif seg_id == "spinal_cord" or seg_name == "spinal_cord":
+        found_other.append({{"segment_id": seg_id, "label": "spinal_cord", "name": seg_name}})
 
 # Sort vertebrae by anatomical order
-order = REGION_VERTEBRAE.get(region, [])
-order_map = {{v: idx for idx, v in enumerate(order)}}
+ANATOMICAL_ORDER = {anatomical_order}
+order_map = {{v: idx for idx, v in enumerate(ANATOMICAL_ORDER)}}
 found_vertebrae.sort(key=lambda x: order_map.get(x["label"], 999))
 
 result = {{
@@ -1002,7 +1288,7 @@ vesselnessLogic.computeVesselnessVolume(
     maximumDiameterMm=6.0,
     alpha=0.3,
     beta=0.3,
-    contrastMeasure=200
+    contrastMeasure={VA_VESSELNESS_CONTRAST_MEASURE}
 )
 
 # --- Step 2: Level set segmentation ---
@@ -1019,7 +1305,7 @@ lsLogic.performEvolution(
     inflationWeight=1.0,
     curvatureWeight=0.7,
     attractionWeight=1.0,
-    iterationCount=20
+    iterationCount={VA_LEVEL_SET_ITERATION_COUNT}
 )
 
 # --- Step 3: Centerline extraction ---
@@ -1040,7 +1326,7 @@ if centerlineModel.GetPolyData():
     radiusArray = pd.GetPointData().GetArray("Radius")
     if radiusArray:
         n_points = radiusArray.GetNumberOfTuples()
-        step = max(1, n_points // 20)  # Sample ~20 points
+        step = max(1, n_points // {VA_CENTERLINE_SAMPLE_POINTS})  # Sample ~N points
         for i in range(0, n_points, step):
             r = radiusArray.GetValue(i)
             diameters.append(round(r * 2.0, 2))  # diameter = 2 * radius
@@ -1118,7 +1404,7 @@ vesselnessLogic.computeVesselnessVolume(
     maximumDiameterMm=6.0,
     alpha=0.3,
     beta=0.3,
-    contrastMeasure=200
+    contrastMeasure={VA_VESSELNESS_CONTRAST_MEASURE}
 )
 
 # --- Step 2: Create seed fiducials ---
@@ -1140,7 +1426,7 @@ lsLogic.performEvolution(
     inflationWeight=1.0,
     curvatureWeight=0.7,
     attractionWeight=1.0,
-    iterationCount=20
+    iterationCount={VA_LEVEL_SET_ITERATION_COUNT}
 )
 
 # --- Step 4: Centerline extraction ---
@@ -1213,14 +1499,14 @@ def _validate_seed_points(seed_points: list[list[float]]) -> list[list[float]]:
         )
 
     for i, pt in enumerate(seed_points):
-        if not isinstance(pt, (list, tuple)) or len(pt) != 3:
+        if not isinstance(pt, list | tuple) or len(pt) != 3:
             raise ValidationError(
                 f"Seed point {i} must be [x, y, z] coordinates, got: {pt}",
                 "seed_points",
                 str(pt),
             )
         for j, coord in enumerate(pt):
-            if not isinstance(coord, (int, float)):
+            if not isinstance(coord, int | float):
                 raise ValidationError(
                     f"Seed point {i} coordinate {j} must be numeric, got: {type(coord).__name__}",
                     "seed_points",
@@ -1564,6 +1850,11 @@ def segment_spine(
         - processing_time_seconds: Actual processing time
         - long_operation: Metadata about this being a long operation
 
+    Tip:
+        Pass ``output_segmentation_id`` from the result to CT/MRI diagnostic
+        tools via ``segmentation_node_id`` to avoid re-running TotalSegmentator
+        on each tool call (~10x faster on CPU).
+
     Raises:
         ValidationError: If input parameters are invalid
         SlicerConnectionError: If Slicer is not reachable or processing fails
@@ -1783,4 +2074,307 @@ def analyze_bone_quality(
 
     except SlicerConnectionError as e:
         logger.error(f"Bone quality analysis failed: {e.message}")
+        raise
+
+
+# =============================================================================
+# Clinical Spine Visualization
+# =============================================================================
+
+
+def _build_clinical_spine_visualization_code(
+    safe_seg_node_id: str,
+    safe_volume_node_id: str,
+    safe_output_path: str,
+    safe_region: str,
+) -> str:
+    """Build Python code to create clinical spine visualization in Slicer.
+
+    Generates a sagittal screenshot with:
+    - Distinct color per vertebra (gradient from yellow to red)
+    - Segmentation in outline mode (thick contour, no fill)
+    - CT bone window (W:2000 L:400)
+    - Navigation to median sagittal plane of vertebral bodies
+    - Markup fiducial labels at each vertebra centroid
+    - High resolution capture (3x)
+
+    Args:
+        safe_seg_node_id: JSON-escaped segmentation node ID
+        safe_volume_node_id: JSON-escaped volume node ID for background CT
+        safe_output_path: JSON-escaped output file path
+        safe_region: JSON-escaped region string
+
+    Returns:
+        Python code string for Slicer execution
+    """
+    return f"""
+import slicer
+import json
+import numpy as np
+
+seg_node_id = {safe_seg_node_id}
+volume_node_id = {safe_volume_node_id}
+output_path = {safe_output_path}
+region = {safe_region}
+
+segNode = slicer.mrmlScene.GetNodeByID(seg_node_id)
+if not segNode:
+    raise ValueError('Segmentation node not found: ' + seg_node_id)
+
+volNode = slicer.mrmlScene.GetNodeByID(volume_node_id)
+if not volNode:
+    raise ValueError('Volume node not found: ' + volume_node_id)
+
+segmentation = segNode.GetSegmentation()
+if not segmentation:
+    raise ValueError('No segmentation data in node: ' + seg_node_id)
+
+# TotalSegmentator vertebra label map
+ts_map = {json.dumps(TOTALSEGMENTATOR_VERTEBRA_MAP)}
+region_vertebrae = {json.dumps(dict(REGION_VERTEBRAE))}
+
+target_vertebrae = region_vertebrae.get(region, region_vertebrae['full'])
+
+# --- Vertebra Color Gradient (yellow -> red) ---
+n_verts = len(target_vertebrae)
+vertebra_colors = {{}}
+for i, vert_name in enumerate(target_vertebrae):
+    t = i / max(n_verts - 1, 1)
+    r = 1.0
+    g = 1.0 - t
+    b = 0.0
+    vertebra_colors[vert_name] = (r, g, b)
+
+# --- Apply colors and collect centroids ---
+centroids = {{}}
+available_segment_ids = set()
+for i in range(segmentation.GetNumberOfSegments()):
+    available_segment_ids.add(segmentation.GetNthSegmentID(i))
+
+for vert_name in target_vertebrae:
+    # Find segment ID (TotalSegmentator format or direct name)
+    seg_id = None
+    for ts_key, std_name in ts_map.items():
+        if std_name == vert_name and ts_key in available_segment_ids:
+            seg_id = ts_key
+            break
+    if seg_id is None and vert_name in available_segment_ids:
+        seg_id = vert_name
+    if seg_id is None:
+        continue
+
+    segment = segmentation.GetSegment(seg_id)
+    if not segment:
+        continue
+
+    # Apply color
+    color = vertebra_colors.get(vert_name, (1.0, 1.0, 0.0))
+    segment.SetColor(color[0], color[1], color[2])
+
+    # Extract centroid via labelmap
+    import vtk
+    labelmapNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLLabelMapVolumeNode')
+    slicer.modules.segmentations.logic().ExportSegmentsToLabelmapNode(
+        segNode, [seg_id], labelmapNode, None
+    )
+    ijkToRas = vtk.vtkMatrix4x4()
+    labelmapNode.GetIJKToRASMatrix(ijkToRas)
+    imageData = labelmapNode.GetImageData()
+    dims = imageData.GetDimensions()
+
+    points_ras = []
+    for k in range(dims[2]):
+        for j in range(dims[1]):
+            for ii in range(dims[0]):
+                val = imageData.GetScalarComponentAsFloat(ii, j, k, 0)
+                if val > 0:
+                    ijk = [ii, j, k, 1]
+                    ras = [0, 0, 0, 1]
+                    ijkToRas.MultiplyPoint(ijk, ras)
+                    points_ras.append(ras[:3])
+
+    slicer.mrmlScene.RemoveNode(labelmapNode)
+
+    if points_ras:
+        pts = np.array(points_ras)
+        centroid = pts.mean(axis=0).tolist()
+        centroids[vert_name] = centroid
+
+# --- Configure segmentation display: outline mode ---
+displayNode = segNode.GetDisplayNode()
+if displayNode:
+    # 2D outline with thick border
+    displayNode.SetVisibility2DOutline(True)
+    displayNode.SetVisibility2DFill(False)
+    displayNode.SetSliceIntersectionThickness(3)
+    # 2D visibility ON
+    displayNode.SetVisibility2D(True)
+
+# --- CT bone window (W:2000 L:400) ---
+volDisplayNode = volNode.GetDisplayNode()
+if volDisplayNode:
+    volDisplayNode.SetAutoWindowLevel(False)
+    volDisplayNode.SetWindow(2000)
+    volDisplayNode.SetLevel(400)
+
+# --- Navigate to sagittal view at median R coordinate ---
+if centroids:
+    r_values = [c[0] for c in centroids.values()]
+    median_r = float(np.median(r_values))
+else:
+    median_r = 0.0
+
+lm = slicer.app.layoutManager()
+
+# Switch to sagittal-only layout for clean capture
+lm.setLayout(slicer.vtkMRMLLayoutNode.SlicerLayoutOneUpYellowSliceView)
+slicer.app.processEvents()
+
+sliceWidget = lm.sliceWidget('Yellow')
+sliceLogic = sliceWidget.sliceLogic()
+sliceNode = sliceLogic.GetSliceNode()
+compositeNode = sliceLogic.GetSliceCompositeNode()
+
+# Set background volume
+compositeNode.SetBackgroundVolumeID(volume_node_id)
+
+# Set sagittal orientation
+sliceNode.SetOrientation('Sagittal')
+
+# Navigate to median R coordinate
+sliceNode.SetSliceOffset(median_r)
+
+# Set FOV ~300mm for L1-S1 coverage with margin
+sliceNode.SetFieldOfView(300, 300, 1)
+
+# --- Create fiducial labels at centroids ---
+fiducialNodes = []
+if centroids:
+    fidNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLMarkupsFiducialNode')
+    fidNode.SetName('SpineLabels')
+    fidNode.GetDisplayNode().SetTextScale(4.0)
+    fidNode.GetDisplayNode().SetGlyphScale(2.0)
+    fidNode.GetDisplayNode().SetColor(1.0, 1.0, 1.0)
+    fidNode.GetDisplayNode().SetSelectedColor(1.0, 1.0, 1.0)
+    fidNode.GetDisplayNode().SetActiveColor(1.0, 1.0, 1.0)
+    # Offset labels slightly anterior for visibility
+    for vert_name, centroid in centroids.items():
+        n = fidNode.AddControlPoint(centroid[0], centroid[1] + 15, centroid[2])
+        fidNode.SetNthControlPointLabel(n, vert_name)
+    fiducialNodes.append(fidNode)
+
+# Force render
+slicer.util.forceRenderAllViews()
+slicer.app.processEvents()
+
+# --- Capture at 3x resolution ---
+import vtk as vtk_lib
+
+renderWindow = sliceWidget.sliceView().renderWindow()
+windowToImage = vtk_lib.vtkWindowToImageFilter()
+windowToImage.SetInput(renderWindow)
+windowToImage.SetScale(3)
+windowToImage.Update()
+
+import os
+writer = vtk_lib.vtkPNGWriter()
+writer.SetFileName(output_path)
+writer.SetInputConnection(windowToImage.GetOutputPort())
+writer.Write()
+
+if not os.path.exists(output_path):
+    raise ValueError('Screenshot was not saved: ' + output_path)
+
+file_size = os.path.getsize(output_path)
+
+# --- Cleanup: remove fiducials ---
+cleanup_ids = []
+for fid in fiducialNodes:
+    cleanup_ids.append(fid.GetID())
+
+result = {{
+    'success': True,
+    'output_path': output_path,
+    'file_size_bytes': file_size,
+    'vertebrae_colored': list(centroids.keys()),
+    'centroids': centroids,
+    'median_r_mm': median_r,
+    'view': 'sagittal',
+    'window_width': 2000,
+    'window_level': 400,
+    'resolution_scale': 3,
+    'fiducial_node_ids': cleanup_ids,
+}}
+
+__execResult = result
+"""
+
+
+def visualize_spine_segmentation(
+    segmentation_node_id: str,
+    volume_node_id: str,
+    output_path: str,
+    region: str = "lumbar",
+) -> dict[str, Any]:
+    """Create clinical visualization of spine segmentation.
+
+    Generates a high-quality sagittal screenshot with distinct colors
+    per vertebra, outline-mode segmentation overlay, bone-window CT,
+    and anatomical labels at each vertebra centroid.
+
+    Args:
+        segmentation_node_id: MRML node ID of the segmentation containing
+            vertebral segments (e.g., from TotalSegmentator)
+        volume_node_id: MRML node ID of the background CT volume
+        output_path: File path for the output PNG screenshot
+        region: Spine region to visualize - "cervical", "thoracic",
+            "lumbar", or "full"
+
+    Returns:
+        Dict with success status, output_path, file_size_bytes,
+        vertebrae_colored, centroids, and view parameters
+
+    Raises:
+        ValidationError: If inputs are invalid
+        SlicerConnectionError: If Slicer is not reachable
+    """
+    segmentation_node_id = validate_mrml_node_id(segmentation_node_id)
+    volume_node_id = validate_mrml_node_id(volume_node_id)
+
+    if region not in SPINE_REGIONS:
+        raise ValidationError(
+            f"Invalid region '{region}'. Must be one of: {', '.join(sorted(SPINE_REGIONS))}",
+            "region",
+            region,
+        )
+
+    if not output_path or not output_path.strip():
+        raise ValidationError("Output path cannot be empty", "output_path", "")
+
+    client = get_client()
+
+    safe_seg_id = json.dumps(segmentation_node_id)
+    safe_vol_id = json.dumps(volume_node_id)
+    safe_output = json.dumps(output_path)
+    safe_region = json.dumps(region)
+
+    python_code = _build_clinical_spine_visualization_code(
+        safe_seg_id, safe_vol_id, safe_output, safe_region
+    )
+
+    try:
+        exec_result = client.exec_python(python_code, timeout=SPINE_SEGMENTATION_TIMEOUT)
+
+        result_data = _parse_json_result(exec_result.get("result", ""), "spine visualization")
+
+        logger.info(
+            f"Spine visualization completed: region={region}, "
+            f"vertebrae={len(result_data.get('vertebrae_colored', []))}, "
+            f"output={output_path}"
+        )
+
+        return result_data
+
+    except SlicerConnectionError as e:
+        logger.error(f"Spine visualization failed: {e.message}")
         raise

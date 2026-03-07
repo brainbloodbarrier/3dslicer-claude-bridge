@@ -86,6 +86,7 @@ TOTALSEGMENTATOR_VERTEBRA_MAP: dict[str, str] = {
     "vertebrae_L3": "L3",
     "vertebrae_L4": "L4",
     "vertebrae_L5": "L5",
+    "vertebrae_S1": "S1",
 }
 
 # TotalSegmentator disc labels
@@ -107,7 +108,7 @@ TOTALSEG_TASK_FULL = "total"
 # Segmentation Timeout
 # =============================================================================
 
-SPINE_SEGMENTATION_TIMEOUT = 300  # 5 minutes for TotalSegmentator spine tasks
+SPINE_SEGMENTATION_TIMEOUT = 600  # 10 minutes for TotalSegmentator spine tasks (CPU via Rosetta 2)
 
 
 # =============================================================================
@@ -694,3 +695,17 @@ METASTASIS_T2_LOW_THRESHOLD = 0.70
 
 # Supported regions for disc analysis (Pfirrmann)
 DISC_SUPPORTED_REGIONS = frozenset(["lumbar"])
+
+# =============================================================================
+# Lesion HU Thresholds (SINS Component 3 — CT)
+# =============================================================================
+LESION_LYTIC_HU_THRESHOLD = 100  # HU below which tissue is considered lytic
+LESION_BLASTIC_HU_THRESHOLD = 300  # HU above which tissue is considered blastic
+
+# =============================================================================
+# Vertebral Artery / Spine Registration Defaults
+# =============================================================================
+VA_VESSELNESS_CONTRAST_MEASURE = 200
+VA_LEVEL_SET_ITERATION_COUNT = 20
+VA_CENTERLINE_SAMPLE_POINTS = 20  # ~N points sampled along centerline
+TRAJECTORY_SAMPLE_POINTS = 20  # sample points along screw trajectory for distance check

@@ -6,6 +6,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from slicer_mcp.diagnostic_tools_ct import (
+    _build_sins_code,
     _classify_genant,
     _classify_meyerding,
     _classify_pickhardt,
@@ -848,6 +849,198 @@ class TestMeasureSpinalCanalCT:
 # =============================================================================
 
 
+# =============================================================================
+# Task Name & Timeout Tests
+# =============================================================================
+
+
+class TestCodegenTaskName:
+    """Verify generated code uses 'total' task, not paid 'vertebral_body' task."""
+
+    @patch("slicer_mcp.diagnostic_tools_ct.get_client")
+    def test_fracture_detection_uses_total_task(self, mock_get_client):
+        mock_client = Mock()
+        mock_get_client.return_value = mock_client
+        mock_client.exec_python.return_value = {
+            "success": True,
+            "result": json.dumps({"success": True, "fractures_detected": 0, "vertebrae": []}),
+        }
+        detect_vertebral_fractures_ct("vtkMRMLScalarVolumeNode1")
+        code = mock_client.exec_python.call_args[0][0]
+        assert 'task="vertebral_body"' not in code
+        assert '"total"' in code
+
+    @patch("slicer_mcp.diagnostic_tools_ct.get_client")
+    def test_osteoporosis_uses_total_task(self, mock_get_client):
+        mock_client = Mock()
+        mock_get_client.return_value = mock_client
+        mock_client.exec_python.return_value = {
+            "success": True,
+            "result": json.dumps(
+                {"success": True, "levels": [], "global_assessment": {}, "clinical_context": {}}
+            ),
+        }
+        assess_osteoporosis_ct("vtkMRMLScalarVolumeNode1")
+        code = mock_client.exec_python.call_args[0][0]
+        assert 'task="vertebral_body"' not in code
+        assert '"total"' in code
+
+    @patch("slicer_mcp.diagnostic_tools_ct.get_client")
+    def test_metastatic_uses_total_task(self, mock_get_client):
+        mock_client = Mock()
+        mock_get_client.return_value = mock_client
+        mock_client.exec_python.return_value = {
+            "success": True,
+            "result": json.dumps(
+                {"success": True, "lesions_detected": 0, "vertebrae": [], "summary": {}}
+            ),
+        }
+        detect_metastatic_lesions_ct("vtkMRMLScalarVolumeNode1")
+        code = mock_client.exec_python.call_args[0][0]
+        assert 'task="vertebral_body"' not in code
+        assert '"total"' in code
+
+    @patch("slicer_mcp.diagnostic_tools_ct.get_client")
+    def test_sins_uses_total_task(self, mock_get_client):
+        mock_client = Mock()
+        mock_get_client.return_value = mock_client
+        mock_client.exec_python.return_value = {
+            "success": True,
+            "result": json.dumps({"success": True, "results": []}),
+        }
+        calculate_sins_score("vtkMRMLScalarVolumeNode1", target_levels=["L1"])
+        code = mock_client.exec_python.call_args[0][0]
+        assert 'task="vertebral_body"' not in code
+        assert '"total"' in code
+
+    @patch("slicer_mcp.diagnostic_tools_ct.get_client")
+    def test_listhesis_uses_total_task(self, mock_get_client):
+        mock_client = Mock()
+        mock_get_client.return_value = mock_client
+        mock_client.exec_python.return_value = {
+            "success": True,
+            "result": json.dumps({"success": True, "levels": []}),
+        }
+        measure_listhesis_ct("vtkMRMLScalarVolumeNode1")
+        code = mock_client.exec_python.call_args[0][0]
+        assert 'task="vertebral_body"' not in code
+        assert '"total"' in code
+
+    @patch("slicer_mcp.diagnostic_tools_ct.get_client")
+    def test_canal_uses_total_task(self, mock_get_client):
+        mock_client = Mock()
+        mock_get_client.return_value = mock_client
+        mock_client.exec_python.return_value = {
+            "success": True,
+            "result": json.dumps({"success": True, "modality": "CT", "levels": []}),
+        }
+        measure_spinal_canal_ct("vtkMRMLScalarVolumeNode1")
+        code = mock_client.exec_python.call_args[0][0]
+        assert 'task="vertebral_body"' not in code
+        assert '"total"' in code
+
+
+class TestSubprocessCodegen:
+    """Verify generated code uses subprocess approach, not in-process TotalSegmentatorLogic."""
+
+    @patch("slicer_mcp.diagnostic_tools_ct.get_client")
+    def test_uses_subprocess_not_process(self, mock_get_client):
+        """Auto-segmentation uses subprocess.Popen, not TotalSegmentatorLogic().process()."""
+        mock_client = Mock()
+        mock_get_client.return_value = mock_client
+        mock_client.exec_python.return_value = {
+            "success": True,
+            "result": json.dumps({"success": True, "fractures_detected": 0, "vertebrae": []}),
+        }
+        detect_vertebral_fractures_ct("vtkMRMLScalarVolumeNode1")
+        code = mock_client.exec_python.call_args[0][0]
+        assert "subprocess" in code
+        assert "start_new_session" in code
+        assert "killpg" in code
+        assert "--device" in code
+        assert "--fast" in code
+
+    @patch("slicer_mcp.diagnostic_tools_ct.get_client")
+    def test_with_seg_id_skips_subprocess(self, mock_get_client):
+        """When segmentation_node_id is provided, subprocess code is still present
+        but the if/else branch selects existing segmentation."""
+        mock_client = Mock()
+        mock_get_client.return_value = mock_client
+        mock_client.exec_python.return_value = {
+            "success": True,
+            "result": json.dumps({"success": True, "fractures_detected": 0, "vertebrae": []}),
+        }
+        detect_vertebral_fractures_ct(
+            "vtkMRMLScalarVolumeNode1",
+            segmentation_node_id="vtkMRMLSegmentationNode1",
+        )
+        code = mock_client.exec_python.call_args[0][0]
+        # seg_node_id is set, so the if-branch runs (reuse existing)
+        assert 'seg_node_id = "vtkMRMLSegmentationNode1"' in code
+
+
+class TestConditionalTimeout:
+    """Verify timeout depends on whether segmentation is provided."""
+
+    @patch("slicer_mcp.diagnostic_tools_ct.get_client")
+    def test_fracture_auto_seg_uses_spine_timeout(self, mock_get_client):
+        """Without segmentation_node_id, uses SPINE_SEGMENTATION_TIMEOUT (600s)."""
+        mock_client = Mock()
+        mock_get_client.return_value = mock_client
+        mock_client.exec_python.return_value = {
+            "success": True,
+            "result": json.dumps({"success": True, "fractures_detected": 0, "vertebrae": []}),
+        }
+        detect_vertebral_fractures_ct("vtkMRMLScalarVolumeNode1")
+        _, kwargs = mock_client.exec_python.call_args
+        assert kwargs["timeout"] == 600
+
+    @patch("slicer_mcp.diagnostic_tools_ct.get_client")
+    def test_fracture_with_seg_uses_fast_timeout(self, mock_get_client):
+        """With segmentation_node_id, uses SEGMENTATION_TIMEOUT (180s)."""
+        mock_client = Mock()
+        mock_get_client.return_value = mock_client
+        mock_client.exec_python.return_value = {
+            "success": True,
+            "result": json.dumps({"success": True, "fractures_detected": 0, "vertebrae": []}),
+        }
+        detect_vertebral_fractures_ct(
+            "vtkMRMLScalarVolumeNode1",
+            segmentation_node_id="vtkMRMLSegmentationNode1",
+        )
+        _, kwargs = mock_client.exec_python.call_args
+        assert kwargs["timeout"] == 180
+
+    @patch("slicer_mcp.diagnostic_tools_ct.get_client")
+    def test_osteoporosis_auto_seg_uses_spine_timeout(self, mock_get_client):
+        mock_client = Mock()
+        mock_get_client.return_value = mock_client
+        mock_client.exec_python.return_value = {
+            "success": True,
+            "result": json.dumps(
+                {"success": True, "levels": [], "global_assessment": {}, "clinical_context": {}}
+            ),
+        }
+        assess_osteoporosis_ct("vtkMRMLScalarVolumeNode1")
+        _, kwargs = mock_client.exec_python.call_args
+        assert kwargs["timeout"] == 600
+
+    @patch("slicer_mcp.diagnostic_tools_ct.get_client")
+    def test_canal_with_seg_uses_fast_timeout(self, mock_get_client):
+        mock_client = Mock()
+        mock_get_client.return_value = mock_client
+        mock_client.exec_python.return_value = {
+            "success": True,
+            "result": json.dumps({"success": True, "modality": "CT", "levels": []}),
+        }
+        measure_spinal_canal_ct(
+            "vtkMRMLScalarVolumeNode1",
+            segmentation_node_id="vtkMRMLSegmentationNode1",
+        )
+        _, kwargs = mock_client.exec_python.call_args
+        assert kwargs["timeout"] == 180
+
+
 class TestServerRegistration:
     """Test that tools are properly registered in server.py."""
 
@@ -872,3 +1065,22 @@ class TestServerRegistration:
         assert hasattr(spine_constants, "MEYERDING_THRESHOLDS")
         assert hasattr(spine_constants, "TORG_PAVLOV_THRESHOLD")
         assert hasattr(spine_constants, "SPINAL_CANAL_AP_DIAMETER")
+
+
+class TestBuildSinsCode:
+    """Tests for _build_sins_code f-string interpolation."""
+
+    def test_lesion_thresholds_are_literal_values(self) -> None:
+        """Ensure HU threshold constants are interpolated as literal integers."""
+        code = _build_sins_code(
+            safe_volume_id='"TestVolume"',
+            safe_seg_id='"TestSeg"',
+            target_levels=["L1"],
+            pain_score=1,
+        )
+        # Must contain literal numeric values
+        assert "lytic_thresh = 100" in code
+        assert "blastic_thresh = 300" in code
+        # Must NOT contain the constant names (they don't exist in Slicer)
+        assert "LESION_LYTIC_HU_THRESHOLD" not in code
+        assert "LESION_BLASTIC_HU_THRESHOLD" not in code

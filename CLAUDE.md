@@ -108,17 +108,7 @@ The `/slicer/exec` endpoint must be explicitly enabled in Slicer (Modules > Deve
 - **New resource**: Implement in `resources.py`, register with `@mcp.resource()` in `server.py`, test in `tests/test_resources.py`
 - **New constant**: Add to `constants.py` (never hardcode validation limits, patterns, or config values in other files)
 
-## Quick Reference
-
-| Topic | File |
-|-------|------|
-| Tool API (12 tools) | [ref/api-tools.md](ref/api-tools.md) |
-| Resource API (3 resources) | [ref/api-resources.md](ref/api-resources.md) |
-| Error codes | [ref/error-codes.md](ref/error-codes.md) |
-| Slicer HTTP endpoints | [ref/slicer-webserver.md](ref/slicer-webserver.md) |
-| Design patterns | [ref/project-patterns.md](ref/project-patterns.md) |
-| Circuit breaker & retry | [ref/resilience-patterns.md](ref/resilience-patterns.md) |
-| Security model | [ref/security.md](ref/security.md) |
-| Performance benchmarks | [ref/benchmarks.md](ref/benchmarks.md) |
-| FastMCP framework | [ref/fastmcp.md](ref/fastmcp.md) |
-| Troubleshooting | [ref/troubleshooting.md](ref/troubleshooting.md) |
+## Agent Orchestration Guidelines
+- **Scope First:** Use `find`, `grep`, or `lsp` to pinpoint exactly where changes belong.
+- **Parallelize:** Obsessively use the Task tool to run `explore` (for discovery) or `reviewer` / `code-simplifier` / `pr-test-analyzer` (for validation) subagents in parallel.
+- **Isolate Code:** Subagents must be given precise context (files to change, exact rules) because they lack history.

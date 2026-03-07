@@ -21,6 +21,7 @@ import math
 import re
 from typing import Any
 
+from slicer_mcp.constants import MAX_XRAY_LANDMARKS
 from slicer_mcp.slicer_client import SlicerConnectionError, get_client
 from slicer_mcp.spine_constants import (
     CORONAL_C7_CSVL_THRESHOLD_MM,
@@ -47,8 +48,8 @@ logger = logging.getLogger("slicer-mcp")
 # Valid X-ray view types
 VALID_XRAY_VIEWS = frozenset(["lateral", "ap"])
 
-# Maximum number of landmarks per tool (safety limit)
-MAX_LANDMARKS = 100
+# Per-tool landmark limit (imported from constants)
+MAX_LANDMARKS = MAX_XRAY_LANDMARKS
 
 # Magnification disclaimer for distance measurements
 MAGNIFICATION_DISCLAIMER = (
@@ -331,7 +332,7 @@ def _validate_landmarks(
     result: dict[str, tuple[float, float]] = {}
     for key in expected_keys:
         coord = landmarks[key]
-        if not isinstance(coord, (list, tuple)) or len(coord) != 2:
+        if not isinstance(coord, list | tuple) or len(coord) != 2:
             raise ValidationError(
                 f"{tool_name}: landmark '{key}' must be [x, y], got: {coord}",
                 field=f"landmarks.{key}",
@@ -1403,7 +1404,7 @@ def classify_disc_degeneration_xray(
         raise
 
     # Compute per-disc measurements
-    disc_results = []
+    disc_results: list[dict[str, Any]] = []
     disc_heights = []  # For reference height calculation
 
     for disc_label, dp in disc_pts.items():
@@ -1461,7 +1462,7 @@ def classify_disc_degeneration_xray(
 
     # Grade each disc
     for dr in disc_results:
-        avg_h = dr.pop("_avg_height")
+        avg_h = float(dr.pop("_avg_height"))
         height_loss_frac = max(0.0, 1.0 - avg_h / ref_height) if ref_height > 0 else 0.0
         height_loss_pct = height_loss_frac * 100
 
@@ -1509,7 +1510,7 @@ def classify_disc_degeneration_xray(
 
     logger.info(
         f"Disc degeneration assessed: {len(disc_results)} discs, "
-        f"max grade={result['summary']['max_grade']}"
+        f"max grade={result['summary']['max_grade']}"  # type: ignore[index]
     )
 
     return result
