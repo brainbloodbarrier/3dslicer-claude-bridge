@@ -81,7 +81,7 @@ measure_coronal_balance_xray(volume_node_id=<xray_id>)
 
 If CT data is available:
 ```
-analyze_bone_quality(volume_node_id=<ct_id>, segmentation_node_id=<seg_id>)
+analyze_bone_quality(input_node_id=<ct_id>, segmentation_node_id=<seg_id>)
 ```
 
 ### 8. Documentation screenshots

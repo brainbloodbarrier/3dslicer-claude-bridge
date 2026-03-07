@@ -71,9 +71,9 @@ Evaluate:
 
 ```
 analyze_bone_quality(
-    volume_node_id=<ct_volume_id>,
+    input_node_id=<ct_volume_id>,
     segmentation_node_id=<seg_id>,
-    levels=["C1", "C2"]
+    region="cervical"
 )
 ```
 

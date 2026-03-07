@@ -32,11 +32,11 @@ If C1-C2 involved and no VA segmentation, run `segment_vertebral_artery()`.
 
 ```
 plan_cervical_screws(
-    volume_node_id=<ct_id>,
-    segmentation_node_id=<seg_id>,
-    levels=<levels>,
     technique="auto",
-    va_segmentation_id=<va_seg_id>
+    level=<level>,
+    segmentation_node_id=<seg_id>,
+    side="bilateral",
+    va_node_id=<va_seg_id>
 )
 ```
 
@@ -47,8 +47,11 @@ Note the recommended technique and viable alternatives from the output.
 For each viable technique returned by the auto analysis, run:
 ```
 plan_cervical_screws(
-    ...,
-    technique=<specific_technique>
+    technique=<specific_technique>,
+    level=<level>,
+    segmentation_node_id=<seg_id>,
+    side="bilateral",
+    va_node_id=<va_seg_id>
 )
 ```
 

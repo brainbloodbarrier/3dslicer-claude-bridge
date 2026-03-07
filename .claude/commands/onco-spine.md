@@ -49,8 +49,8 @@ detect_metastatic_lesions_ct(
 If MRI T1 and T2/STIR volumes are loaded:
 ```
 detect_metastatic_lesions_mri(
-    t1_volume_id=<t1_id>,
-    t2_or_stir_volume_id=<t2_id>,
+    t1_node_id=<t1_id>,
+    t2_stir_node_id=<t2_id>,
     segmentation_node_id=<seg_id>
 )
 ```

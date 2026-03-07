@@ -41,8 +41,9 @@ segment_spine(input_node_id=<t2_volume_id>, region=<region>)
 
 ```
 classify_modic_changes(
-    t1_volume_id=<t1_id>,
-    t2_volume_id=<t2_id>,
+    t1_node_id=<t1_id>,
+    t2_node_id=<t2_id>,
+    region=<region>,
     segmentation_node_id=<seg_id>
 )
 ```
@@ -58,7 +59,8 @@ Modic classification:
 
 ```
 assess_disc_degeneration_mri(
-    t2_volume_id=<t2_id>,
+    t2_node_id=<t2_id>,
+    region=<region>,
     segmentation_node_id=<seg_id>
 )
 ```
@@ -75,8 +77,9 @@ Pfirrmann grading (T2-weighted):
 If the region includes cervical or thoracic spine:
 ```
 detect_cord_compression_mri(
-    t2_volume_id=<t2_id>,
-    t1_volume_id=<t1_id>,
+    t2_node_id=<t2_id>,
+    t1_node_id=<t1_id>,
+    region=<region>,
     segmentation_node_id=<seg_id>
 )
 ```

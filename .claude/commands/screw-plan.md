@@ -21,8 +21,8 @@ When the user invokes this command:
 ### 1. Parse arguments
 
 Extract from `$ARGUMENTS`:
-- **levels**: vertebral levels for instrumentation (e.g., "C1-C2", "C3-C6")
-- **technique** (optional): "auto", "harms", "magerl", "lateral_mass", "pedicle"
+- **level**: vertebral level for instrumentation (e.g., "C1", "C2", "C5") — run per-level for multi-level constructs
+- **technique** (optional): "auto", "harms", "magerl", "lateral_mass", "pedicle", "wright"
 
 If no levels specified, ask the user which levels to instrument.
 
@@ -57,11 +57,11 @@ Do NOT proceed with C1-C2 planning without user confirmation if no CTA.
 
 ```
 plan_cervical_screws(
-    volume_node_id=<ct_id>,
-    segmentation_node_id=<seg_id>,
-    levels=<parsed_levels>,
     technique=<technique_or_auto>,
-    va_segmentation_id=<va_seg_id_if_available>
+    level=<level>,
+    segmentation_node_id=<seg_id>,
+    side="bilateral",
+    va_node_id=<va_seg_id_if_available>
 )
 ```
 
@@ -69,10 +69,9 @@ plan_cervical_screws(
 
 ```
 analyze_bone_quality(
-    volume_node_id=<ct_id>,
+    input_node_id=<ct_id>,
     segmentation_node_id=<seg_id>,
-    region="cervical",
-    levels=<levels_list>
+    region="cervical"
 )
 ```
 

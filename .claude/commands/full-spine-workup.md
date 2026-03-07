@@ -110,14 +110,14 @@ measure_listhesis_dynamic_xray(
 ### 6. MRI Pipeline (if T1 + T2 available)
 
 ```
-classify_modic_changes(t1_volume_id=<t1_id>, t2_volume_id=<t2_id>, segmentation_node_id=<seg_id>)
-assess_disc_degeneration_mri(t2_volume_id=<t2_id>, segmentation_node_id=<seg_id>)
-detect_cord_compression_mri(t2_volume_id=<t2_id>, t1_volume_id=<t1_id>, segmentation_node_id=<seg_id>)
+classify_modic_changes(t1_node_id=<t1_id>, t2_node_id=<t2_id>, region=<region>, segmentation_node_id=<seg_id>)
+assess_disc_degeneration_mri(t2_node_id=<t2_id>, region=<region>, segmentation_node_id=<seg_id>)
+detect_cord_compression_mri(t2_node_id=<t2_id>, t1_node_id=<t1_id>, region=<region>, segmentation_node_id=<seg_id>)
 ```
 
 If oncologic screening requested and MRI available:
 ```
-detect_metastatic_lesions_mri(t1_volume_id=<t1_id>, t2_or_stir_volume_id=<t2_id>, segmentation_node_id=<seg_id>)
+detect_metastatic_lesions_mri(t1_node_id=<t1_id>, t2_stir_node_id=<t2_id>, segmentation_node_id=<seg_id>)
 ```
 
 ### 7. Documentation screenshots
