@@ -211,13 +211,20 @@ class TestGetWorkflowsResource:
             missing = required_fields - set(workflow.keys())
             assert not missing, f"Workflow {workflow['name']} missing fields: {missing}"
 
-    def test_all_workflows_have_planned_status(self):
-        """All workflows should currently have 'planned' status."""
+    def test_workflows_have_valid_status(self):
+        """All workflows should have a recognized status value."""
+        valid_statuses = {"available", "planned"}
         result = json.loads(get_workflows_resource())
         for workflow in result["workflows"]:
-            assert workflow["status"] == "planned", (
-                f"Expected 'planned' status for {workflow['name']}, " f"got '{workflow['status']}'"
+            assert workflow["status"] in valid_statuses, (
+                f"Unexpected status '{workflow['status']}' for {workflow['name']}"
             )
+
+    def test_modic_eval_is_available(self):
+        """workflow_modic_eval is implemented and should be marked available."""
+        result = json.loads(get_workflows_resource())
+        modic = next(w for w in result["workflows"] if w["name"] == "workflow_modic_eval")
+        assert modic["status"] == "available"
 
     def test_does_not_require_slicer_connection(self):
         """get_workflows_resource should work without any Slicer connection."""

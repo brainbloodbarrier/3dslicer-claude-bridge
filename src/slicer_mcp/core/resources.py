@@ -147,7 +147,7 @@ def get_status_resource() -> str:
 
     try:
         # Perform health check
-        health = client.health_check()
+        health = client.health_check(check_version=False)
 
         # Get Slicer version and scene status
         python_code = """
@@ -205,7 +205,7 @@ __execResult = result
 _WORKFLOW_CATALOG: list[dict] = [
     {
         "name": "workflow_modic_eval",
-        "status": "planned",
+        "status": "available",
         "description": "Modic endplate and disc degeneration assessment from MRI",
         "required_modalities": ["T1 MRI", "T2 MRI"],
         "clinical_indication": "Endplate changes, disc degeneration, cord screening",
