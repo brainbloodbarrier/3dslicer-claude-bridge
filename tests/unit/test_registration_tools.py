@@ -12,7 +12,7 @@ from slicer_mcp.tools import ValidationError
 # Helper: build a mock client returning a success dict
 # =============================================================================
 
-PATCH_TARGET = "slicer_mcp.registration_tools.get_client"
+PATCH_TARGET = "slicer_mcp.features.registration.get_client"
 
 
 def _mock_client(return_dict: dict) -> Mock:

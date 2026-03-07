@@ -87,7 +87,7 @@ class TestGetSceneResource:
 
     def test_returns_json_with_nodes(self):
         """get_scene_resource should return JSON with node count and nodes."""
-        with patch("slicer_mcp.resources.get_client") as mock_get_client:
+        with patch("slicer_mcp.core.resources.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.get_scene_nodes.return_value = [
                 {
@@ -103,7 +103,7 @@ class TestGetSceneResource:
 
     def test_connection_error_raises(self):
         """get_scene_resource should propagate SlicerConnectionError."""
-        with patch("slicer_mcp.resources.get_client") as mock_get_client:
+        with patch("slicer_mcp.core.resources.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.get_scene_nodes.side_effect = SlicerConnectionError("fail")
             mock_get_client.return_value = mock_client
@@ -116,7 +116,7 @@ class TestGetVolumesResource:
 
     def test_returns_json_with_volumes(self):
         """get_volumes_resource should return JSON with volume data."""
-        with patch("slicer_mcp.resources.get_client") as mock_get_client:
+        with patch("slicer_mcp.core.resources.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
@@ -128,7 +128,7 @@ class TestGetVolumesResource:
 
     def test_connection_error_raises(self):
         """get_volumes_resource should propagate SlicerConnectionError."""
-        with patch("slicer_mcp.resources.get_client") as mock_get_client:
+        with patch("slicer_mcp.core.resources.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.side_effect = SlicerConnectionError("fail")
             mock_get_client.return_value = mock_client
@@ -141,7 +141,7 @@ class TestGetStatusResource:
 
     def test_connected_status(self):
         """get_status_resource should return connected status with Slicer info."""
-        with patch("slicer_mcp.resources.get_client") as mock_get_client:
+        with patch("slicer_mcp.core.resources.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.health_check.return_value = {
                 "connected": True,
@@ -163,7 +163,7 @@ class TestGetStatusResource:
 
     def test_disconnected_status(self):
         """get_status_resource should return disconnected status on connection error."""
-        with patch("slicer_mcp.resources.get_client") as mock_get_client:
+        with patch("slicer_mcp.core.resources.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.base_url = "http://localhost:2016"
             mock_client.health_check.side_effect = SlicerConnectionError("fail")
