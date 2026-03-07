@@ -446,6 +446,45 @@ class TestSegmentationToModels:
         with pytest.raises(SlicerConnectionError):
             segmentation_to_models("vtkMRMLSegmentationNode1")
 
+    def test_generated_code_parents_models_under_folder(self):
+        """Verify generated code uses Subject Hierarchy to parent models in a folder."""
+        code = _build_segmentation_to_models_code('"vtkMRMLSegmentationNode1"', "None")
+        assert "CreateFolderItem" in code, "Should create SH folder, not vtkMRMLFolderDisplayNode"
+        assert "SetItemParent" in code, "Should parent model nodes under the folder"
+        assert "folder_item_id" in code, "Result dict should include folder_item_id"
+
+    @patch("slicer_mcp.features.rendering.get_client")
+    def test_result_includes_folder_info(self, mock_get_client):
+        """Verify the tool result includes folder_item_id and folder_name."""
+        mock_client = Mock()
+        mock_get_client.return_value = mock_client
+        mock_client.exec_python.return_value = {
+            "result": json.dumps(
+                {
+                    "success": True,
+                    "segmentation_node_id": "vtkMRMLSegmentationNode1",
+                    "segmentation_node_name": "Segmentation",
+                    "folder_item_id": 42,
+                    "folder_name": "Segmentation_models",
+                    "models": [
+                        {
+                            "segment_id": "Segment_1",
+                            "segment_name": "Bone",
+                            "model_node_id": "vtkMRMLModelNode1",
+                            "model_node_name": "Bone",
+                            "point_count": 1000,
+                            "cell_count": 2000,
+                        }
+                    ],
+                    "model_count": 1,
+                }
+            )
+        }
+
+        result = segmentation_to_models("vtkMRMLSegmentationNode1")
+        assert result["folder_item_id"] == 42
+        assert result["folder_name"] == "Segmentation_models"
+
 
 # =============================================================================
 # Capture 3D View Tests

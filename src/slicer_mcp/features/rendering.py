@@ -325,10 +325,11 @@ else:
 if not export_ids:
     raise ValueError('No segments to export in: ' + segmentation_id)
 
-# Create a folder node for organization
-shFolderNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLFolderDisplayNode')
+# Create a Subject Hierarchy folder for organization
+shNode = slicer.vtkMRMLSubjectHierarchyNode.GetSubjectHierarchyNode(slicer.mrmlScene)
+sceneItemID = shNode.GetSceneItemID()
 folderName = segNode.GetName() + '_models'
-shFolderNode.SetName(folderName)
+folderItemID = shNode.CreateFolderItem(sceneItemID, folderName)
 
 # Export segments to model nodes
 models = []
@@ -358,6 +359,11 @@ for seg_id in export_ids:
         modelNode.SetAndObservePolyData(copiedPolyData)
         modelNode.CreateDefaultDisplayNodes()
 
+        # Parent model under folder in Subject Hierarchy
+        modelItemID = shNode.GetItemByDataNode(modelNode)
+        if modelItemID:
+            shNode.SetItemParent(modelItemID, folderItemID)
+
         # Apply segment color
         color = segment.GetColor()
         displayNode = modelNode.GetDisplayNode()
@@ -386,6 +392,8 @@ result = {{
     'success': True,
     'segmentation_node_id': segNode.GetID(),
     'segmentation_node_name': segNode.GetName(),
+    'folder_item_id': folderItemID,
+    'folder_name': folderName,
     'models': models,
     'model_count': len([m for m in models if m.get('model_node_id')]),
 }}
