@@ -4,7 +4,7 @@ import json
 import logging
 import re
 
-from slicer_mcp.constants import (
+from slicer_mcp.core.constants import (
     DEFAULT_SAMPLING_PERCENTAGE,
     LANDMARK_LABEL_PATTERN,
     MAX_LANDMARK_LABEL_LENGTH,
@@ -15,8 +15,12 @@ from slicer_mcp.constants import (
     VALID_LANDMARK_TRANSFORM_TYPES,
     VALID_TRANSFORM_TYPES,
 )
-from slicer_mcp.slicer_client import get_client
-from slicer_mcp.tools import ValidationError, _parse_json_result, validate_mrml_node_id
+from slicer_mcp.core.slicer_client import get_client
+from slicer_mcp.features.base_tools import (
+    ValidationError,
+    _parse_json_result,
+    validate_mrml_node_id,
+)
 
 logger = logging.getLogger("slicer-mcp")
 

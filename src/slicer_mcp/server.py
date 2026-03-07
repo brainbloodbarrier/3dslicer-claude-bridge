@@ -5,20 +5,19 @@ import sys
 
 from mcp.server.fastmcp import FastMCP
 
-# Import tools and resources
-from slicer_mcp import (
-    diagnostic_tools_ct,
-    diagnostic_tools_mri,
-    diagnostic_tools_xray,
-    instrumentation_tools,
-    registration_tools,
-    rendering_tools,
-    resources,
-    spine_tools,
-    tools,
-)
-from slicer_mcp.circuit_breaker import CircuitOpenError
-from slicer_mcp.slicer_client import SlicerConnectionError, SlicerTimeoutError
+from slicer_mcp.core import resources
+
+# Import tools and resources from canonical locations
+from slicer_mcp.core.circuit_breaker import CircuitOpenError
+from slicer_mcp.core.slicer_client import SlicerConnectionError, SlicerTimeoutError
+from slicer_mcp.features import base_tools as tools
+from slicer_mcp.features import registration as registration_tools
+from slicer_mcp.features import rendering as rendering_tools
+from slicer_mcp.features.diagnostics import ct as diagnostic_tools_ct
+from slicer_mcp.features.diagnostics import mri as diagnostic_tools_mri
+from slicer_mcp.features.diagnostics import xray as diagnostic_tools_xray
+from slicer_mcp.features.spine import instrumentation as instrumentation_tools
+from slicer_mcp.features.spine import tools as spine_tools
 
 # Configure logging to stderr (stdout reserved for MCP protocol)
 logging.basicConfig(

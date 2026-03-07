@@ -4,8 +4,8 @@ import json
 import logging
 from datetime import datetime, timezone
 
-from slicer_mcp.slicer_client import SlicerConnectionError, get_client
-from slicer_mcp.tools import _parse_json_result
+from slicer_mcp.core.slicer_client import SlicerConnectionError, get_client
+from slicer_mcp.features.base_tools import _parse_json_result
 
 logger = logging.getLogger("slicer-mcp")
 

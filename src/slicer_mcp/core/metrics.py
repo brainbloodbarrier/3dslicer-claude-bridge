@@ -8,7 +8,7 @@ Usage:
     export SLICER_METRICS_ENABLED=true
 
     # In code:
-    from slicer_mcp.metrics import track_request, REQUEST_TOTAL
+    from slicer_mcp.core.metrics import track_request, REQUEST_TOTAL
 
     with track_request("health_check"):
         result = client.health_check()

@@ -20,8 +20,13 @@ import json
 import logging
 from typing import Any
 
-from slicer_mcp.slicer_client import SlicerConnectionError, get_client
-from slicer_mcp.spine_constants import (
+from slicer_mcp.core.slicer_client import SlicerConnectionError, get_client
+from slicer_mcp.features.base_tools import (
+    ValidationError,
+    _parse_json_result,
+    validate_mrml_node_id,
+)
+from slicer_mcp.features.spine.constants import (
     CORD_T2_HYPERINTENSITY_THRESHOLD,
     DISC_HOMOGENEOUS_CV_THRESHOLD,
     DISC_SUPPORTED_REGIONS,
@@ -49,8 +54,7 @@ from slicer_mcp.spine_constants import (
     TOTALSEGMENTATOR_DISC_MAP,
     TOTALSEGMENTATOR_VERTEBRA_MAP,
 )
-from slicer_mcp.spine_tools import _build_totalseg_subprocess_block
-from slicer_mcp.tools import ValidationError, _parse_json_result, validate_mrml_node_id
+from slicer_mcp.features.spine.tools import _build_totalseg_subprocess_block
 
 logger = logging.getLogger("slicer-mcp")
 

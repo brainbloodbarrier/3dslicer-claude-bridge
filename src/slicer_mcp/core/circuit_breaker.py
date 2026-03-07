@@ -27,7 +27,7 @@ from enum import Enum
 from functools import wraps
 from typing import TypeVar
 
-from slicer_mcp.constants import (
+from slicer_mcp.core.constants import (
     CIRCUIT_BREAKER_FAILURE_THRESHOLD,
     CIRCUIT_BREAKER_RECOVERY_TIMEOUT,
 )

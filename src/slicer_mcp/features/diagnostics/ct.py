@@ -13,11 +13,16 @@ import json
 import logging
 from typing import Any
 
-from slicer_mcp.constants import (
+from slicer_mcp.core.constants import (
     SEGMENTATION_TIMEOUT,
 )
-from slicer_mcp.slicer_client import SlicerConnectionError, get_client
-from slicer_mcp.spine_constants import (
+from slicer_mcp.core.slicer_client import SlicerConnectionError, get_client
+from slicer_mcp.features.base_tools import (
+    ValidationError,
+    _parse_json_result,
+    validate_mrml_node_id,
+)
+from slicer_mcp.features.spine.constants import (
     GENANT_THRESHOLDS,
     LESION_BLASTIC_HU_THRESHOLD,
     LESION_LYTIC_HU_THRESHOLD,
@@ -28,12 +33,7 @@ from slicer_mcp.spine_constants import (
     SPINE_SEGMENTATION_TIMEOUT,
     TOTALSEG_TASK_VERTEBRAE,
 )
-from slicer_mcp.spine_tools import _build_totalseg_subprocess_block
-from slicer_mcp.tools import (
-    ValidationError,
-    _parse_json_result,
-    validate_mrml_node_id,
-)
+from slicer_mcp.features.spine.tools import _build_totalseg_subprocess_block
 
 logger = logging.getLogger("slicer-mcp")
 

@@ -12,11 +12,11 @@ from typing import Any, NoReturn, TypeVar
 import requests
 from requests.exceptions import ConnectionError, RequestException, Timeout
 
-from slicer_mcp.circuit_breaker import (
+from slicer_mcp.core.circuit_breaker import (
     CircuitBreaker,
     CircuitOpenError,
 )
-from slicer_mcp.constants import (
+from slicer_mcp.core.constants import (
     DEFAULT_SLICER_URL,
     DEFAULT_TIMEOUT_SECONDS,
     RETRY_BACKOFF_BASE,
@@ -24,7 +24,7 @@ from slicer_mcp.constants import (
     SLICER_MIN_VERSION,
     SLICER_TESTED_VERSIONS,
 )
-from slicer_mcp.metrics import (
+from slicer_mcp.core.metrics import (
     record_retry,
     track_request,
     update_circuit_breaker_state,

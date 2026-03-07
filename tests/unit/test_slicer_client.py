@@ -79,7 +79,7 @@ class TestHealthCheck:
 
     def test_health_check_success(self, slicer_client):
         """Test successful health check."""
-        with patch("slicer_mcp.slicer_client.requests.get") as mock_get:
+        with patch("slicer_mcp.core.slicer_client.requests.get") as mock_get:
             mock_response = Mock()
             mock_response.status_code = 200
             mock_response.raise_for_status = Mock()
@@ -94,7 +94,7 @@ class TestHealthCheck:
 
     def test_health_check_connection_error(self, slicer_client):
         """Test health check with connection error."""
-        with patch("slicer_mcp.slicer_client.requests.get") as mock_get:
+        with patch("slicer_mcp.core.slicer_client.requests.get") as mock_get:
             mock_get.side_effect = ConnectionError("Connection refused")
 
             with pytest.raises(SlicerConnectionError) as exc_info:
@@ -104,7 +104,7 @@ class TestHealthCheck:
 
     def test_health_check_timeout(self, slicer_client):
         """Test health check with timeout."""
-        with patch("slicer_mcp.slicer_client.requests.get") as mock_get:
+        with patch("slicer_mcp.core.slicer_client.requests.get") as mock_get:
             mock_get.side_effect = Timeout("Request timeout")
 
             with pytest.raises(SlicerTimeoutError) as exc_info:
@@ -118,7 +118,7 @@ class TestExecPython:
 
     def test_exec_python_success(self, slicer_client):
         """Test successful Python code execution."""
-        with patch("slicer_mcp.slicer_client.requests.post") as mock_post:
+        with patch("slicer_mcp.core.slicer_client.requests.post") as mock_post:
             mock_response = Mock()
             mock_response.status_code = 200
             mock_response.text = "42"
@@ -133,7 +133,7 @@ class TestExecPython:
 
     def test_exec_python_connection_error(self, slicer_client):
         """Test Python execution with connection error."""
-        with patch("slicer_mcp.slicer_client.requests.post") as mock_post:
+        with patch("slicer_mcp.core.slicer_client.requests.post") as mock_post:
             mock_post.side_effect = ConnectionError("Connection refused")
 
             with pytest.raises(SlicerConnectionError) as exc_info:
@@ -143,7 +143,7 @@ class TestExecPython:
 
     def test_exec_python_uses_default_timeout(self, slicer_client):
         """Test exec_python uses client's default timeout when no timeout specified."""
-        with patch("slicer_mcp.slicer_client.requests.post") as mock_post:
+        with patch("slicer_mcp.core.slicer_client.requests.post") as mock_post:
             mock_response = Mock()
             mock_response.status_code = 200
             mock_response.text = "result"
@@ -158,7 +158,7 @@ class TestExecPython:
 
     def test_exec_python_uses_custom_timeout(self, slicer_client):
         """Test exec_python uses provided custom timeout for long operations."""
-        with patch("slicer_mcp.slicer_client.requests.post") as mock_post:
+        with patch("slicer_mcp.core.slicer_client.requests.post") as mock_post:
             mock_response = Mock()
             mock_response.status_code = 200
             mock_response.text = "result"
@@ -174,7 +174,7 @@ class TestExecPython:
 
     def test_exec_python_custom_timeout_zero(self, slicer_client):
         """Test exec_python with timeout=0 is valid (no timeout)."""
-        with patch("slicer_mcp.slicer_client.requests.post") as mock_post:
+        with patch("slicer_mcp.core.slicer_client.requests.post") as mock_post:
             mock_response = Mock()
             mock_response.status_code = 200
             mock_response.text = "result"
@@ -193,7 +193,7 @@ class TestGetScreenshot:
 
     def test_get_screenshot_default(self, slicer_client):
         """Test screenshot capture with default parameters."""
-        with patch("slicer_mcp.slicer_client.requests.get") as mock_get:
+        with patch("slicer_mcp.core.slicer_client.requests.get") as mock_get:
             mock_response = Mock()
             mock_response.status_code = 200
             mock_response.content = b"\x89PNG\r\n\x1a\n..."  # PNG magic bytes
@@ -209,7 +209,7 @@ class TestGetScreenshot:
 
     def test_get_screenshot_with_scroll(self, slicer_client):
         """Test screenshot capture with scroll position."""
-        with patch("slicer_mcp.slicer_client.requests.get") as mock_get:
+        with patch("slicer_mcp.core.slicer_client.requests.get") as mock_get:
             mock_response = Mock()
             mock_response.status_code = 200
             mock_response.content = b"\x89PNG\r\n\x1a\n..."
@@ -225,7 +225,7 @@ class TestGetScreenshot:
 
     def test_get_screenshot_connection_error(self, slicer_client):
         """Test screenshot capture with connection error."""
-        with patch("slicer_mcp.slicer_client.requests.get") as mock_get:
+        with patch("slicer_mcp.core.slicer_client.requests.get") as mock_get:
             mock_get.side_effect = ConnectionError("Connection refused")
 
             with pytest.raises(SlicerConnectionError) as exc_info:
@@ -239,7 +239,7 @@ class TestGet3DScreenshot:
 
     def test_get_3d_screenshot_default(self, slicer_client):
         """Test 3D screenshot capture with default parameters."""
-        with patch("slicer_mcp.slicer_client.requests.get") as mock_get:
+        with patch("slicer_mcp.core.slicer_client.requests.get") as mock_get:
             mock_response = Mock()
             mock_response.status_code = 200
             mock_response.content = b"\x89PNG\r\n\x1a\n..."
@@ -255,7 +255,7 @@ class TestGet3DScreenshot:
 
     def test_get_3d_screenshot_with_axis(self, slicer_client):
         """Test 3D screenshot capture with look_from_axis."""
-        with patch("slicer_mcp.slicer_client.requests.get") as mock_get:
+        with patch("slicer_mcp.core.slicer_client.requests.get") as mock_get:
             mock_response = Mock()
             mock_response.status_code = 200
             mock_response.content = b"\x89PNG\r\n\x1a\n..."
@@ -274,7 +274,7 @@ class TestGetSceneNodes:
 
     def test_get_scene_nodes_success(self, slicer_client):
         """Test successful scene nodes retrieval."""
-        with patch("slicer_mcp.slicer_client.requests.get") as mock_get:
+        with patch("slicer_mcp.core.slicer_client.requests.get") as mock_get:
             # Mock names response (JSON array)
             mock_names_response = Mock()
             mock_names_response.status_code = 200
@@ -300,7 +300,7 @@ class TestGetSceneNodes:
 
     def test_get_scene_nodes_empty(self, slicer_client):
         """Test scene nodes retrieval with empty scene."""
-        with patch("slicer_mcp.slicer_client.requests.get") as mock_get:
+        with patch("slicer_mcp.core.slicer_client.requests.get") as mock_get:
             mock_response = Mock()
             mock_response.status_code = 200
             mock_response.text = json.dumps([])
@@ -321,7 +321,7 @@ class TestGetSceneNodes:
         mock_ids_response.text = '["vtkMRML3DViewNode1"]'
         mock_ids_response.raise_for_status = Mock()
 
-        with patch("slicer_mcp.slicer_client.requests.get") as mock_get:
+        with patch("slicer_mcp.core.slicer_client.requests.get") as mock_get:
             mock_get.side_effect = [mock_names_response, mock_ids_response]
 
             nodes = slicer_client.get_scene_nodes()
@@ -334,7 +334,7 @@ class TestLoadSampleData:
 
     def test_load_sample_data_success(self, slicer_client):
         """Test successful sample data loading."""
-        with patch("slicer_mcp.slicer_client.requests.get") as mock_get:
+        with patch("slicer_mcp.core.slicer_client.requests.get") as mock_get:
             mock_response = Mock()
             mock_response.status_code = 200
             mock_response.raise_for_status = Mock()
@@ -348,7 +348,7 @@ class TestLoadSampleData:
 
     def test_load_sample_data_connection_error(self, slicer_client):
         """Test sample data loading with connection error."""
-        with patch("slicer_mcp.slicer_client.requests.get") as mock_get:
+        with patch("slicer_mcp.core.slicer_client.requests.get") as mock_get:
             mock_get.side_effect = ConnectionError("Connection refused")
 
             with pytest.raises(SlicerConnectionError) as exc_info:
@@ -362,7 +362,7 @@ class TestSetLayout:
 
     def test_set_layout_success(self, slicer_client):
         """Test successful layout change."""
-        with patch("slicer_mcp.slicer_client.requests.get") as mock_get:
+        with patch("slicer_mcp.core.slicer_client.requests.get") as mock_get:
             mock_response = Mock()
             mock_response.status_code = 200
             mock_response.raise_for_status = Mock()
@@ -376,7 +376,7 @@ class TestSetLayout:
 
     def test_set_layout_viewers_only(self, slicer_client):
         """Test layout change with viewers only mode."""
-        with patch("slicer_mcp.slicer_client.requests.get") as mock_get:
+        with patch("slicer_mcp.core.slicer_client.requests.get") as mock_get:
             mock_response = Mock()
             mock_response.status_code = 200
             mock_response.raise_for_status = Mock()
@@ -458,8 +458,8 @@ class TestScreenshotRetry:
     def test_get_screenshot_retries_on_connection_error(self, slicer_client):
         """Test get_screenshot retries on SlicerConnectionError."""
         with (
-            patch("slicer_mcp.slicer_client.requests.get") as mock_get,
-            patch("slicer_mcp.slicer_client.time.sleep") as mock_sleep,
+            patch("slicer_mcp.core.slicer_client.requests.get") as mock_get,
+            patch("slicer_mcp.core.slicer_client.time.sleep") as mock_sleep,
         ):
             # First 3 calls fail with ConnectionError, 4th succeeds
             mock_success = Mock()
@@ -485,8 +485,8 @@ class TestScreenshotRetry:
     def test_get_3d_screenshot_retries_on_connection_error(self, slicer_client):
         """Test get_3d_screenshot retries on SlicerConnectionError."""
         with (
-            patch("slicer_mcp.slicer_client.requests.get") as mock_get,
-            patch("slicer_mcp.slicer_client.time.sleep") as _mock_sleep,
+            patch("slicer_mcp.core.slicer_client.requests.get") as mock_get,
+            patch("slicer_mcp.core.slicer_client.time.sleep") as _mock_sleep,
         ):
             mock_success = Mock()
             mock_success.status_code = 200
@@ -508,8 +508,8 @@ class TestScreenshotRetry:
     def test_get_full_screenshot_retries_on_connection_error(self, slicer_client):
         """Test get_full_screenshot retries on SlicerConnectionError."""
         with (
-            patch("slicer_mcp.slicer_client.requests.get") as mock_get,
-            patch("slicer_mcp.slicer_client.time.sleep") as _mock_sleep,
+            patch("slicer_mcp.core.slicer_client.requests.get") as mock_get,
+            patch("slicer_mcp.core.slicer_client.time.sleep") as _mock_sleep,
         ):
             mock_success = Mock()
             mock_success.status_code = 200
@@ -530,8 +530,8 @@ class TestScreenshotRetry:
     def test_get_screenshot_exhausts_retries(self, slicer_client):
         """Test get_screenshot fails after exhausting all retries."""
         with (
-            patch("slicer_mcp.slicer_client.requests.get") as mock_get,
-            patch("slicer_mcp.slicer_client.time.sleep") as _mock_sleep,
+            patch("slicer_mcp.core.slicer_client.requests.get") as mock_get,
+            patch("slicer_mcp.core.slicer_client.time.sleep") as _mock_sleep,
         ):
             # All calls fail
             mock_get.side_effect = ConnectionError("Connection refused")
@@ -557,8 +557,8 @@ class TestRetryExhaustion:
     def test_health_check_exhausts_all_retries(self, slicer_client):
         """Test health check fails after exhausting all retries."""
         with (
-            patch("slicer_mcp.slicer_client.requests.get") as mock_get,
-            patch("slicer_mcp.slicer_client.time.sleep") as mock_sleep,
+            patch("slicer_mcp.core.slicer_client.requests.get") as mock_get,
+            patch("slicer_mcp.core.slicer_client.time.sleep") as mock_sleep,
         ):
             mock_get.side_effect = ConnectionError("Connection refused")
 
@@ -573,8 +573,8 @@ class TestRetryExhaustion:
     def test_exec_python_does_not_retry(self, slicer_client):
         """Test exec_python does NOT retry on connection error (non-idempotent)."""
         with (
-            patch("slicer_mcp.slicer_client.requests.post") as mock_post,
-            patch("slicer_mcp.slicer_client.time.sleep") as mock_sleep,
+            patch("slicer_mcp.core.slicer_client.requests.post") as mock_post,
+            patch("slicer_mcp.core.slicer_client.time.sleep") as mock_sleep,
         ):
             mock_post.side_effect = ConnectionError("Connection refused")
 
@@ -587,8 +587,8 @@ class TestRetryExhaustion:
     def test_retry_exponential_backoff_timing(self, slicer_client):
         """Test exponential backoff delays are correct."""
         with (
-            patch("slicer_mcp.slicer_client.requests.get") as mock_get,
-            patch("slicer_mcp.slicer_client.time.sleep") as mock_sleep,
+            patch("slicer_mcp.core.slicer_client.requests.get") as mock_get,
+            patch("slicer_mcp.core.slicer_client.time.sleep") as mock_sleep,
         ):
             mock_get.side_effect = ConnectionError("Connection refused")
 
@@ -610,7 +610,7 @@ class TestErrorHandlerEdgeCases:
 
     def test_timeout_not_retried(self, slicer_client):
         """Test that Timeout errors are NOT retried (Slicer may be frozen)."""
-        with patch("slicer_mcp.slicer_client.requests.get") as mock_get:
+        with patch("slicer_mcp.core.slicer_client.requests.get") as mock_get:
             mock_get.side_effect = Timeout("Request timeout")
 
             with pytest.raises(SlicerTimeoutError):
@@ -624,8 +624,8 @@ class TestErrorHandlerEdgeCases:
         from requests.exceptions import RequestException
 
         with (
-            patch("slicer_mcp.slicer_client.requests.get") as mock_get,
-            patch("slicer_mcp.slicer_client.time.sleep") as mock_sleep,
+            patch("slicer_mcp.core.slicer_client.requests.get") as mock_get,
+            patch("slicer_mcp.core.slicer_client.time.sleep") as mock_sleep,
         ):
             mock_get.side_effect = RequestException("Generic error")
 
@@ -648,7 +648,7 @@ class TestVersionChecking:
 
     def test_get_slicer_version_returns_string(self, slicer_client):
         """Test get_slicer_version returns a version string."""
-        with patch("slicer_mcp.slicer_client.requests.post") as mock_post:
+        with patch("slicer_mcp.core.slicer_client.requests.post") as mock_post:
             mock_response = Mock()
             mock_response.status_code = 200
             mock_response.text = "'5.6.2'"  # Slicer returns quoted string
@@ -662,7 +662,7 @@ class TestVersionChecking:
 
     def test_get_slicer_version_strips_quotes(self, slicer_client):
         """Test version string is cleaned of quotes."""
-        with patch("slicer_mcp.slicer_client.requests.post") as mock_post:
+        with patch("slicer_mcp.core.slicer_client.requests.post") as mock_post:
             mock_response = Mock()
             mock_response.status_code = 200
             mock_response.text = '"5.4.0"'  # Double-quoted
@@ -675,7 +675,7 @@ class TestVersionChecking:
 
     def test_check_version_compatibility_compatible_tested(self, slicer_client):
         """Test compatible and tested version returns correct status."""
-        with patch("slicer_mcp.slicer_client.requests.post") as mock_post:
+        with patch("slicer_mcp.core.slicer_client.requests.post") as mock_post:
             mock_response = Mock()
             mock_response.status_code = 200
             mock_response.text = "'5.6.2'"
@@ -692,7 +692,7 @@ class TestVersionChecking:
 
     def test_check_version_compatibility_compatible_untested(self, slicer_client):
         """Test compatible but untested version returns warning."""
-        with patch("slicer_mcp.slicer_client.requests.post") as mock_post:
+        with patch("slicer_mcp.core.slicer_client.requests.post") as mock_post:
             mock_response = Mock()
             mock_response.status_code = 200
             mock_response.text = "'5.8.0'"  # Not in tested versions
@@ -709,7 +709,7 @@ class TestVersionChecking:
 
     def test_check_version_compatibility_incompatible(self, slicer_client):
         """Test incompatible version returns warning."""
-        with patch("slicer_mcp.slicer_client.requests.post") as mock_post:
+        with patch("slicer_mcp.core.slicer_client.requests.post") as mock_post:
             mock_response = Mock()
             mock_response.status_code = 200
             mock_response.text = "'4.11.0'"  # Below minimum
@@ -726,7 +726,7 @@ class TestVersionChecking:
 
     def test_check_version_compatibility_dev_version(self, slicer_client):
         """Test development version (e.g., 5.7.0-2024-01-01) is handled."""
-        with patch("slicer_mcp.slicer_client.requests.post") as mock_post:
+        with patch("slicer_mcp.core.slicer_client.requests.post") as mock_post:
             mock_response = Mock()
             mock_response.status_code = 200
             mock_response.text = "'5.7.0-2024-01-01'"
@@ -742,7 +742,7 @@ class TestVersionChecking:
 
     def test_check_version_compatibility_connection_error(self, slicer_client):
         """Test version check raises error if Slicer not connected."""
-        with patch("slicer_mcp.slicer_client.requests.post") as mock_post:
+        with patch("slicer_mcp.core.slicer_client.requests.post") as mock_post:
             mock_post.side_effect = ConnectionError("Connection refused")
 
             with pytest.raises(SlicerConnectionError):
@@ -750,7 +750,7 @@ class TestVersionChecking:
 
     def test_get_slicer_version_whitespace_handling(self, slicer_client):
         """Test version string handles whitespace."""
-        with patch("slicer_mcp.slicer_client.requests.post") as mock_post:
+        with patch("slicer_mcp.core.slicer_client.requests.post") as mock_post:
             mock_response = Mock()
             mock_response.status_code = 200
             mock_response.text = "  '5.6.1'  \n"  # Extra whitespace
@@ -856,7 +856,7 @@ class TestCircuitBreakerIntegration:
         reset_circuit_breaker()
         client = SlicerClient()
 
-        with patch("slicer_mcp.slicer_client.requests.get") as mock_get:
+        with patch("slicer_mcp.core.slicer_client.requests.get") as mock_get:
             mock_response = Mock()
             mock_response.status_code = 200
             mock_response.text = "{}"
@@ -911,8 +911,8 @@ class TestHealthCheckVersionIntegration:
         client = SlicerClient()
 
         with (
-            patch("slicer_mcp.slicer_client.requests.get") as mock_get,
-            patch("slicer_mcp.slicer_client.requests.post") as mock_post,
+            patch("slicer_mcp.core.slicer_client.requests.get") as mock_get,
+            patch("slicer_mcp.core.slicer_client.requests.post") as mock_post,
         ):
             # Mock health check response
             mock_health_response = Mock()
@@ -942,7 +942,7 @@ class TestHealthCheckVersionIntegration:
         reset_circuit_breaker()
         client = SlicerClient()
 
-        with patch("slicer_mcp.slicer_client.requests.get") as mock_get:
+        with patch("slicer_mcp.core.slicer_client.requests.get") as mock_get:
             mock_response = Mock()
             mock_response.status_code = 200
             mock_response.text = "{}"
@@ -961,8 +961,8 @@ class TestHealthCheckVersionIntegration:
         client = SlicerClient()
 
         with (
-            patch("slicer_mcp.slicer_client.requests.get") as mock_get,
-            patch("slicer_mcp.slicer_client.requests.post") as mock_post,
+            patch("slicer_mcp.core.slicer_client.requests.get") as mock_get,
+            patch("slicer_mcp.core.slicer_client.requests.post") as mock_post,
         ):
             # Mock health check response (success)
             mock_health_response = Mock()
@@ -993,8 +993,8 @@ class TestGetSceneNodesRetry:
     def test_get_scene_nodes_retries_on_connection_error(self, slicer_client):
         """Test get_scene_nodes retries on SlicerConnectionError."""
         with (
-            patch("slicer_mcp.slicer_client.requests.get") as mock_get,
-            patch("slicer_mcp.slicer_client.time.sleep") as mock_sleep,
+            patch("slicer_mcp.core.slicer_client.requests.get") as mock_get,
+            patch("slicer_mcp.core.slicer_client.time.sleep") as mock_sleep,
         ):
             # Mock successful responses for names and ids
             mock_success_names = Mock()
@@ -1043,8 +1043,8 @@ class TestLoadSampleDataRetry:
     def test_load_sample_data_retries_on_connection_error(self, slicer_client):
         """Test load_sample_data retries on SlicerConnectionError."""
         with (
-            patch("slicer_mcp.slicer_client.requests.get") as mock_get,
-            patch("slicer_mcp.slicer_client.time.sleep") as mock_sleep,
+            patch("slicer_mcp.core.slicer_client.requests.get") as mock_get,
+            patch("slicer_mcp.core.slicer_client.time.sleep") as mock_sleep,
         ):
             mock_success = Mock()
             mock_success.status_code = 200
@@ -1066,8 +1066,8 @@ class TestLoadSampleDataRetry:
     def test_load_sample_data_exhausts_retries(self, slicer_client):
         """Test load_sample_data fails after exhausting retries."""
         with (
-            patch("slicer_mcp.slicer_client.requests.get") as mock_get,
-            patch("slicer_mcp.slicer_client.time.sleep") as _mock_sleep,
+            patch("slicer_mcp.core.slicer_client.requests.get") as mock_get,
+            patch("slicer_mcp.core.slicer_client.time.sleep") as _mock_sleep,
         ):
             mock_get.side_effect = ConnectionError("Connection refused")
 
@@ -1098,8 +1098,8 @@ class TestSetLayoutRetry:
     def test_set_layout_retries_on_connection_error(self, slicer_client):
         """Test set_layout retries on SlicerConnectionError."""
         with (
-            patch("slicer_mcp.slicer_client.requests.get") as mock_get,
-            patch("slicer_mcp.slicer_client.time.sleep") as mock_sleep,
+            patch("slicer_mcp.core.slicer_client.requests.get") as mock_get,
+            patch("slicer_mcp.core.slicer_client.time.sleep") as mock_sleep,
         ):
             mock_success = Mock()
             mock_success.status_code = 200
@@ -1120,8 +1120,8 @@ class TestSetLayoutRetry:
     def test_set_layout_exhausts_retries(self, slicer_client):
         """Test set_layout fails after exhausting retries."""
         with (
-            patch("slicer_mcp.slicer_client.requests.get") as mock_get,
-            patch("slicer_mcp.slicer_client.time.sleep") as _mock_sleep,
+            patch("slicer_mcp.core.slicer_client.requests.get") as mock_get,
+            patch("slicer_mcp.core.slicer_client.time.sleep") as _mock_sleep,
         ):
             mock_get.side_effect = ConnectionError("Connection refused")
 
@@ -1156,7 +1156,7 @@ class TestGetSceneNodesJsonHandling:
 
     def test_get_scene_nodes_malformed_json_names(self, slicer_client):
         """get_scene_nodes should raise SlicerConnectionError on malformed JSON for names."""
-        with patch("slicer_mcp.slicer_client.requests.get") as mock_get:
+        with patch("slicer_mcp.core.slicer_client.requests.get") as mock_get:
             # First response (names) returns invalid JSON
             mock_names_response = Mock()
             mock_names_response.status_code = 200
@@ -1173,8 +1173,8 @@ class TestGetSceneNodesJsonHandling:
     def test_get_scene_nodes_malformed_json_ids(self, slicer_client):
         """get_scene_nodes should raise SlicerConnectionError on malformed JSON for IDs."""
         with (
-            patch("slicer_mcp.slicer_client.requests.get") as mock_get,
-            patch("slicer_mcp.slicer_client.time.sleep"),  # Skip retry delays
+            patch("slicer_mcp.core.slicer_client.requests.get") as mock_get,
+            patch("slicer_mcp.core.slicer_client.time.sleep"),  # Skip retry delays
         ):
             # Create responses - need enough for retries (initial + 3 retries = 4 attempts)
             # Each attempt makes 2 requests (names then IDs)
@@ -1204,7 +1204,7 @@ class TestGetSceneNodesJsonHandling:
 
     def test_get_scene_nodes_valid_json(self, slicer_client):
         """get_scene_nodes should successfully parse valid JSON responses."""
-        with patch("slicer_mcp.slicer_client.requests.get") as mock_get:
+        with patch("slicer_mcp.core.slicer_client.requests.get") as mock_get:
             mock_names_response = Mock()
             mock_names_response.status_code = 200
             mock_names_response.text = '["Volume1", "Segment1"]'
@@ -1236,8 +1236,8 @@ class TestGetNodePropertiesRetry:
     def test_get_node_properties_retries_on_connection_error(self, slicer_client):
         """get_node_properties should retry on ConnectionError."""
         with (
-            patch("slicer_mcp.slicer_client.requests.get") as mock_get,
-            patch("slicer_mcp.slicer_client.time.sleep") as mock_sleep,
+            patch("slicer_mcp.core.slicer_client.requests.get") as mock_get,
+            patch("slicer_mcp.core.slicer_client.time.sleep") as mock_sleep,
         ):
             mock_success = Mock()
             mock_success.status_code = 200
@@ -1261,8 +1261,8 @@ class TestGetNodePropertiesRetry:
     def test_get_node_properties_exhausts_retries(self, slicer_client):
         """get_node_properties should fail after exhausting retries."""
         with (
-            patch("slicer_mcp.slicer_client.requests.get") as mock_get,
-            patch("slicer_mcp.slicer_client.time.sleep") as _mock_sleep,
+            patch("slicer_mcp.core.slicer_client.requests.get") as mock_get,
+            patch("slicer_mcp.core.slicer_client.time.sleep") as _mock_sleep,
         ):
             mock_get.side_effect = ConnectionError("Connection refused")
 

@@ -2,10 +2,10 @@
 
 __version__ = "0.9.0"
 
-from slicer_mcp.circuit_breaker import CircuitOpenError
+from slicer_mcp.core.circuit_breaker import CircuitOpenError
+from slicer_mcp.core.slicer_client import SlicerConnectionError, SlicerTimeoutError
+from slicer_mcp.features.base_tools import ValidationError
 from slicer_mcp.server import main
-from slicer_mcp.slicer_client import SlicerConnectionError, SlicerTimeoutError
-from slicer_mcp.tools import ValidationError
 
 __all__ = [
     "__version__",

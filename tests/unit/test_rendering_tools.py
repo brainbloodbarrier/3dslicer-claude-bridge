@@ -75,25 +75,25 @@ class TestValidateExportDirectory:
         with pytest.raises(ValidationError, match="forbidden component"):
             validate_export_directory("/tmp/../etc")
 
-    @patch("slicer_mcp.tools.os.path.isdir", return_value=True)
-    @patch("slicer_mcp.tools.os.path.exists", return_value=True)
-    @patch("slicer_mcp.tools.os.path.realpath", return_value="/tmp/export")
-    @patch("slicer_mcp.tools.os.path.expanduser", return_value="/tmp/export")
+    @patch("slicer_mcp.features.base_tools.os.path.isdir", return_value=True)
+    @patch("slicer_mcp.features.base_tools.os.path.exists", return_value=True)
+    @patch("slicer_mcp.features.base_tools.os.path.realpath", return_value="/tmp/export")
+    @patch("slicer_mcp.features.base_tools.os.path.expanduser", return_value="/tmp/export")
     def test_valid_directory(self, mock_expand, mock_real, mock_exists, mock_isdir):
         result = validate_export_directory("/tmp/export")
         assert result == "/tmp/export"
 
-    @patch("slicer_mcp.tools.os.path.exists", return_value=False)
-    @patch("slicer_mcp.tools.os.path.realpath", return_value="/tmp/nonexistent")
-    @patch("slicer_mcp.tools.os.path.expanduser", return_value="/tmp/nonexistent")
+    @patch("slicer_mcp.features.base_tools.os.path.exists", return_value=False)
+    @patch("slicer_mcp.features.base_tools.os.path.realpath", return_value="/tmp/nonexistent")
+    @patch("slicer_mcp.features.base_tools.os.path.expanduser", return_value="/tmp/nonexistent")
     def test_directory_not_exists(self, mock_expand, mock_real, mock_exists):
         with pytest.raises(ValidationError, match="does not exist"):
             validate_export_directory("/tmp/nonexistent")
 
-    @patch("slicer_mcp.tools.os.path.isdir", return_value=False)
-    @patch("slicer_mcp.tools.os.path.exists", return_value=True)
-    @patch("slicer_mcp.tools.os.path.realpath", return_value="/tmp/file.txt")
-    @patch("slicer_mcp.tools.os.path.expanduser", return_value="/tmp/file.txt")
+    @patch("slicer_mcp.features.base_tools.os.path.isdir", return_value=False)
+    @patch("slicer_mcp.features.base_tools.os.path.exists", return_value=True)
+    @patch("slicer_mcp.features.base_tools.os.path.realpath", return_value="/tmp/file.txt")
+    @patch("slicer_mcp.features.base_tools.os.path.expanduser", return_value="/tmp/file.txt")
     def test_path_not_directory(self, mock_expand, mock_real, mock_exists, mock_isdir):
         with pytest.raises(ValidationError, match="not a directory"):
             validate_export_directory("/tmp/file.txt")

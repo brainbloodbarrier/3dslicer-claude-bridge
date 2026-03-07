@@ -5,7 +5,7 @@ import logging
 import os
 import re
 
-from slicer_mcp.constants import (
+from slicer_mcp.core.constants import (
     CAPTURE_3D_VIEW_TIMEOUT,
     CAPTURE_MAX_DIMENSION,
     CAPTURE_MIN_DIMENSION,
@@ -20,8 +20,8 @@ from slicer_mcp.constants import (
     VR_OPACITY_SCALE_MAX,
     VR_OPACITY_SCALE_MIN,
 )
-from slicer_mcp.slicer_client import get_client
-from slicer_mcp.tools import (
+from slicer_mcp.core.slicer_client import get_client
+from slicer_mcp.features.base_tools import (
     ValidationError,
     _parse_json_result,
     validate_folder_path,

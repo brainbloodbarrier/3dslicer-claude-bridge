@@ -17,8 +17,13 @@ import json
 import logging
 from typing import Any
 
-from slicer_mcp.slicer_client import SlicerConnectionError, get_client
-from slicer_mcp.spine_constants import (
+from slicer_mcp.core.slicer_client import SlicerConnectionError, get_client
+from slicer_mcp.features.base_tools import (
+    ValidationError,
+    _parse_json_result,
+    validate_mrml_node_id,
+)
+from slicer_mcp.features.spine.constants import (
     C1_LATERAL_MASS_SCREW_DEFAULTS,
     C2_PARS_SCREW_DEFAULTS,
     CERVICAL_LATERAL_MASS_SCREW_DEFAULTS,
@@ -36,11 +41,6 @@ from slicer_mcp.spine_constants import (
     VALID_INSTRUMENTATION_TECHNIQUES,
     VALID_LATERAL_MASS_VARIANTS,
     VALID_SIDES,
-)
-from slicer_mcp.tools import (
-    ValidationError,
-    _parse_json_result,
-    validate_mrml_node_id,
 )
 
 logger = logging.getLogger("slicer-mcp")

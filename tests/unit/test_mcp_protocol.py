@@ -99,7 +99,8 @@ class TestToolParameterValidation:
 
     def test_load_sample_data_validates_dataset(self):
         """Test load_sample_data rejects invalid dataset names."""
-        from slicer_mcp.tools import FALLBACK_SAMPLE_DATASETS, load_sample_data
+        from slicer_mcp.constants import FALLBACK_SAMPLE_DATASETS
+        from slicer_mcp.tools import load_sample_data
 
         with pytest.raises(ValueError) as exc_info:
             load_sample_data(dataset_name="InvalidDataset")
@@ -237,8 +238,9 @@ class TestToolResponseFormat:
 
     def test_list_sample_data_fallback_on_connection_error(self):
         """Test list_sample_data falls back to static list when Slicer disconnected."""
+        from slicer_mcp.constants import FALLBACK_SAMPLE_DATASETS
         from slicer_mcp.slicer_client import SlicerConnectionError, reset_client
-        from slicer_mcp.tools import FALLBACK_SAMPLE_DATASETS, list_sample_data
+        from slicer_mcp.tools import list_sample_data
 
         reset_client()
 

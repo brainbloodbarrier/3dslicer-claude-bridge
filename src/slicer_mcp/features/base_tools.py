@@ -11,7 +11,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from slicer_mcp.constants import (
+from slicer_mcp.core.constants import (
     AUDIT_CODE_MAX_LENGTH,
     AUDIT_RESULT_MAX_LENGTH,
     DICOM_UID_PATTERN,
@@ -25,7 +25,7 @@ from slicer_mcp.constants import (
     VALID_LAYOUTS,
     VIEW_MAP,
 )
-from slicer_mcp.slicer_client import SlicerConnectionError, get_client
+from slicer_mcp.core.slicer_client import SlicerConnectionError, get_client
 
 logger = logging.getLogger("slicer-mcp")
 
@@ -344,7 +344,7 @@ def validate_folder_path(path: str) -> str:
     Raises:
         ValidationError: If path is invalid or unsafe
     """
-    from slicer_mcp.constants import FORBIDDEN_PATH_COMPONENTS, MAX_FOLDER_PATH_LENGTH
+    from slicer_mcp.core.constants import FORBIDDEN_PATH_COMPONENTS, MAX_FOLDER_PATH_LENGTH
 
     if not path:
         raise ValidationError("Folder path cannot be empty", "folder_path", "")
@@ -1475,7 +1475,7 @@ def run_brain_extraction(
         ValidationError: If input parameters are invalid
         SlicerConnectionError: If Slicer is not reachable or processing fails
     """
-    from slicer_mcp.constants import (
+    from slicer_mcp.core.constants import (
         BRAIN_EXTRACTION_TIMEOUT,
         VALID_BRAIN_EXTRACTION_METHODS,
         VALID_HDBET_DEVICES,

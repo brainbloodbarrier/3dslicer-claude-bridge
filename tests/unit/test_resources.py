@@ -6,8 +6,8 @@ from unittest.mock import Mock, patch
 
 import pytest
 
+from slicer_mcp.core.resources import _iso_timestamp
 from slicer_mcp.resources import (
-    _iso_timestamp,
     get_scene_resource,
     get_status_resource,
     get_volumes_resource,
