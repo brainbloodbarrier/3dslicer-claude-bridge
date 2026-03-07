@@ -2365,9 +2365,7 @@ def visualize_spine_segmentation(
     try:
         exec_result = client.exec_python(python_code, timeout=SPINE_SEGMENTATION_TIMEOUT)
 
-        result_data = _parse_json_result(
-            exec_result.get("result", ""), "spine visualization"
-        )
+        result_data = _parse_json_result(exec_result.get("result", ""), "spine visualization")
 
         logger.info(
             f"Spine visualization completed: region={region}, "

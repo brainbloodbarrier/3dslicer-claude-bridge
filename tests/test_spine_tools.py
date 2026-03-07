@@ -544,6 +544,7 @@ class TestSagittalAlignmentCodeCompiles:
         # Must not raise SyntaxError or IndentationError
         compile(code, "<test_sagittal_alignment>", "exec")
 
+
 # =============================================================================
 # Full Tool Execution Tests with Mocked Slicer
 # =============================================================================
@@ -1809,7 +1810,6 @@ class TestSpineConstantsIntegration:
 # =============================================================================
 
 
-
 # =============================================================================
 # Clinical Spine Visualization Tests
 # =============================================================================
@@ -1826,9 +1826,7 @@ class TestVisualizeSpineSegmentationValidation:
     def test_empty_volume_node_id_rejected(self):
         """Empty volume_node_id raises ValidationError."""
         with pytest.raises(ValidationError):
-            visualize_spine_segmentation(
-                "vtkMRMLSegmentationNode1", "", "/tmp/out.png"
-            )
+            visualize_spine_segmentation("vtkMRMLSegmentationNode1", "", "/tmp/out.png")
 
     def test_invalid_region_rejected(self):
         """Invalid region raises ValidationError."""
