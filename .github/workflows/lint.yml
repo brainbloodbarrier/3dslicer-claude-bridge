@@ -31,4 +31,4 @@ jobs:
         run: uv run ruff check src tests
 
       - name: Type check with Mypy
-        run: uv run pre-commit run mypy --all-files
+        run: uv run mypy

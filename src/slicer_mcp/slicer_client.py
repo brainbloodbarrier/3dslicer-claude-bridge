@@ -533,7 +533,7 @@ class SlicerClient:
         with track_request("get_screenshot"):
             try:
                 url = f"{self.base_url}/slicer/slice"
-                params = {"view": view}
+                params: dict[str, str | float] = {"view": view}
                 if scroll_to is not None:
                     params["scrollTo"] = scroll_to
 

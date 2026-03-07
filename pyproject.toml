@@ -44,6 +44,8 @@ dev = [
     "httpx>=0.24",
     "black>=23.0",
     "ruff>=0.1",
+    "mypy>=1.0",
+    "types-requests>=2.31",
 ]
 metrics = [
     "prometheus_client>=0.15.0",
