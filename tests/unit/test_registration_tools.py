@@ -5,8 +5,8 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from slicer_mcp.slicer_client import SlicerConnectionError
-from slicer_mcp.tools import ValidationError
+from slicer_mcp.core.slicer_client import SlicerConnectionError
+from slicer_mcp.features.base_tools import ValidationError
 
 # =============================================================================
 # Helper: build a mock client returning a success dict
@@ -42,7 +42,7 @@ class TestPlaceLandmarks:
 
     def test_place_landmarks_success(self):
         """Happy path: 3 points with labels."""
-        from slicer_mcp.registration_tools import place_landmarks
+        from slicer_mcp.features.registration import place_landmarks
 
         ret = {
             "success": True,
@@ -63,7 +63,7 @@ class TestPlaceLandmarks:
 
     def test_place_landmarks_no_labels(self):
         """Labels=None should still succeed."""
-        from slicer_mcp.registration_tools import place_landmarks
+        from slicer_mcp.features.registration import place_landmarks
 
         ret = {
             "success": True,
@@ -83,21 +83,21 @@ class TestPlaceLandmarks:
 
     def test_place_landmarks_empty_points(self):
         """Empty points list must raise ValidationError."""
-        from slicer_mcp.registration_tools import place_landmarks
+        from slicer_mcp.features.registration import place_landmarks
 
         with pytest.raises(ValidationError):
             place_landmarks("Name", [], labels=None)
 
     def test_place_landmarks_invalid_point_dimensions(self):
         """Points with != 3 coordinates must raise ValidationError."""
-        from slicer_mcp.registration_tools import place_landmarks
+        from slicer_mcp.features.registration import place_landmarks
 
         with pytest.raises(ValidationError):
             place_landmarks("Name", [[1.0, 2.0]], labels=None)
 
     def test_place_landmarks_label_count_mismatch(self):
         """Labels length != points length must raise ValidationError."""
-        from slicer_mcp.registration_tools import place_landmarks
+        from slicer_mcp.features.registration import place_landmarks
 
         with pytest.raises(ValidationError):
             place_landmarks(
@@ -108,7 +108,7 @@ class TestPlaceLandmarks:
 
     def test_place_landmarks_label_injection(self):
         """Label containing injection chars must raise ValidationError."""
-        from slicer_mcp.registration_tools import place_landmarks
+        from slicer_mcp.features.registration import place_landmarks
 
         with pytest.raises(ValidationError):
             place_landmarks(
@@ -119,14 +119,14 @@ class TestPlaceLandmarks:
 
     def test_place_landmarks_empty_name(self):
         """Empty name must raise ValidationError."""
-        from slicer_mcp.registration_tools import place_landmarks
+        from slicer_mcp.features.registration import place_landmarks
 
         with pytest.raises(ValidationError):
             place_landmarks("", [[1.0, 2.0, 3.0]])
 
     def test_place_landmarks_connection_error(self):
         """SlicerConnectionError must propagate."""
-        from slicer_mcp.registration_tools import place_landmarks
+        from slicer_mcp.features.registration import place_landmarks
 
         with patch(PATCH_TARGET) as mock_gc:
             mock_gc.return_value = _mock_client_error(SlicerConnectionError("connection refused"))
@@ -135,7 +135,7 @@ class TestPlaceLandmarks:
 
     def test_place_landmarks_invalid_name_pattern(self):
         """Name with invalid characters must raise ValidationError."""
-        from slicer_mcp.registration_tools import place_landmarks
+        from slicer_mcp.features.registration import place_landmarks
 
         with pytest.raises(ValidationError, match="Invalid landmark name format"):
             place_landmarks("bad;name", [[1.0, 2.0, 3.0]])
@@ -151,7 +151,7 @@ class TestGetLandmarks:
 
     def test_get_landmarks_success(self):
         """Happy path: retrieve points from a markup node."""
-        from slicer_mcp.registration_tools import get_landmarks
+        from slicer_mcp.features.registration import get_landmarks
 
         ret = {
             "success": True,
@@ -173,14 +173,14 @@ class TestGetLandmarks:
 
     def test_get_landmarks_invalid_node_id(self):
         """Invalid node ID must raise ValidationError."""
-        from slicer_mcp.registration_tools import get_landmarks
+        from slicer_mcp.features.registration import get_landmarks
 
         with pytest.raises(ValidationError):
             get_landmarks("'; DROP TABLE;")
 
     def test_get_landmarks_connection_error(self):
         """SlicerConnectionError must propagate."""
-        from slicer_mcp.registration_tools import get_landmarks
+        from slicer_mcp.features.registration import get_landmarks
 
         with patch(PATCH_TARGET) as mock_gc:
             mock_gc.return_value = _mock_client_error(SlicerConnectionError("timeout"))
@@ -209,7 +209,7 @@ class TestRegisterVolumes:
 
     def test_register_volumes_rigid_success(self):
         """Rigid registration happy path."""
-        from slicer_mcp.registration_tools import register_volumes
+        from slicer_mcp.features.registration import register_volumes
 
         with patch(PATCH_TARGET) as mock_gc:
             mock_gc.return_value = _mock_client(self._success_ret())
@@ -223,7 +223,7 @@ class TestRegisterVolumes:
 
     def test_register_volumes_bspline_success(self):
         """BSpline registration must use BSplineTransformNode."""
-        from slicer_mcp.registration_tools import register_volumes
+        from slicer_mcp.features.registration import register_volumes
 
         ret = self._success_ret(ttype="BSpline")
         ret["transform_node_id"] = "vtkMRMLBSplineTransformNode1"
@@ -243,7 +243,7 @@ class TestRegisterVolumes:
 
     def test_register_volumes_with_resampled(self):
         """create_resampled=True should return resampled_node_id."""
-        from slicer_mcp.registration_tools import register_volumes
+        from slicer_mcp.features.registration import register_volumes
 
         with patch(PATCH_TARGET) as mock_gc:
             mock_gc.return_value = _mock_client(self._success_ret(resampled=True))
@@ -257,7 +257,7 @@ class TestRegisterVolumes:
 
     def test_register_volumes_invalid_transform_type(self):
         """Unknown transform type must raise ValidationError."""
-        from slicer_mcp.registration_tools import register_volumes
+        from slicer_mcp.features.registration import register_volumes
 
         with pytest.raises(ValidationError):
             register_volumes(
@@ -268,7 +268,7 @@ class TestRegisterVolumes:
 
     def test_register_volumes_invalid_init_mode(self):
         """Unknown init mode must raise ValidationError."""
-        from slicer_mcp.registration_tools import register_volumes
+        from slicer_mcp.features.registration import register_volumes
 
         with pytest.raises(ValidationError):
             register_volumes(
@@ -279,7 +279,7 @@ class TestRegisterVolumes:
 
     def test_register_volumes_sampling_out_of_range(self):
         """Sampling percentage out of (0, 1] must raise ValidationError."""
-        from slicer_mcp.registration_tools import register_volumes
+        from slicer_mcp.features.registration import register_volumes
 
         with pytest.raises(ValidationError):
             register_volumes(
@@ -296,7 +296,7 @@ class TestRegisterVolumes:
 
     def test_register_volumes_invalid_node_id(self):
         """Invalid fixed/moving node IDs must raise ValidationError."""
-        from slicer_mcp.registration_tools import register_volumes
+        from slicer_mcp.features.registration import register_volumes
 
         with pytest.raises(ValidationError):
             register_volumes("bad;id", "vtkMRMLScalarVolumeNode2")
@@ -305,7 +305,7 @@ class TestRegisterVolumes:
 
     def test_register_volumes_connection_error(self):
         """SlicerConnectionError must propagate."""
-        from slicer_mcp.registration_tools import register_volumes
+        from slicer_mcp.features.registration import register_volumes
 
         with patch(PATCH_TARGET) as mock_gc:
             mock_gc.return_value = _mock_client_error(SlicerConnectionError("timeout"))
@@ -333,7 +333,7 @@ class TestRegisterLandmarks:
 
     def test_register_landmarks_rigid_success(self):
         """Rigid landmark registration happy path."""
-        from slicer_mcp.registration_tools import register_landmarks
+        from slicer_mcp.features.registration import register_landmarks
 
         with patch(PATCH_TARGET) as mock_gc:
             mock_gc.return_value = _mock_client(self._RET)
@@ -347,7 +347,7 @@ class TestRegisterLandmarks:
 
     def test_register_landmarks_affine_success(self):
         """Affine landmark registration happy path."""
-        from slicer_mcp.registration_tools import register_landmarks
+        from slicer_mcp.features.registration import register_landmarks
 
         ret = dict(self._RET, transform_type="Affine")
         with patch(PATCH_TARGET) as mock_gc:
@@ -362,7 +362,7 @@ class TestRegisterLandmarks:
 
     def test_register_landmarks_invalid_transform_type(self):
         """Invalid transform type must raise ValidationError."""
-        from slicer_mcp.registration_tools import register_landmarks
+        from slicer_mcp.features.registration import register_landmarks
 
         with pytest.raises(ValidationError):
             register_landmarks(
@@ -373,7 +373,7 @@ class TestRegisterLandmarks:
 
     def test_register_landmarks_invalid_node_id(self):
         """Invalid node ID must raise ValidationError."""
-        from slicer_mcp.registration_tools import register_landmarks
+        from slicer_mcp.features.registration import register_landmarks
 
         with pytest.raises(ValidationError):
             register_landmarks(
@@ -388,7 +388,7 @@ class TestRegisterLandmarks:
 
     def test_register_landmarks_connection_error(self):
         """SlicerConnectionError must propagate."""
-        from slicer_mcp.registration_tools import register_landmarks
+        from slicer_mcp.features.registration import register_landmarks
 
         with patch(PATCH_TARGET) as mock_gc:
             mock_gc.return_value = _mock_client_error(SlicerConnectionError("refused"))
@@ -416,7 +416,7 @@ class TestApplyTransform:
 
     def test_apply_transform_success(self):
         """Apply transform without hardening."""
-        from slicer_mcp.registration_tools import apply_transform
+        from slicer_mcp.features.registration import apply_transform
 
         with patch(PATCH_TARGET) as mock_gc:
             mock_gc.return_value = _mock_client(self._RET)
@@ -429,7 +429,7 @@ class TestApplyTransform:
 
     def test_apply_transform_with_harden(self):
         """Apply and harden transform."""
-        from slicer_mcp.registration_tools import apply_transform
+        from slicer_mcp.features.registration import apply_transform
 
         ret = dict(self._RET, hardened=True)
         with patch(PATCH_TARGET) as mock_gc:
@@ -444,7 +444,7 @@ class TestApplyTransform:
 
     def test_apply_transform_invalid_node_id(self):
         """Invalid node IDs must raise ValidationError."""
-        from slicer_mcp.registration_tools import apply_transform
+        from slicer_mcp.features.registration import apply_transform
 
         with pytest.raises(ValidationError):
             apply_transform("bad;id", "vtkMRMLLinearTransformNode1")
@@ -453,7 +453,7 @@ class TestApplyTransform:
 
     def test_apply_transform_connection_error(self):
         """SlicerConnectionError must propagate."""
-        from slicer_mcp.registration_tools import apply_transform
+        from slicer_mcp.features.registration import apply_transform
 
         with patch(PATCH_TARGET) as mock_gc:
             mock_gc.return_value = _mock_client_error(SlicerConnectionError("down"))
@@ -474,7 +474,7 @@ class TestCodegen:
 
     def test_register_volumes_code_contains_brainsfit(self):
         """Generated code must reference BRAINSFit / brainsfit module."""
-        from slicer_mcp.registration_tools import register_volumes
+        from slicer_mcp.features.registration import register_volumes
 
         with patch(PATCH_TARGET) as mock_gc:
             client = _mock_client(
@@ -495,7 +495,7 @@ class TestCodegen:
 
     def test_register_landmarks_code_contains_fiducialregistration(self):
         """Generated code must reference fiducialregistration module."""
-        from slicer_mcp.registration_tools import register_landmarks
+        from slicer_mcp.features.registration import register_landmarks
 
         with patch(PATCH_TARGET) as mock_gc:
             client = _mock_client(
@@ -516,7 +516,7 @@ class TestCodegen:
 
     def test_place_landmarks_code_uses_json_dumps(self):
         """Generated code must inject values via json.dumps, not raw f-string."""
-        from slicer_mcp.registration_tools import place_landmarks
+        from slicer_mcp.features.registration import place_landmarks
 
         with patch(PATCH_TARGET) as mock_gc:
             client = _mock_client(
@@ -538,7 +538,7 @@ class TestCodegen:
 
     def test_apply_transform_harden_code_calls_harden_transform(self):
         """When harden=True, generated code must call HardenTransform."""
-        from slicer_mcp.registration_tools import apply_transform
+        from slicer_mcp.features.registration import apply_transform
 
         with patch(PATCH_TARGET) as mock_gc:
             client = _mock_client(
@@ -560,7 +560,7 @@ class TestCodegen:
 
     def test_apply_transform_no_harden_code_skips_harden(self):
         """When harden=False, generated code must NOT call HardenTransform."""
-        from slicer_mcp.registration_tools import apply_transform
+        from slicer_mcp.features.registration import apply_transform
 
         with patch(PATCH_TARGET) as mock_gc:
             client = _mock_client(
@@ -583,7 +583,7 @@ class TestCodegen:
 
     def test_register_volumes_code_contains_execresult(self):
         """Generated code must end with __execResult assignment."""
-        from slicer_mcp.registration_tools import register_volumes
+        from slicer_mcp.features.registration import register_volumes
 
         with patch(PATCH_TARGET) as mock_gc:
             client = _mock_client(
@@ -604,7 +604,7 @@ class TestCodegen:
 
     def test_register_landmarks_code_enforces_min_pairs(self):
         """Generated code must check MIN_LANDMARK_PAIRS before registration."""
-        from slicer_mcp.registration_tools import register_landmarks
+        from slicer_mcp.features.registration import register_landmarks
 
         with patch(PATCH_TARGET) as mock_gc:
             client = _mock_client(
@@ -627,8 +627,8 @@ class TestCodegen:
 
     def test_register_landmarks_code_returns_error_below_min_pairs(self):
         """Generated code returns error dict (not exception) for too few landmarks."""
-        from slicer_mcp.constants import MIN_LANDMARK_PAIRS
-        from slicer_mcp.registration_tools import register_landmarks
+        from slicer_mcp.core.constants import MIN_LANDMARK_PAIRS
+        from slicer_mcp.features.registration import register_landmarks
 
         with patch(PATCH_TARGET) as mock_gc:
             client = _mock_client(

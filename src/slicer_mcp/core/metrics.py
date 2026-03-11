@@ -20,15 +20,20 @@ Metrics exported:
     - slicer_circuit_breaker_state: Gauge of circuit breaker state
 """
 
+from __future__ import annotations
+
 import logging
 import os
 import time
 from collections.abc import Generator
 from contextlib import contextmanager
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from prometheus_client import Counter, Gauge, Histogram
 
 logger = logging.getLogger("slicer-mcp")
 
-# Check if metrics are enabled via environment variable
 METRICS_ENABLED = os.environ.get("SLICER_METRICS_ENABLED", "").lower() == "true"
 
 
@@ -39,56 +44,51 @@ class NullMetric:
     This allows code to call metric methods without checking if metrics are enabled.
     """
 
-    def labels(self, *args, **kwargs) -> "NullMetric":
-        """Return self for chaining."""
+    def labels(self, *args: object, **kwargs: object) -> NullMetric:
         return self
 
     def inc(self, amount: float = 1) -> None:
-        """No-op increment."""
         pass
 
     def dec(self, amount: float = 1) -> None:
-        """No-op decrement."""
         pass
 
     def set(self, value: float) -> None:
-        """No-op set."""
         pass
 
     def observe(self, value: float) -> None:
-        """No-op observe."""
         pass
 
 
-# Initialize metrics based on environment
+REQUEST_DURATION: Histogram | NullMetric
+REQUEST_TOTAL: Counter | NullMetric
+RETRY_TOTAL: Counter | NullMetric
+CIRCUIT_BREAKER_STATE: Gauge | NullMetric
+CIRCUIT_STATE_VALUES: dict[str, int]
+
 if METRICS_ENABLED:
     try:
         from prometheus_client import Counter, Gauge, Histogram
 
         logger.info("Metrics collection enabled (prometheus_client)")
 
-        REQUEST_DURATION: "Histogram | NullMetric" = Histogram(
+        REQUEST_DURATION = Histogram(
             "slicer_request_duration_seconds",
             "Request duration in seconds",
             ["operation"],
             buckets=(0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0),
         )
 
-        REQUEST_TOTAL: "Counter | NullMetric" = Counter(
-            "slicer_request_total", "Total requests", ["operation", "status"]
-        )
+        REQUEST_TOTAL = Counter("slicer_request_total", "Total requests", ["operation", "status"])
 
-        RETRY_TOTAL: "Counter | NullMetric" = Counter(
-            "slicer_retry_total", "Total retry attempts", ["operation"]
-        )
+        RETRY_TOTAL = Counter("slicer_retry_total", "Total retry attempts", ["operation"])
 
-        CIRCUIT_BREAKER_STATE: "Gauge | NullMetric" = Gauge(
+        CIRCUIT_BREAKER_STATE = Gauge(
             "slicer_circuit_breaker_state",
             "Circuit breaker state (0=closed, 1=half-open, 2=open)",
             ["breaker_name"],
         )
 
-        # Map circuit states to numeric values for Gauge
         CIRCUIT_STATE_VALUES = {
             "closed": 0,
             "half_open": 1,
@@ -101,18 +101,17 @@ if METRICS_ENABLED:
             "Install with: pip install prometheus_client"
         )
         METRICS_ENABLED = False
-        REQUEST_DURATION = NullMetric()  # type: ignore[assignment]
-        REQUEST_TOTAL = NullMetric()  # type: ignore[assignment]
-        RETRY_TOTAL = NullMetric()  # type: ignore[assignment]
-        CIRCUIT_BREAKER_STATE = NullMetric()  # type: ignore[assignment]
+        REQUEST_DURATION = NullMetric()
+        REQUEST_TOTAL = NullMetric()
+        RETRY_TOTAL = NullMetric()
+        CIRCUIT_BREAKER_STATE = NullMetric()
         CIRCUIT_STATE_VALUES = {}
 
 else:
-    # Metrics disabled - use null objects
-    REQUEST_DURATION = NullMetric()  # type: ignore[assignment]
-    REQUEST_TOTAL = NullMetric()  # type: ignore[assignment]
-    RETRY_TOTAL = NullMetric()  # type: ignore[assignment]
-    CIRCUIT_BREAKER_STATE = NullMetric()  # type: ignore[assignment]
+    REQUEST_DURATION = NullMetric()
+    REQUEST_TOTAL = NullMetric()
+    RETRY_TOTAL = NullMetric()
+    CIRCUIT_BREAKER_STATE = NullMetric()
     CIRCUIT_STATE_VALUES = {}
 
 

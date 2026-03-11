@@ -18,7 +18,7 @@ from typing import Any
 
 import pytest
 
-from slicer_mcp.slicer_client import (
+from slicer_mcp.core.slicer_client import (
     SlicerClient,
     SlicerConnectionError,
     reset_circuit_breaker,

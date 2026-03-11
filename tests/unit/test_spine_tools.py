@@ -5,8 +5,9 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from slicer_mcp.slicer_client import SlicerConnectionError
-from slicer_mcp.spine_tools import (
+from slicer_mcp.core.slicer_client import SlicerConnectionError
+from slicer_mcp.features.base_tools import ValidationError
+from slicer_mcp.features.spine.tools import (
     VALID_ALIGNMENT_REGIONS,
     VALID_ARTERY_SIDES,
     VALID_BONE_REGIONS,
@@ -26,7 +27,6 @@ from slicer_mcp.spine_tools import (
     segment_vertebral_artery,
     visualize_spine_segmentation,
 )
-from slicer_mcp.tools import ValidationError
 
 # =============================================================================
 # Input Validation Tests -- measure_ccj_angles
@@ -1174,7 +1174,7 @@ class TestSegmentSpineExecution:
 
     def test_uses_extended_timeout(self):
         """segment_spine must use SPINE_SEGMENTATION_TIMEOUT."""
-        from slicer_mcp.spine_constants import SPINE_SEGMENTATION_TIMEOUT
+        from slicer_mcp.features.spine.constants import SPINE_SEGMENTATION_TIMEOUT
 
         with patch("slicer_mcp.features.spine.tools.get_client") as mock_get_client:
             mock_client = Mock()
@@ -1460,16 +1460,14 @@ class TestSegmentVertebralArteryExecution:
 
     def test_uses_segmentation_timeout(self):
         """Tool uses SEGMENTATION_TIMEOUT for exec_python call."""
-        from slicer_mcp.constants import SEGMENTATION_TIMEOUT
+        from slicer_mcp.core.constants import SEGMENTATION_TIMEOUT
 
         with patch("slicer_mcp.features.spine.tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
                 "result": (
-                    '{"success": true,'
-                    ' "mean_diameter_mm": 3.0,'
-                    ' "processing_time_seconds": 10.0}'
+                    '{"success": true, "mean_diameter_mm": 3.0, "processing_time_seconds": 10.0}'
                 ),
             }
             mock_get_client.return_value = mock_client
@@ -1653,7 +1651,7 @@ class TestAnalyzeBoneQualityExecution:
 
     def test_uses_spine_segmentation_timeout(self):
         """Tool uses SPINE_SEGMENTATION_TIMEOUT for exec_python call."""
-        from slicer_mcp.spine_constants import SPINE_SEGMENTATION_TIMEOUT
+        from slicer_mcp.features.spine.constants import SPINE_SEGMENTATION_TIMEOUT
 
         with patch("slicer_mcp.features.spine.tools.get_client") as mock_get_client:
             mock_client = Mock()
@@ -1764,7 +1762,7 @@ class TestSpineConstants:
 
     def test_spine_constants_import(self):
         """Test spine_constants module imports correctly."""
-        from slicer_mcp.spine_constants import (
+        from slicer_mcp.features.spine.constants import (
             CCJ_NORMAL_RANGES,
             REGION_VERTEBRAE,
             SPINE_REGIONS,
@@ -1789,8 +1787,8 @@ class TestSpineConstantsIntegration:
 
     def test_pickhardt_thresholds_used_in_code(self):
         """Generated bone quality code embeds Pickhardt HU thresholds."""
-        from slicer_mcp.spine_constants import PICKHARDT_HU_THRESHOLDS
-        from slicer_mcp.spine_tools import _build_bone_quality_code
+        from slicer_mcp.features.spine.constants import PICKHARDT_HU_THRESHOLDS
+        from slicer_mcp.features.spine.tools import _build_bone_quality_code
 
         code = _build_bone_quality_code('"node1"', '"seg1"', '"lumbar"')
 
@@ -1800,7 +1798,7 @@ class TestSpineConstantsIntegration:
 
     def test_valid_bone_regions_match_spine_regions(self):
         """VALID_BONE_REGIONS matches SPINE_REGIONS from constants."""
-        from slicer_mcp.spine_constants import SPINE_REGIONS
+        from slicer_mcp.features.spine.constants import SPINE_REGIONS
 
         assert VALID_BONE_REGIONS == SPINE_REGIONS
 

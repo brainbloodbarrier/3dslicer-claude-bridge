@@ -370,8 +370,7 @@ def _validate_vertebra_label(label: str, tool_name: str) -> str:
     if re.match(VERTEBRA_LABEL_PATTERN, label) or re.match(VERTEBRA_LEVEL_PATTERN, label):
         return label
     raise ValidationError(
-        f"{tool_name}: invalid vertebra label '{label}'. "
-        f"Must match pattern like 'T12' or 'L4-L5'",
+        f"{tool_name}: invalid vertebra label '{label}'. Must match pattern like 'T12' or 'L4-L5'",
         field="vertebra_label",
         value=label,
     )
@@ -790,7 +789,7 @@ def measure_coronal_balance_xray(
     }
 
     logger.info(
-        f"Coronal balance measured: C7-CSVL={c7_csvl_offset_mm:.1f}mm, " f"Cobb={coronal_cobb:.1f}°"
+        f"Coronal balance measured: C7-CSVL={c7_csvl_offset_mm:.1f}mm, Cobb={coronal_cobb:.1f}°"
     )
 
     return result
@@ -1492,18 +1491,20 @@ def classify_disc_degeneration_xray(
         dr["grade"] = grade
         dr["grade_description"] = DISC_DEGENERATION_XRAY_GRADES[grade]
 
+    summary = {
+        "total_discs_assessed": len(disc_results),
+        "max_grade": max((d["grade"] for d in disc_results), default=0),
+        "grade_distribution": {
+            g: sum(1 for d in disc_results if d["grade"] == g) for g in range(1, 6)
+        },
+    }
+
     result = {
         "success": True,
         "tool": "classify_disc_degeneration_xray",
         "discs": disc_results,
         "reference_disc_height_mm": round(ref_height, 2),
-        "summary": {
-            "total_discs_assessed": len(disc_results),
-            "max_grade": max((d["grade"] for d in disc_results), default=0),
-            "grade_distribution": {
-                g: sum(1 for d in disc_results if d["grade"] == g) for g in range(1, 6)
-            },
-        },
+        "summary": summary,
         "magnification_factor": magnification_factor,
         "disclaimer": MAGNIFICATION_DISCLAIMER,
         "references": [
@@ -1513,8 +1514,7 @@ def classify_disc_degeneration_xray(
     }
 
     logger.info(
-        f"Disc degeneration assessed: {len(disc_results)} discs, "
-        f"max grade={result['summary']['max_grade']}"  # type: ignore[index]
+        f"Disc degeneration assessed: {len(disc_results)} discs, max grade={summary['max_grade']}"
     )
 
     return result

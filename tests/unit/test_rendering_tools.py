@@ -5,7 +5,9 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from slicer_mcp.rendering_tools import (
+from slicer_mcp.core.slicer_client import SlicerConnectionError
+from slicer_mcp.features.base_tools import ValidationError
+from slicer_mcp.features.rendering import (
     _build_capture_3d_view_code,
     _build_enable_volume_rendering_code,
     _build_export_model_code,
@@ -19,8 +21,6 @@ from slicer_mcp.rendering_tools import (
     validate_export_directory,
     validate_export_filename,
 )
-from slicer_mcp.slicer_client import SlicerConnectionError
-from slicer_mcp.tools import ValidationError
 
 # =============================================================================
 # Validation Tests

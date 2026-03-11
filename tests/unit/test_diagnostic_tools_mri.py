@@ -5,7 +5,9 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from slicer_mcp.diagnostic_tools_mri import (
+from slicer_mcp.core.slicer_client import SlicerConnectionError
+from slicer_mcp.features.base_tools import ValidationError
+from slicer_mcp.features.diagnostics.mri import (
     VALID_MRI_REGIONS,
     _validate_mri_region,
     assess_disc_degeneration_mri,
@@ -13,8 +15,7 @@ from slicer_mcp.diagnostic_tools_mri import (
     detect_cord_compression_mri,
     detect_metastatic_lesions_mri,
 )
-from slicer_mcp.slicer_client import SlicerConnectionError
-from slicer_mcp.spine_constants import (
+from slicer_mcp.features.spine.constants import (
     CORD_COMPRESSION_RATIO_NORMAL,
     CORD_T2_HYPERINTENSITY_THRESHOLD,
     DISC_HOMOGENEOUS_CV_THRESHOLD,
@@ -30,7 +31,6 @@ from slicer_mcp.spine_constants import (
     PFIRRMANN_BRIGHT_THRESHOLD,
     SPINE_SEGMENTATION_TIMEOUT,
 )
-from slicer_mcp.tools import ValidationError
 
 # =============================================================================
 # MRI Region Validation Tests
@@ -885,7 +885,7 @@ class TestModicCodeGeneration:
 
     def test_region_escaped_in_codegen(self):
         """Test that region is JSON-escaped in generated code."""
-        from slicer_mcp.diagnostic_tools_mri import _build_modic_analysis_code
+        from slicer_mcp.features.diagnostics.mri import _build_modic_analysis_code
 
         code = _build_modic_analysis_code('"node1"', '"node2"', "lumbar")
         # Should use json.dumps for region, not raw f-string interpolation
@@ -895,14 +895,14 @@ class TestModicCodeGeneration:
 
     def test_median_reference_used(self):
         """Test that median reference is used instead of middle vertebra."""
-        from slicer_mcp.diagnostic_tools_mri import _build_modic_analysis_code
+        from slicer_mcp.features.diagnostics.mri import _build_modic_analysis_code
 
         code = _build_modic_analysis_code('"node1"', '"node2"', "lumbar")
         assert "median" in code.lower() or "np.median" in code
 
     def test_brainsfit_uses_moments_align(self):
         """Test that BRAINSFit uses useMomentsAlign."""
-        from slicer_mcp.diagnostic_tools_mri import _build_registration_check_code
+        from slicer_mcp.features.diagnostics.mri import _build_registration_check_code
 
         code = _build_registration_check_code('"node1"', '"node2"')
         assert "useMomentsAlign" in code
@@ -910,7 +910,7 @@ class TestModicCodeGeneration:
 
     def test_cleanup_code_present(self):
         """Test that registration cleanup code is present."""
-        from slicer_mcp.diagnostic_tools_mri import _build_modic_analysis_code
+        from slicer_mcp.features.diagnostics.mri import _build_modic_analysis_code
 
         code = _build_modic_analysis_code('"node1"', '"node2"', "lumbar")
         assert "T2_to_T1_transform" in code
@@ -921,7 +921,7 @@ class TestPfirrmannCodeGeneration:
 
     def test_uses_segment_bounds_for_height(self):
         """Test that disc height uses GetSegmentBounds instead of cube root."""
-        from slicer_mcp.diagnostic_tools_mri import _build_pfirrmann_analysis_code
+        from slicer_mcp.features.diagnostics.mri import _build_pfirrmann_analysis_code
 
         code = _build_pfirrmann_analysis_code('"node1"', "lumbar")
         assert "GetSegmentBounds" in code
@@ -939,14 +939,14 @@ class TestCordCompressionCodeGeneration:
 
     def test_measures_cord_not_vertebra(self):
         """Test that cord compression measures spinal_cord, not vertebral body."""
-        from slicer_mcp.diagnostic_tools_mri import _build_cord_compression_code
+        from slicer_mcp.features.diagnostics.mri import _build_cord_compression_code
 
         code = _build_cord_compression_code('"node1"', None, "cervical")
         assert "spinal_cord" in code or "spinal_canal" in code
 
     def test_uses_np_pi(self):
         """Test that pi uses np.pi instead of hardcoded value."""
-        from slicer_mcp.diagnostic_tools_mri import _build_cord_compression_code
+        from slicer_mcp.features.diagnostics.mri import _build_cord_compression_code
 
         code = _build_cord_compression_code('"node1"', None, "cervical")
         assert "np.pi" in code
@@ -1347,7 +1347,7 @@ class TestMriSubprocessCodegen:
 
     def test_totalseg_code_uses_subprocess(self):
         """Generated TotalSegmentator code uses subprocess, not in-process API."""
-        from slicer_mcp.diagnostic_tools_mri import _build_totalseg_spine_code
+        from slicer_mcp.features.diagnostics.mri import _build_totalseg_spine_code
 
         code = _build_totalseg_spine_code('"vtkMRMLScalarVolumeNode1"', "lumbar")
         assert "subprocess.Popen" in code
@@ -1359,7 +1359,7 @@ class TestMriSubprocessCodegen:
 
     def test_totalseg_code_with_seg_id_skips_subprocess(self):
         """When seg_id is provided, generated code loads existing node."""
-        from slicer_mcp.diagnostic_tools_mri import _build_totalseg_spine_code
+        from slicer_mcp.features.diagnostics.mri import _build_totalseg_spine_code
 
         code = _build_totalseg_spine_code(
             '"vtkMRMLScalarVolumeNode1"', '"vtkMRMLSegmentationNode1"'
@@ -1369,7 +1369,7 @@ class TestMriSubprocessCodegen:
 
     def test_modic_code_uses_seg_was_provided_for_cleanup(self):
         """Modic code conditionally cleans up segmentation node."""
-        from slicer_mcp.diagnostic_tools_mri import _build_modic_analysis_code
+        from slicer_mcp.features.diagnostics.mri import _build_modic_analysis_code
 
         code = _build_modic_analysis_code(
             '"vtkMRMLScalarVolumeNode1"', '"vtkMRMLScalarVolumeNode2"', "lumbar"
@@ -1379,7 +1379,7 @@ class TestMriSubprocessCodegen:
 
     def test_pfirrmann_code_uses_seg_was_provided_for_cleanup(self):
         """Pfirrmann code conditionally cleans up segmentation node."""
-        from slicer_mcp.diagnostic_tools_mri import _build_pfirrmann_analysis_code
+        from slicer_mcp.features.diagnostics.mri import _build_pfirrmann_analysis_code
 
         code = _build_pfirrmann_analysis_code('"vtkMRMLScalarVolumeNode1"', "lumbar")
         assert "if not _seg_was_provided" in code
@@ -1387,7 +1387,7 @@ class TestMriSubprocessCodegen:
 
     def test_cord_compression_code_uses_seg_was_provided_for_cleanup(self):
         """Cord compression code conditionally cleans up segmentation node."""
-        from slicer_mcp.diagnostic_tools_mri import _build_cord_compression_code
+        from slicer_mcp.features.diagnostics.mri import _build_cord_compression_code
 
         code = _build_cord_compression_code('"vtkMRMLScalarVolumeNode1"', None, "cervical")
         assert "if not _seg_was_provided" in code
@@ -1395,7 +1395,7 @@ class TestMriSubprocessCodegen:
 
     def test_metastasis_code_uses_seg_was_provided_for_cleanup(self):
         """Metastasis code conditionally cleans up segmentation node."""
-        from slicer_mcp.diagnostic_tools_mri import _build_metastasis_detection_code
+        from slicer_mcp.features.diagnostics.mri import _build_metastasis_detection_code
 
         code = _build_metastasis_detection_code(
             '"vtkMRMLScalarVolumeNode1"', '"vtkMRMLScalarVolumeNode2"', "lumbar"

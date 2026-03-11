@@ -785,7 +785,8 @@ def capture_3d_view(
                 "width",
                 str(width),
             )
-        if not (CAPTURE_MIN_DIMENSION <= height <= CAPTURE_MAX_DIMENSION):  # type: ignore[operator]
+        assert height is not None  # guaranteed by (width is None) != (height is None) check above
+        if not (CAPTURE_MIN_DIMENSION <= height <= CAPTURE_MAX_DIMENSION):
             raise ValidationError(
                 f"height must be in range [{CAPTURE_MIN_DIMENSION}, {CAPTURE_MAX_DIMENSION}], "
                 f"got {height}",
