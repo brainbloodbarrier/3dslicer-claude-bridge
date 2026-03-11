@@ -4,8 +4,8 @@ import json
 import logging
 from datetime import datetime, timezone
 
+from slicer_mcp.core.parsing import _parse_json_result
 from slicer_mcp.core.slicer_client import SlicerConnectionError, get_client
-from slicer_mcp.features.base_tools import _parse_json_result
 
 logger = logging.getLogger("slicer-mcp")
 
@@ -228,7 +228,7 @@ _WORKFLOW_CATALOG: list[dict] = [
         "required_modalities": ["CT"],
         "optional_modalities": ["CTA"],
         "clinical_indication": (
-            "CCJ instability evaluation, craniometry measurements, " "vertebral artery assessment"
+            "CCJ instability evaluation, craniometry measurements, vertebral artery assessment"
         ),
         "tools_orchestrated": [
             "segment_spine",
@@ -243,7 +243,7 @@ _WORKFLOW_CATALOG: list[dict] = [
         "name": "workflow_onco_spine",
         "status": "planned",
         "description": (
-            "Oncologic spine assessment: lesion detection, SINS scoring, " "and stability analysis"
+            "Oncologic spine assessment: lesion detection, SINS scoring, and stability analysis"
         ),
         "required_modalities": ["CT"],
         "optional_modalities": ["T1 MRI", "T2 MRI"],

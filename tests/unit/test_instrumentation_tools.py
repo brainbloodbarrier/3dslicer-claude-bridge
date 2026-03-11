@@ -5,17 +5,9 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from slicer_mcp.instrumentation_tools import (
-    _TECHNIQUE_SCREW_DEFAULTS,
-    _validate_level,
-    _validate_screw_dimensions,
-    _validate_side,
-    _validate_technique,
-    _validate_variant,
-    plan_cervical_screws,
-)
-from slicer_mcp.slicer_client import SlicerConnectionError
-from slicer_mcp.spine_constants import (
+from slicer_mcp.core.slicer_client import SlicerConnectionError
+from slicer_mcp.features.base_tools import ValidationError
+from slicer_mcp.features.spine.constants import (
     C1_LATERAL_MASS_SCREW_DEFAULTS,
     C2_PARS_SCREW_DEFAULTS,
     CERVICAL_LATERAL_MASS_SCREW_DEFAULTS,
@@ -29,7 +21,15 @@ from slicer_mcp.spine_constants import (
     VALID_LATERAL_MASS_VARIANTS,
     VALID_SIDES,
 )
-from slicer_mcp.tools import ValidationError
+from slicer_mcp.features.spine.instrumentation import (
+    _TECHNIQUE_SCREW_DEFAULTS,
+    _validate_level,
+    _validate_screw_dimensions,
+    _validate_side,
+    _validate_technique,
+    _validate_variant,
+    plan_cervical_screws,
+)
 
 # =============================================================================
 # Technique Validation
@@ -894,7 +894,7 @@ class TestPlanCervicalScrewsErrorHandling:
             mock_client.exec_python.return_value = {"success": True, "result": ""}
             mock_get_client.return_value = mock_client
 
-            from slicer_mcp.slicer_client import SlicerConnectionError
+            from slicer_mcp.core.slicer_client import SlicerConnectionError
 
             with pytest.raises(SlicerConnectionError):
                 plan_cervical_screws("pedicle", "C5", "vtkMRMLSegmentationNode1")
@@ -908,7 +908,7 @@ class TestPlanCervicalScrewsErrorHandling:
             }
             mock_get_client.return_value = mock_client
 
-            from slicer_mcp.slicer_client import SlicerConnectionError
+            from slicer_mcp.core.slicer_client import SlicerConnectionError
 
             with pytest.raises(SlicerConnectionError):
                 plan_cervical_screws("pedicle", "C5", "vtkMRMLSegmentationNode1")

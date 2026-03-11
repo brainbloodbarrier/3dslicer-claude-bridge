@@ -4,7 +4,8 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from slicer_mcp.diagnostic_tools_xray import (
+from slicer_mcp.features.base_tools import ValidationError
+from slicer_mcp.features.diagnostics.xray import (
     MAGNIFICATION_DISCLAIMER,
     _angle_between_lines_2d,
     _classify_genant,
@@ -26,7 +27,6 @@ from slicer_mcp.diagnostic_tools_xray import (
     measure_listhesis_dynamic_xray,
     measure_sagittal_balance_xray,
 )
-from slicer_mcp.tools import ValidationError
 
 # =============================================================================
 # Geometry Helper Tests
@@ -1176,7 +1176,7 @@ class TestSlicerConnectionErrors:
     @patch("slicer_mcp.features.diagnostics.xray.get_client")
     def test_sagittal_balance_connection_error(self, mock_get_client):
         """Sagittal balance raises on Slicer connection error."""
-        from slicer_mcp.slicer_client import SlicerConnectionError
+        from slicer_mcp.core.slicer_client import SlicerConnectionError
 
         mock_client = Mock()
         mock_client.exec_python.side_effect = SlicerConnectionError("Connection failed")
@@ -1188,7 +1188,7 @@ class TestSlicerConnectionErrors:
     @patch("slicer_mcp.features.diagnostics.xray.get_client")
     def test_coronal_balance_connection_error(self, mock_get_client):
         """Coronal balance raises on Slicer connection error."""
-        from slicer_mcp.slicer_client import SlicerConnectionError
+        from slicer_mcp.core.slicer_client import SlicerConnectionError
 
         mock_client = Mock()
         mock_client.exec_python.side_effect = SlicerConnectionError("Connection failed")
@@ -1200,7 +1200,7 @@ class TestSlicerConnectionErrors:
     @patch("slicer_mcp.features.diagnostics.xray.get_client")
     def test_cobb_angle_connection_error(self, mock_get_client):
         """Cobb angle raises on Slicer connection error."""
-        from slicer_mcp.slicer_client import SlicerConnectionError
+        from slicer_mcp.core.slicer_client import SlicerConnectionError
 
         mock_client = Mock()
         mock_client.exec_python.side_effect = SlicerConnectionError("Connection failed")
@@ -1212,7 +1212,7 @@ class TestSlicerConnectionErrors:
     @patch("slicer_mcp.features.diagnostics.xray.get_client")
     def test_fractures_connection_error(self, mock_get_client):
         """Fracture detection raises on Slicer connection error."""
-        from slicer_mcp.slicer_client import SlicerConnectionError
+        from slicer_mcp.core.slicer_client import SlicerConnectionError
 
         mock_client = Mock()
         mock_client.exec_python.side_effect = SlicerConnectionError("Connection failed")

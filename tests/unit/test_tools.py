@@ -5,8 +5,8 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from slicer_mcp.slicer_client import SlicerConnectionError
-from slicer_mcp.tools import (
+from slicer_mcp.core.slicer_client import SlicerConnectionError
+from slicer_mcp.features.base_tools import (
     ValidationError,
     _build_segment_statistics_code,
     _validate_audit_log_path,
@@ -440,7 +440,7 @@ class TestMalformedJsonHandling:
 
     def test_measure_volume_malformed_json(self):
         """Test measure_volume handles malformed JSON gracefully."""
-        from slicer_mcp.slicer_client import SlicerConnectionError
+        from slicer_mcp.core.slicer_client import SlicerConnectionError
 
         with patch("slicer_mcp.features.base_tools.get_client") as mock_get_client:
             mock_client = Mock()
@@ -454,7 +454,7 @@ class TestMalformedJsonHandling:
 
     def test_measure_volume_empty_result(self):
         """Test measure_volume handles empty result."""
-        from slicer_mcp.slicer_client import SlicerConnectionError
+        from slicer_mcp.core.slicer_client import SlicerConnectionError
 
         with patch("slicer_mcp.features.base_tools.get_client") as mock_get_client:
             mock_client = Mock()
@@ -468,7 +468,7 @@ class TestMalformedJsonHandling:
 
     def test_measure_volume_null_result(self):
         """Test measure_volume handles null JSON result."""
-        from slicer_mcp.slicer_client import SlicerConnectionError
+        from slicer_mcp.core.slicer_client import SlicerConnectionError
 
         with patch("slicer_mcp.features.base_tools.get_client") as mock_get_client:
             mock_client = Mock()
@@ -482,7 +482,7 @@ class TestMalformedJsonHandling:
 
     def test_list_sample_data_malformed_json(self):
         """Test list_sample_data handles malformed JSON gracefully."""
-        from slicer_mcp.tools import list_sample_data
+        from slicer_mcp.features.base_tools import list_sample_data
 
         with patch("slicer_mcp.features.base_tools.get_client") as mock_get_client:
             mock_client = Mock()
@@ -655,7 +655,7 @@ class TestDICOMValidation:
 
     def test_validate_folder_path_valid(self, tmp_path):
         """Test valid folder paths."""
-        from slicer_mcp.tools import validate_folder_path
+        from slicer_mcp.features.base_tools import validate_folder_path
 
         # Create a temporary directory
         test_dir = tmp_path / "dicom_folder"
@@ -666,7 +666,7 @@ class TestDICOMValidation:
 
     def test_validate_folder_path_empty(self):
         """Test empty folder path."""
-        from slicer_mcp.tools import ValidationError, validate_folder_path
+        from slicer_mcp.features.base_tools import ValidationError, validate_folder_path
 
         with pytest.raises(ValidationError) as exc_info:
             validate_folder_path("")
@@ -675,7 +675,7 @@ class TestDICOMValidation:
 
     def test_validate_folder_path_traversal_attack(self, tmp_path):
         """Test path traversal attack prevention."""
-        from slicer_mcp.tools import ValidationError, validate_folder_path
+        from slicer_mcp.features.base_tools import ValidationError, validate_folder_path
 
         with pytest.raises(ValidationError) as exc_info:
             validate_folder_path("../../../etc/passwd")
@@ -684,7 +684,7 @@ class TestDICOMValidation:
 
     def test_validate_folder_path_not_exists(self):
         """Test non-existent path."""
-        from slicer_mcp.tools import ValidationError, validate_folder_path
+        from slicer_mcp.features.base_tools import ValidationError, validate_folder_path
 
         with pytest.raises(ValidationError) as exc_info:
             validate_folder_path("/nonexistent/path/12345")
@@ -693,7 +693,7 @@ class TestDICOMValidation:
 
     def test_validate_folder_path_not_directory(self, tmp_path):
         """Test path that is a file, not directory."""
-        from slicer_mcp.tools import ValidationError, validate_folder_path
+        from slicer_mcp.features.base_tools import ValidationError, validate_folder_path
 
         # Create a file
         test_file = tmp_path / "test_file.txt"
@@ -706,7 +706,7 @@ class TestDICOMValidation:
 
     def test_validate_folder_path_symlink_resolved(self, tmp_path):
         """Test that symlinks are resolved to real path."""
-        from slicer_mcp.tools import validate_folder_path
+        from slicer_mcp.features.base_tools import validate_folder_path
 
         # Create a real directory and a symlink pointing to it
         real_dir = tmp_path / "real_dir"
@@ -721,7 +721,7 @@ class TestDICOMValidation:
 
     def test_validate_dicom_uid_valid(self):
         """Test valid DICOM UIDs."""
-        from slicer_mcp.tools import validate_dicom_uid
+        from slicer_mcp.features.base_tools import validate_dicom_uid
 
         # Standard DICOM UID format
         uid = "1.2.840.113619.2.55.3.604688"
@@ -736,7 +736,7 @@ class TestDICOMValidation:
 
     def test_validate_dicom_uid_empty(self):
         """Test empty DICOM UID."""
-        from slicer_mcp.tools import ValidationError, validate_dicom_uid
+        from slicer_mcp.features.base_tools import ValidationError, validate_dicom_uid
 
         with pytest.raises(ValidationError) as exc_info:
             validate_dicom_uid("")
@@ -745,7 +745,7 @@ class TestDICOMValidation:
 
     def test_validate_dicom_uid_invalid_characters(self):
         """Test DICOM UID with invalid characters."""
-        from slicer_mcp.tools import ValidationError, validate_dicom_uid
+        from slicer_mcp.features.base_tools import ValidationError, validate_dicom_uid
 
         # Letters not allowed
         with pytest.raises(ValidationError):
@@ -761,7 +761,7 @@ class TestDICOMValidation:
 
     def test_validate_dicom_uid_too_long(self):
         """Test DICOM UID that exceeds max length."""
-        from slicer_mcp.tools import ValidationError, validate_dicom_uid
+        from slicer_mcp.features.base_tools import ValidationError, validate_dicom_uid
 
         # Create UID longer than 64 characters
         long_uid = "1." + ".1" * 40  # ~80 characters
@@ -773,7 +773,7 @@ class TestDICOMValidation:
 
     def test_validate_dicom_uid_custom_field_name(self):
         """Test custom field name in error messages."""
-        from slicer_mcp.tools import ValidationError, validate_dicom_uid
+        from slicer_mcp.features.base_tools import ValidationError, validate_dicom_uid
 
         with pytest.raises(ValidationError) as exc_info:
             validate_dicom_uid("", field_name="series_uid")
@@ -791,7 +791,7 @@ class TestBrainExtractionValidation:
 
     def test_valid_brain_extraction_methods(self):
         """Test that valid methods are defined in constants."""
-        from slicer_mcp.constants import VALID_BRAIN_EXTRACTION_METHODS
+        from slicer_mcp.core.constants import VALID_BRAIN_EXTRACTION_METHODS
 
         assert "hd-bet" in VALID_BRAIN_EXTRACTION_METHODS
         assert "swiss" in VALID_BRAIN_EXTRACTION_METHODS
@@ -799,7 +799,7 @@ class TestBrainExtractionValidation:
 
     def test_valid_hdbet_devices(self):
         """Test that valid HD-BET devices are defined."""
-        from slicer_mcp.constants import VALID_HDBET_DEVICES
+        from slicer_mcp.core.constants import VALID_HDBET_DEVICES
 
         assert "auto" in VALID_HDBET_DEVICES
         assert "cpu" in VALID_HDBET_DEVICES
@@ -807,21 +807,21 @@ class TestBrainExtractionValidation:
 
     def test_invalid_method_rejected(self):
         """Test that invalid extraction method raises ValidationError."""
-        from slicer_mcp.constants import VALID_BRAIN_EXTRACTION_METHODS
+        from slicer_mcp.core.constants import VALID_BRAIN_EXTRACTION_METHODS
 
         invalid_method = "invalid_method"
         assert invalid_method not in VALID_BRAIN_EXTRACTION_METHODS
 
     def test_invalid_device_rejected(self):
         """Test that invalid device raises ValidationError."""
-        from slicer_mcp.constants import VALID_HDBET_DEVICES
+        from slicer_mcp.core.constants import VALID_HDBET_DEVICES
 
         invalid_device = "invalid_device"
         assert invalid_device not in VALID_HDBET_DEVICES
 
     def test_node_id_validation_applied(self):
         """Test that node ID validation is applied."""
-        from slicer_mcp.tools import ValidationError, validate_mrml_node_id
+        from slicer_mcp.features.base_tools import ValidationError, validate_mrml_node_id
 
         # Empty node ID should fail
         with pytest.raises(ValidationError):
@@ -837,17 +837,15 @@ class TestBrainExtractionLongOperation:
 
     def test_run_brain_extraction_uses_extended_timeout(self):
         """Tool should call exec_python with BRAIN_EXTRACTION_TIMEOUT."""
-        from slicer_mcp.constants import BRAIN_EXTRACTION_TIMEOUT
-        from slicer_mcp.tools import run_brain_extraction
+        from slicer_mcp.core.constants import BRAIN_EXTRACTION_TIMEOUT
+        from slicer_mcp.features.base_tools import run_brain_extraction
 
         with patch("slicer_mcp.features.base_tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
                 "result": (
-                    '{"success": true,'
-                    ' "brain_volume_ml": 123.4,'
-                    ' "processing_time_seconds": 12.3}'
+                    '{"success": true, "brain_volume_ml": 123.4, "processing_time_seconds": 12.3}'
                 ),
             }
             mock_get_client.return_value = mock_client
@@ -861,16 +859,14 @@ class TestBrainExtractionLongOperation:
 
     def test_run_brain_extraction_adds_long_operation_metadata(self):
         """Tool should include long_operation metadata in result."""
-        from slicer_mcp.tools import run_brain_extraction
+        from slicer_mcp.features.base_tools import run_brain_extraction
 
         with patch("slicer_mcp.features.base_tools.get_client") as mock_get_client:
             mock_client = Mock()
             mock_client.exec_python.return_value = {
                 "success": True,
                 "result": (
-                    '{"success": true,'
-                    ' "brain_volume_ml": 123.4,'
-                    ' "processing_time_seconds": 12.3}'
+                    '{"success": true, "brain_volume_ml": 123.4, "processing_time_seconds": 12.3}'
                 ),
             }
             mock_get_client.return_value = mock_client
@@ -892,7 +888,7 @@ class TestExecutePythonCodeLengthValidation:
 
     def test_execute_python_accepts_code_at_max_length(self):
         """execute_python should accept code exactly at MAX_PYTHON_CODE_LENGTH."""
-        from slicer_mcp.constants import MAX_PYTHON_CODE_LENGTH
+        from slicer_mcp.core.constants import MAX_PYTHON_CODE_LENGTH
 
         # Create code exactly at the limit
         code = "x" * MAX_PYTHON_CODE_LENGTH
@@ -908,7 +904,7 @@ class TestExecutePythonCodeLengthValidation:
 
     def test_execute_python_rejects_code_exceeding_max_length(self):
         """execute_python should reject code exceeding MAX_PYTHON_CODE_LENGTH."""
-        from slicer_mcp.constants import MAX_PYTHON_CODE_LENGTH
+        from slicer_mcp.core.constants import MAX_PYTHON_CODE_LENGTH
 
         # Create code over the limit
         oversized_code = "x" * (MAX_PYTHON_CODE_LENGTH + 1)
@@ -921,7 +917,7 @@ class TestExecutePythonCodeLengthValidation:
 
     def test_execute_python_error_includes_code_size(self):
         """ValidationError should include the actual code size."""
-        from slicer_mcp.constants import MAX_PYTHON_CODE_LENGTH
+        from slicer_mcp.core.constants import MAX_PYTHON_CODE_LENGTH
 
         oversized_code = "x" * (MAX_PYTHON_CODE_LENGTH + 500)
 
@@ -987,7 +983,7 @@ class TestCaptureScreenshotValidation:
 
     def test_capture_screenshot_rejects_invalid_look_from_axis(self):
         """Invalid look_from_axis should raise ValueError."""
-        from slicer_mcp.tools import capture_screenshot
+        from slicer_mcp.features.base_tools import capture_screenshot
 
         with pytest.raises(ValueError) as exc_info:
             capture_screenshot("3d", look_from_axis="malicious_value")
@@ -995,7 +991,7 @@ class TestCaptureScreenshotValidation:
 
     def test_capture_screenshot_accepts_valid_look_from_axis(self):
         """Valid look_from_axis should pass validation."""
-        from slicer_mcp.tools import capture_screenshot
+        from slicer_mcp.features.base_tools import capture_screenshot
 
         with patch("slicer_mcp.features.base_tools.get_client") as mock_get_client:
             mock_client = Mock()
@@ -1007,7 +1003,7 @@ class TestCaptureScreenshotValidation:
 
     def test_capture_screenshot_allows_none_look_from_axis(self):
         """None look_from_axis should be allowed for 3d view."""
-        from slicer_mcp.tools import capture_screenshot
+        from slicer_mcp.features.base_tools import capture_screenshot
 
         with patch("slicer_mcp.features.base_tools.get_client") as mock_get_client:
             mock_client = Mock()
@@ -1019,7 +1015,7 @@ class TestCaptureScreenshotValidation:
 
     def test_capture_screenshot_invalid_view_type(self):
         """Invalid view_type should raise ValueError."""
-        from slicer_mcp.tools import capture_screenshot
+        from slicer_mcp.features.base_tools import capture_screenshot
 
         with pytest.raises(ValueError) as exc_info:
             capture_screenshot("invalid_view")
@@ -1031,7 +1027,7 @@ class TestCaptureScreenshotTool:
 
     def test_axial_view(self):
         """Axial view screenshot should return success with base64 image."""
-        from slicer_mcp.tools import capture_screenshot
+        from slicer_mcp.features.base_tools import capture_screenshot
 
         with patch("slicer_mcp.features.base_tools.get_client") as mock_get_client:
             mock_client = Mock()
@@ -1044,7 +1040,7 @@ class TestCaptureScreenshotTool:
 
     def test_3d_view(self):
         """3D view screenshot should return success with look_from_axis."""
-        from slicer_mcp.tools import capture_screenshot
+        from slicer_mcp.features.base_tools import capture_screenshot
 
         with patch("slicer_mcp.features.base_tools.get_client") as mock_get_client:
             mock_client = Mock()
@@ -1056,7 +1052,7 @@ class TestCaptureScreenshotTool:
 
     def test_full_view(self):
         """Full layout screenshot should return success."""
-        from slicer_mcp.tools import capture_screenshot
+        from slicer_mcp.features.base_tools import capture_screenshot
 
         with patch("slicer_mcp.features.base_tools.get_client") as mock_get_client:
             mock_client = Mock()
@@ -1067,7 +1063,7 @@ class TestCaptureScreenshotTool:
 
     def test_with_scroll_position(self):
         """Screenshot with scroll_position should include it in result."""
-        from slicer_mcp.tools import capture_screenshot
+        from slicer_mcp.features.base_tools import capture_screenshot
 
         with patch("slicer_mcp.features.base_tools.get_client") as mock_get_client:
             mock_client = Mock()
@@ -1078,7 +1074,7 @@ class TestCaptureScreenshotTool:
 
     def test_connection_error_propagates(self):
         """SlicerConnectionError should propagate from capture_screenshot."""
-        from slicer_mcp.tools import capture_screenshot
+        from slicer_mcp.features.base_tools import capture_screenshot
 
         with patch("slicer_mcp.features.base_tools.get_client") as mock_get_client:
             mock_client = Mock()
@@ -1093,7 +1089,7 @@ class TestSetLayoutTool:
 
     def test_valid_layout(self):
         """Valid layout name should return success."""
-        from slicer_mcp.tools import set_layout
+        from slicer_mcp.features.base_tools import set_layout
 
         with patch("slicer_mcp.features.base_tools.get_client") as mock_get_client:
             mock_client = Mock()
@@ -1104,7 +1100,7 @@ class TestSetLayoutTool:
 
     def test_invalid_layout(self):
         """Invalid layout name should raise ValueError."""
-        from slicer_mcp.tools import set_layout
+        from slicer_mcp.features.base_tools import set_layout
 
         with pytest.raises(ValueError) as exc_info:
             set_layout("InvalidLayout")
@@ -1112,7 +1108,7 @@ class TestSetLayoutTool:
 
     def test_invalid_gui_mode(self):
         """Invalid gui_mode should raise ValueError."""
-        from slicer_mcp.tools import set_layout
+        from slicer_mcp.features.base_tools import set_layout
 
         with pytest.raises(ValueError) as exc_info:
             set_layout("FourUp", gui_mode="invalid")
@@ -1124,7 +1120,7 @@ class TestDICOMTools:
 
     def test_list_dicom_studies(self):
         """list_dicom_studies should return parsed JSON result."""
-        from slicer_mcp.tools import list_dicom_studies
+        from slicer_mcp.features.base_tools import list_dicom_studies
 
         with patch("slicer_mcp.features.base_tools.get_client") as mock_get_client:
             mock_client = Mock()
@@ -1138,7 +1134,7 @@ class TestDICOMTools:
 
     def test_list_dicom_series(self):
         """list_dicom_series should return parsed JSON result."""
-        from slicer_mcp.tools import list_dicom_series
+        from slicer_mcp.features.base_tools import list_dicom_series
 
         with patch("slicer_mcp.features.base_tools.get_client") as mock_get_client:
             mock_client = Mock()
@@ -1152,7 +1148,7 @@ class TestDICOMTools:
 
     def test_load_dicom_series(self):
         """load_dicom_series should return parsed JSON result."""
-        from slicer_mcp.tools import load_dicom_series
+        from slicer_mcp.features.base_tools import load_dicom_series
 
         with patch("slicer_mcp.features.base_tools.get_client") as mock_get_client:
             mock_client = Mock()
@@ -1169,7 +1165,7 @@ class TestDICOMTools:
 
     def test_import_dicom(self, tmp_path):
         """import_dicom should return parsed JSON result."""
-        from slicer_mcp.tools import import_dicom
+        from slicer_mcp.features.base_tools import import_dicom
 
         dicom_dir = tmp_path / "dicoms"
         dicom_dir.mkdir()

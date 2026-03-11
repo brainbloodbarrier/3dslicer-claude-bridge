@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 MCP server bridging Claude Code and Cursor to 3D Slicer for AI-assisted medical
 image analysis. Uses FastMCP with stdio transport. The server currently exposes
-45 tools and 3 resources over MCP/stdio, communicating with Slicer's WebServer
+46 tools and 4 resources over MCP/stdio, communicating with Slicer's WebServer
 extension over HTTP.
 
 Entry point: `slicer-mcp` → `slicer_mcp:main` (in `server.py`).

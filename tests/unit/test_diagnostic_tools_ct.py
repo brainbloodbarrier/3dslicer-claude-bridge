@@ -5,7 +5,9 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from slicer_mcp.diagnostic_tools_ct import (
+from slicer_mcp.core.slicer_client import SlicerConnectionError
+from slicer_mcp.features.base_tools import ValidationError
+from slicer_mcp.features.diagnostics.ct import (
     _build_sins_code,
     _classify_genant,
     _classify_meyerding,
@@ -28,8 +30,6 @@ from slicer_mcp.diagnostic_tools_ct import (
     measure_listhesis_ct,
     measure_spinal_canal_ct,
 )
-from slicer_mcp.slicer_client import SlicerConnectionError
-from slicer_mcp.tools import ValidationError
 
 # =============================================================================
 # Validation Tests

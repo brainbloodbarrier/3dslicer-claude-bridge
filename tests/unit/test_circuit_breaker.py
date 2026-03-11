@@ -4,7 +4,7 @@ import time
 
 import pytest
 
-from slicer_mcp.circuit_breaker import (
+from slicer_mcp.core.circuit_breaker import (
     CircuitBreaker,
     CircuitOpenError,
     CircuitState,

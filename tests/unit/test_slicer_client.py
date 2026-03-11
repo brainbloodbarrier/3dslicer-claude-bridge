@@ -6,7 +6,7 @@ from unittest.mock import Mock, patch
 import pytest
 from requests.exceptions import ConnectionError, Timeout
 
-from slicer_mcp.slicer_client import SlicerClient, SlicerConnectionError, SlicerTimeoutError
+from slicer_mcp.core.slicer_client import SlicerClient, SlicerConnectionError, SlicerTimeoutError
 
 
 @pytest.fixture
@@ -405,7 +405,7 @@ class TestSingletonThreadSafety:
         """Test multiple threads calling get_client() get the same instance."""
         import threading
 
-        from slicer_mcp.slicer_client import get_client, reset_client
+        from slicer_mcp.core.slicer_client import get_client, reset_client
 
         # Reset to ensure clean state
         reset_client()
@@ -437,7 +437,7 @@ class TestSingletonThreadSafety:
 
     def test_singleton_reset_allows_new_instance(self):
         """Test reset_client() allows creation of a new singleton."""
-        from slicer_mcp.slicer_client import get_client, reset_client
+        from slicer_mcp.core.slicer_client import get_client, reset_client
 
         client1 = get_client()
         reset_client()
@@ -808,14 +808,14 @@ class TestCircuitBreakerIntegration:
 
     def setup_method(self):
         """Reset circuit breaker before each test."""
-        from slicer_mcp.slicer_client import reset_circuit_breaker
+        from slicer_mcp.core.slicer_client import reset_circuit_breaker
 
         reset_circuit_breaker()
 
     def test_circuit_breaker_opens_after_failures(self):
         """Circuit breaker should open after consecutive failures."""
-        from slicer_mcp.circuit_breaker import CircuitState
-        from slicer_mcp.slicer_client import get_circuit_breaker, reset_circuit_breaker
+        from slicer_mcp.core.circuit_breaker import CircuitState
+        from slicer_mcp.core.slicer_client import get_circuit_breaker, reset_circuit_breaker
 
         reset_circuit_breaker()
         breaker = get_circuit_breaker()
@@ -830,8 +830,8 @@ class TestCircuitBreakerIntegration:
 
     def test_circuit_breaker_rejects_when_open(self):
         """Requests should be rejected immediately when circuit is open."""
-        from slicer_mcp.circuit_breaker import CircuitOpenError, CircuitState
-        from slicer_mcp.slicer_client import get_circuit_breaker, reset_circuit_breaker
+        from slicer_mcp.core.circuit_breaker import CircuitOpenError, CircuitState
+        from slicer_mcp.core.slicer_client import get_circuit_breaker, reset_circuit_breaker
 
         reset_circuit_breaker()
         client = SlicerClient(base_url="http://localhost:9999")
@@ -851,7 +851,7 @@ class TestCircuitBreakerIntegration:
 
     def test_health_check_includes_circuit_breaker_state(self):
         """Health check should include circuit breaker state."""
-        from slicer_mcp.slicer_client import reset_circuit_breaker
+        from slicer_mcp.core.slicer_client import reset_circuit_breaker
 
         reset_circuit_breaker()
         client = SlicerClient()
@@ -870,8 +870,8 @@ class TestCircuitBreakerIntegration:
 
     def test_get_circuit_breaker_returns_instance(self):
         """get_circuit_breaker should return the global instance."""
-        from slicer_mcp.circuit_breaker import CircuitBreaker
-        from slicer_mcp.slicer_client import get_circuit_breaker
+        from slicer_mcp.core.circuit_breaker import CircuitBreaker
+        from slicer_mcp.core.slicer_client import get_circuit_breaker
 
         breaker = get_circuit_breaker()
         assert isinstance(breaker, CircuitBreaker)
@@ -879,8 +879,8 @@ class TestCircuitBreakerIntegration:
 
     def test_reset_circuit_breaker_closes_open_circuit(self):
         """reset_circuit_breaker should close an open circuit."""
-        from slicer_mcp.circuit_breaker import CircuitState
-        from slicer_mcp.slicer_client import get_circuit_breaker, reset_circuit_breaker
+        from slicer_mcp.core.circuit_breaker import CircuitState
+        from slicer_mcp.core.slicer_client import get_circuit_breaker, reset_circuit_breaker
 
         breaker = get_circuit_breaker()
 
@@ -899,13 +899,13 @@ class TestHealthCheckVersionIntegration:
 
     def setup_method(self):
         """Reset circuit breaker before each test."""
-        from slicer_mcp.slicer_client import reset_circuit_breaker
+        from slicer_mcp.core.slicer_client import reset_circuit_breaker
 
         reset_circuit_breaker()
 
     def test_health_check_includes_version_info_on_success(self):
         """Health check should include version info when successful."""
-        from slicer_mcp.slicer_client import reset_circuit_breaker
+        from slicer_mcp.core.slicer_client import reset_circuit_breaker
 
         reset_circuit_breaker()
         client = SlicerClient()
@@ -937,7 +937,7 @@ class TestHealthCheckVersionIntegration:
 
     def test_health_check_skips_version_on_request(self):
         """Health check should skip version check when check_version=False."""
-        from slicer_mcp.slicer_client import reset_circuit_breaker
+        from slicer_mcp.core.slicer_client import reset_circuit_breaker
 
         reset_circuit_breaker()
         client = SlicerClient()
@@ -955,7 +955,7 @@ class TestHealthCheckVersionIntegration:
 
     def test_health_check_gracefully_handles_version_check_failure(self):
         """Health check should succeed even if version check fails."""
-        from slicer_mcp.slicer_client import reset_circuit_breaker
+        from slicer_mcp.core.slicer_client import reset_circuit_breaker
 
         reset_circuit_breaker()
         client = SlicerClient()
@@ -1023,8 +1023,8 @@ class TestGetSceneNodesRetry:
 
     def test_get_scene_nodes_checks_circuit_breaker(self, slicer_client):
         """Test get_scene_nodes respects circuit breaker state."""
-        from slicer_mcp.circuit_breaker import CircuitOpenError
-        from slicer_mcp.slicer_client import get_circuit_breaker, reset_circuit_breaker
+        from slicer_mcp.core.circuit_breaker import CircuitOpenError
+        from slicer_mcp.core.slicer_client import get_circuit_breaker, reset_circuit_breaker
 
         reset_circuit_breaker()
         breaker = get_circuit_breaker()
@@ -1078,8 +1078,8 @@ class TestLoadSampleDataRetry:
 
     def test_load_sample_data_checks_circuit_breaker(self, slicer_client):
         """Test load_sample_data respects circuit breaker state."""
-        from slicer_mcp.circuit_breaker import CircuitOpenError
-        from slicer_mcp.slicer_client import get_circuit_breaker, reset_circuit_breaker
+        from slicer_mcp.core.circuit_breaker import CircuitOpenError
+        from slicer_mcp.core.slicer_client import get_circuit_breaker, reset_circuit_breaker
 
         reset_circuit_breaker()
         breaker = get_circuit_breaker()
@@ -1132,8 +1132,8 @@ class TestSetLayoutRetry:
 
     def test_set_layout_checks_circuit_breaker(self, slicer_client):
         """Test set_layout respects circuit breaker state."""
-        from slicer_mcp.circuit_breaker import CircuitOpenError
-        from slicer_mcp.slicer_client import get_circuit_breaker, reset_circuit_breaker
+        from slicer_mcp.core.circuit_breaker import CircuitOpenError
+        from slicer_mcp.core.slicer_client import get_circuit_breaker, reset_circuit_breaker
 
         reset_circuit_breaker()
         breaker = get_circuit_breaker()
@@ -1274,8 +1274,8 @@ class TestGetNodePropertiesRetry:
 
     def test_get_node_properties_checks_circuit_breaker(self, slicer_client):
         """get_node_properties should respect circuit breaker state."""
-        from slicer_mcp.circuit_breaker import CircuitOpenError
-        from slicer_mcp.slicer_client import get_circuit_breaker, reset_circuit_breaker
+        from slicer_mcp.core.circuit_breaker import CircuitOpenError
+        from slicer_mcp.core.slicer_client import get_circuit_breaker, reset_circuit_breaker
 
         reset_circuit_breaker()
         breaker = get_circuit_breaker()
