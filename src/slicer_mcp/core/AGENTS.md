@@ -12,6 +12,7 @@ HTTP transport to Slicer WebServer, circuit breaker resilience, centralized cons
 | Change retry/backoff | `slicer_client.py::with_retry` | 3 attempts, 1s/2s/4s exponential |
 | Change circuit breaker thresholds | `constants.py` | `CIRCUIT_BREAKER_FAILURE_THRESHOLD=5`, `RECOVERY_TIMEOUT=30` |
 | Add validation constant | `constants.py` | Single source of truth — never hardcode elsewhere |
+| Understand JSON parsing | `parsing.py` | `_parse_json_result()`; re-exported by `features/base_tools.py` |
 | Add a resource | `resources.py` + `server.py` | 4 existing: scene, volumes, status, workflows |
 | Enable metrics | Set `SLICER_METRICS_ENABLED=true` env var | `metrics.py` uses NullMetric when disabled |
 
@@ -61,4 +62,4 @@ NullMetric null-object pattern. When `SLICER_METRICS_ENABLED != "true"` or `prom
 
 4 MCP resources: `slicer://scene`, `slicer://volumes`, `slicer://status`, `slicer://workflows`.
 
-Imports `_parse_json_result` from `features/base_tools.py` — known layer inversion, acceptable for shared JSON parsing utility.
+`core/parsing.py` owns `_parse_json_result()` so resources and feature modules can share the same JSON parsing utility without a layer inversion.

@@ -9,6 +9,7 @@ Package root with three layers: `server.py` (registration), `core/` (infrastruct
 ```
 slicer_mcp/
 ├── __init__.py           # Exports: main, 4 exception classes, __version__
+├── __main__.py           # python -m slicer_mcp entry point
 ├── server.py             # 1515 LOC — ALL 46 @mcp.tool() + 4 @mcp.resource() wrappers
 ├── core/                 # Infrastructure: HTTP transport, circuit breaker, constants, metrics
 ├── features/             # Domain logic: tools, diagnostics, spine, rendering, registration
@@ -22,7 +23,7 @@ slicer_mcp/
 | Add a tool | `features/*.py` + `server.py` | Implement in features, wrap in server.py with try/except |
 | Change entry point | `server.py::main()` | Calls `mcp.run(transport="stdio")` |
 | See public API | `__init__.py` | 5 symbols in `__all__` |
-| Understand shim pattern | Any root `*.py` except `server.py`/`__init__.py` | All identical: `importlib.import_module` + `globals().update()` |
+| Understand shim pattern | Any root `*.py` except `server.py`/`__init__.py`/`__main__.py` | All identical: `importlib.import_module` + `globals().update()` |
 
 ## TOOL REGISTRATION PATTERN
 
@@ -74,7 +75,7 @@ globals().update({name: getattr(_module, name) for name in dir(_module) if not n
 | `registration_tools.py` | `features.registration` |
 | `diagnostic_tools_{ct,mri,xray}.py` | `features.diagnostics.{ct,mri,xray}` |
 
-Tests import through shims. `server.py` imports from canonical paths. New code must use canonical paths.
+Tests now import from canonical paths. Shims remain for backward compatibility. New code must use canonical paths.
 
 ## DEPENDENCY DIRECTION
 
@@ -86,7 +87,7 @@ server.py → features/* → core/*
            diagnostics/*   → spine/tools (_build_totalseg_subprocess_block)
            ALL features    → features/base_tools (validation, JSON parse)
 
-Exception: core/resources.py imports _parse_json_result from features/base_tools (layer inversion)
+Shared JSON parsing lives in `core/parsing.py`; `features/base_tools.py` re-exports `_parse_json_result` for feature modules.
 ```
 
 No circular imports exist.

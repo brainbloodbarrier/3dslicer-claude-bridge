@@ -54,7 +54,7 @@ def some_tool(node_id: str) -> dict:
 | Add CT/MRI/X-ray diagnostic | `diagnostics/{ct,mri,xray}.py` | Follow existing tool pattern in same file |
 | Add registration/rendering tool | `registration.py` / `rendering.py` | |
 | Add workflow (multi-step) | `workflows/` | See `modic.py` as template |
-| Understand `_parse_json_result` | `base_tools.py:38-62` | Returns `SlicerConnectionError` on empty/null/malformed |
+| Understand `_parse_json_result` | `../core/parsing.py` | Returns `SlicerConnectionError` on empty/null/malformed |
 
 ## INPUT VALIDATION (base_tools.py)
 
@@ -69,7 +69,7 @@ Invisible character stripping covers: U+200B, U+200C, U+200D, U+FEFF, U+00AD, U+
 
 ## DIAGNOSTICS SUBDIRECTORY
 
-Three modality files, each self-contained with 4-6 tools. All follow the same code-as-string pattern. Each file imports `get_client`, `_parse_json_result`, validators from `base_tools.py`, and `_build_totalseg_subprocess_block` from `spine/tools.py` for segmentation-dependent diagnostics.
+Three modality files, each self-contained with 4-6 tools. All follow the same code-as-string pattern. Each file imports `get_client`, validators from `base_tools.py`, shared JSON parsing (via the `base_tools.py` re-export), and `_build_totalseg_subprocess_block` from `spine/tools.py` for segmentation-dependent diagnostics.
 
 ## WORKFLOWS SUBDIRECTORY
 
@@ -78,7 +78,7 @@ Currently one workflow (`modic.py`, 169 LOC). Orchestrates multiple tools: segme
 ## CROSS-MODULE DEPENDENCIES
 
 ```
-base_tools.py    ← imported by ALL feature modules (validation, JSON parse, exec helpers)
+base_tools.py    ← imported by ALL feature modules (validation, exec helpers, `_parse_json_result` re-export)
 spine/tools.py   ← imported by diagnostics/ct.py, diagnostics/mri.py (_build_totalseg_subprocess_block)
 diagnostics/mri.py + spine/tools.py ← imported by workflows/modic.py
 ```

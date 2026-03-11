@@ -13,6 +13,7 @@ MCP server (FastMCP/stdio) bridging Claude Code and Cursor to 3D Slicer's WebSer
 ```
 ./
 ├── src/slicer_mcp/           # Package root (see src/slicer_mcp/AGENTS.md)
+│   ├── __main__.py           # python -m slicer_mcp entry point
 │   ├── server.py             # Entry point: all 46 @mcp.tool() + 4 @mcp.resource() wrappers
 │   ├── core/                 # Transport, resilience, config (see core/AGENTS.md)
 │   ├── features/             # Domain logic: tools, diagnostics, spine (see features/AGENTS.md)
@@ -85,8 +86,8 @@ uv run slicer-mcp                                    # Start MCP server
 
 ## NOTES
 
-- **14 compatibility shims** at package root re-export from `core/` and `features/` via `importlib.import_module`. Tests still import through shims. New code must use canonical paths.
-- **`core/resources.py` imports from `features/base_tools.py`** — minor layer inversion for `_parse_json_result()`.
-- **No `__main__.py`** — `python -m slicer_mcp` won't work. Use `uv run slicer-mcp`.
+- **14 compatibility shims** at package root re-export from `core/` and `features/` via `importlib.import_module`. Tests now use canonical imports; keep shims for backward compatibility.
+- **`core/parsing.py`** owns `_parse_json_result()`. `features/base_tools.py` re-exports it for existing feature-module imports.
+- **`__main__.py` exists** — `python -m slicer_mcp` works in addition to `uv run slicer-mcp`.
 - **asyncio_mode = "auto"** in pytest despite synchronous codebase (MCP framework is async underneath).
 - **TotalSegmentator subprocess** uses `start_new_session=True` + `os.killpg()` to prevent hanging. Never switch to `proc.wait()`.
