@@ -1,0 +1,36 @@
+version: "3.8"
+
+services:
+  slicer-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: slicer-mcp
+    stdin_open: true  # Required for MCP stdio transport
+    tty: true
+    environment:
+      - SLICER_URL=${SLICER_URL:-http://host.docker.internal:2016}
+      - SLICER_TIMEOUT=${SLICER_TIMEOUT:-30}
+      - SLICER_AUDIT_LOG=${SLICER_AUDIT_LOG:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # Linux support for host.docker.internal
+    restart: unless-stopped
+
+  # Optional: Development mode with live code mounting
+  slicer-mcp-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: slicer-mcp-dev
+    stdin_open: true
+    tty: true
+    volumes:
+      - ./src:/app/src:ro  # Mount source for live updates
+    environment:
+      - SLICER_URL=${SLICER_URL:-http://host.docker.internal:2016}
+      - SLICER_TIMEOUT=${SLICER_TIMEOUT:-30}
+      - PYTHONDONTWRITEBYTECODE=1
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    profiles:
+      - dev  # Only starts with: docker compose --profile dev up

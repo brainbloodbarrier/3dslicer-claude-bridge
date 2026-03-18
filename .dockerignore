@@ -1,0 +1,50 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv
+venv
+ENV
+env
+
+# Testing
+tests/
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+*.cover
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Build
+build/
+dist/
+*.egg-info/
+
+# Documentation (not needed in container)
+docs/
+*.md
+!README.md
+
+# Development files
+.pre-commit-config.yaml
+.github/
+
+# Local files
+*.log
+*.local
+.env
+.env.*
+Exame_*/
