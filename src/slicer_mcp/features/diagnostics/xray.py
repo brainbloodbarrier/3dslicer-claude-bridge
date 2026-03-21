@@ -43,6 +43,15 @@ from slicer_mcp.features.spine.constants import (
     VERTEBRA_LEVEL_PATTERN,
 )
 
+__all__ = [
+    "classify_disc_degeneration_xray",
+    "measure_cobb_angle_xray",
+    "measure_coronal_balance_xray",
+    "measure_listhesis_dynamic_xray",
+    "measure_sagittal_balance_xray",
+    "detect_vertebral_fractures_xray",
+]
+
 logger = logging.getLogger("slicer-mcp")
 
 # =============================================================================

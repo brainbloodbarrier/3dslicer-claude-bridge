@@ -56,6 +56,13 @@ from slicer_mcp.features.spine.constants import (
 )
 from slicer_mcp.features.spine.tools import _build_totalseg_subprocess_block
 
+__all__ = [
+    "assess_disc_degeneration_mri",
+    "classify_modic_changes",
+    "detect_cord_compression_mri",
+    "detect_metastatic_lesions_mri",
+]
+
 logger = logging.getLogger("slicer-mcp")
 
 

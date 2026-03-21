@@ -32,6 +32,13 @@ from slicer_mcp.core.constants import (
     CIRCUIT_BREAKER_RECOVERY_TIMEOUT,
 )
 
+__all__ = [
+    "CircuitBreaker",
+    "CircuitOpenError",
+    "CircuitState",
+    "with_circuit_breaker",
+]
+
 logger = logging.getLogger("slicer-mcp")
 
 # Type variable for generic return type

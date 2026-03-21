@@ -22,7 +22,9 @@ from slicer_mcp.features.diagnostics import mri as diagnostic_tools_mri
 from slicer_mcp.features.diagnostics import xray as diagnostic_tools_xray
 from slicer_mcp.features.spine import instrumentation as instrumentation_tools
 from slicer_mcp.features.spine import tools as spine_tools
+from slicer_mcp.features.workflows import ccj as workflow_ccj
 from slicer_mcp.features.workflows import modic as workflow_modic
+from slicer_mcp.features.workflows import onco_spine as workflow_onco
 
 # Configure logging to stderr (stdout reserved for MCP protocol)
 logging.basicConfig(
@@ -134,7 +136,8 @@ def _register_tool(
 # =============================================================================
 
 capture_screenshot = _register_tool(
-    tools, "capture_screenshot",
+    tools,
+    "capture_screenshot",
     """Capture a screenshot from a specific 3D Slicer viewport and return as base64 PNG.
 
     Args:
@@ -152,7 +155,8 @@ capture_screenshot = _register_tool(
 )
 
 list_scene_nodes = _register_tool(
-    tools, "list_scene_nodes",
+    tools,
+    "list_scene_nodes",
     """List all nodes in the current MRML scene with metadata.
 
     Returns:
@@ -161,7 +165,8 @@ list_scene_nodes = _register_tool(
 )
 
 execute_python = _register_tool(
-    tools, "execute_python",
+    tools,
+    "execute_python",
     """Execute arbitrary Python code in Slicer's Python environment.
 
     Security Warning: This executes code directly in Slicer's Python interpreter.
@@ -176,7 +181,8 @@ execute_python = _register_tool(
 )
 
 measure_volume = _register_tool(
-    tools, "measure_volume",
+    tools,
+    "measure_volume",
     """Calculate the volume of a segmentation node or specific segment in cubic millimeters.
 
     Args:
@@ -189,7 +195,8 @@ measure_volume = _register_tool(
 )
 
 list_sample_data = _register_tool(
-    tools, "list_sample_data",
+    tools,
+    "list_sample_data",
     """List all available sample datasets from 3D Slicer's SampleData module.
 
     Dynamically queries Slicer to discover available sample datasets.
@@ -202,7 +209,8 @@ list_sample_data = _register_tool(
 )
 
 load_sample_data = _register_tool(
-    tools, "load_sample_data",
+    tools,
+    "load_sample_data",
     """Load a sample dataset into 3D Slicer for testing and demonstration.
 
     Use list_sample_data() first to see available datasets.
@@ -216,7 +224,8 @@ load_sample_data = _register_tool(
 )
 
 set_layout = _register_tool(
-    tools, "set_layout",
+    tools,
+    "set_layout",
     """Set the viewer layout and GUI mode in 3D Slicer.
 
     Args:
@@ -234,7 +243,8 @@ set_layout = _register_tool(
 )
 
 import_dicom = _register_tool(
-    tools, "import_dicom",
+    tools,
+    "import_dicom",
     """Import DICOM files from a folder into Slicer's DICOM database.
 
     Args:
@@ -247,7 +257,8 @@ import_dicom = _register_tool(
 )
 
 list_dicom_studies = _register_tool(
-    tools, "list_dicom_studies",
+    tools,
+    "list_dicom_studies",
     """List all studies in the DICOM database with patient and study metadata.
 
     Returns:
@@ -257,7 +268,8 @@ list_dicom_studies = _register_tool(
 )
 
 list_dicom_series = _register_tool(
-    tools, "list_dicom_series",
+    tools,
+    "list_dicom_series",
     """List all series within a DICOM study.
 
     Args:
@@ -270,7 +282,8 @@ list_dicom_series = _register_tool(
 )
 
 load_dicom_series = _register_tool(
-    tools, "load_dicom_series",
+    tools,
+    "load_dicom_series",
     """Load a DICOM series as a volume into the scene.
 
     Args:
@@ -282,7 +295,8 @@ load_dicom_series = _register_tool(
 )
 
 run_brain_extraction = _register_tool(
-    tools, "run_brain_extraction",
+    tools,
+    "run_brain_extraction",
     """Extract brain from MRI/CT scan (skull stripping).
 
     LONG OPERATION: This tool may take 20 seconds to 5 minutes depending on method and hardware.
@@ -317,7 +331,8 @@ run_brain_extraction = _register_tool(
 # =============================================================================
 
 measure_sagittal_balance_xray = _register_tool(
-    diagnostic_tools_xray, "measure_sagittal_balance_xray",
+    diagnostic_tools_xray,
+    "measure_sagittal_balance_xray",
     """Measure sagittal spinal balance from lateral standing X-ray.
 
     Computes SVA, C2-C7 SVA, T1 slope, TPA, cervical lordosis, thoracic
@@ -340,7 +355,8 @@ measure_sagittal_balance_xray = _register_tool(
 )
 
 measure_coronal_balance_xray = _register_tool(
-    diagnostic_tools_xray, "measure_coronal_balance_xray",
+    diagnostic_tools_xray,
+    "measure_coronal_balance_xray",
     """Measure coronal spinal balance from AP standing X-ray.
 
     Computes C7 plumb line to CSVL offset, trunk shift, pelvic obliquity,
@@ -361,7 +377,8 @@ measure_coronal_balance_xray = _register_tool(
 )
 
 measure_listhesis_dynamic_xray = _register_tool(
-    diagnostic_tools_xray, "measure_listhesis_dynamic_xray",
+    diagnostic_tools_xray,
+    "measure_listhesis_dynamic_xray",
     """Measure dynamic listhesis from neutral, flexion, and extension X-rays.
 
     Processes 3 lateral X-rays simultaneously. Computes translation and angular
@@ -383,7 +400,8 @@ measure_listhesis_dynamic_xray = _register_tool(
 )
 
 detect_vertebral_fractures_xray = _register_tool(
-    diagnostic_tools_xray, "detect_vertebral_fractures_xray",
+    diagnostic_tools_xray,
+    "detect_vertebral_fractures_xray",
     """Detect vertebral fractures using Genant semi-quantitative method on lateral X-ray.
 
     6 points per vertebral body define anterior, middle, and posterior heights.
@@ -402,7 +420,8 @@ detect_vertebral_fractures_xray = _register_tool(
 )
 
 measure_cobb_angle_xray = _register_tool(
-    diagnostic_tools_xray, "measure_cobb_angle_xray",
+    diagnostic_tools_xray,
+    "measure_cobb_angle_xray",
     """Measure Cobb angle for scoliosis from AP standing X-ray.
 
     Computes angle between superior endplate of upper end vertebra and inferior
@@ -423,7 +442,8 @@ measure_cobb_angle_xray = _register_tool(
 )
 
 classify_disc_degeneration_xray = _register_tool(
-    diagnostic_tools_xray, "classify_disc_degeneration_xray",
+    diagnostic_tools_xray,
+    "classify_disc_degeneration_xray",
     """Classify disc degeneration from lateral X-ray using height and osteophyte analysis.
 
     Adapted grading combining disc height loss with osteophyte evaluation.
@@ -449,7 +469,8 @@ classify_disc_degeneration_xray = _register_tool(
 # =============================================================================
 
 detect_vertebral_fractures_ct = _register_tool(
-    diagnostic_tools_ct, "detect_vertebral_fractures_ct",
+    diagnostic_tools_ct,
+    "detect_vertebral_fractures_ct",
     """Detect vertebral fractures in CT with Genant, AO Spine, and Denis classification.
 
     LONG OPERATION: Runs TotalSegmentator if no segmentation provided.
@@ -471,7 +492,8 @@ detect_vertebral_fractures_ct = _register_tool(
 )
 
 assess_osteoporosis_ct = _register_tool(
-    diagnostic_tools_ct, "assess_osteoporosis_ct",
+    diagnostic_tools_ct,
+    "assess_osteoporosis_ct",
     """Assess bone density for opportunistic osteoporosis screening on CT.
 
     LONG OPERATION: Runs TotalSegmentator if no segmentation provided.
@@ -492,7 +514,8 @@ assess_osteoporosis_ct = _register_tool(
 )
 
 detect_metastatic_lesions_ct = _register_tool(
-    diagnostic_tools_ct, "detect_metastatic_lesions_ct",
+    diagnostic_tools_ct,
+    "detect_metastatic_lesions_ct",
     """Detect metastatic lesions (lytic/blastic/mixed) in vertebral bodies on CT.
 
     LONG OPERATION: Runs TotalSegmentator if no segmentation provided.
@@ -514,7 +537,8 @@ detect_metastatic_lesions_ct = _register_tool(
 )
 
 calculate_sins_score = _register_tool(
-    diagnostic_tools_ct, "calculate_sins_score",
+    diagnostic_tools_ct,
+    "calculate_sins_score",
     """Calculate SINS (Spinal Instability Neoplastic Score) from CT.
 
     LONG OPERATION: Runs TotalSegmentator if no segmentation provided.
@@ -536,7 +560,8 @@ calculate_sins_score = _register_tool(
 )
 
 measure_listhesis_ct = _register_tool(
-    diagnostic_tools_ct, "measure_listhesis_ct",
+    diagnostic_tools_ct,
+    "measure_listhesis_ct",
     """Measure spondylolisthesis on static CT.
 
     LONG OPERATION: Runs TotalSegmentator if no segmentation provided.
@@ -557,7 +582,8 @@ measure_listhesis_ct = _register_tool(
 )
 
 measure_spinal_canal_ct = _register_tool(
-    diagnostic_tools_ct, "measure_spinal_canal_ct",
+    diagnostic_tools_ct,
+    "measure_spinal_canal_ct",
     """Measure spinal canal morphometry on CT.
 
     LONG OPERATION: Runs TotalSegmentator if no segmentation provided.
@@ -582,7 +608,8 @@ measure_spinal_canal_ct = _register_tool(
 # =============================================================================
 
 plan_cervical_screws = _register_tool(
-    instrumentation_tools, "plan_cervical_screws",
+    instrumentation_tools,
+    "plan_cervical_screws",
     """Plan cervical screw placement using one of 6 instrumentation techniques.
 
     Generates patient-specific screw entry points, trajectory vectors, safety
@@ -616,7 +643,8 @@ plan_cervical_screws = _register_tool(
 )
 
 measure_ccj_angles = _register_tool(
-    spine_tools, "measure_ccj_angles",
+    spine_tools,
+    "measure_ccj_angles",
     """Measure craniocervical junction (CCJ) angles and distances.
 
     Computes CXA, ADI, Powers ratio, BDI, BAI, Ranawat, McGregor,
@@ -639,7 +667,8 @@ measure_ccj_angles = _register_tool(
 )
 
 measure_spine_alignment = _register_tool(
-    spine_tools, "measure_spine_alignment",
+    spine_tools,
+    "measure_spine_alignment",
     """Measure sagittal spinal alignment parameters.
 
     Computes cervical lordosis, thoracic kyphosis, lumbar lordosis,
@@ -663,7 +692,8 @@ measure_spine_alignment = _register_tool(
 )
 
 segment_spine = _register_tool(
-    spine_tools, "segment_spine",
+    spine_tools,
+    "segment_spine",
     """Segment spine structures from a CT volume using TotalSegmentator AI.
 
     LONG OPERATION: This tool may take 1-5 minutes depending on hardware and region.
@@ -689,7 +719,8 @@ segment_spine = _register_tool(
 )
 
 visualize_spine_segmentation = _register_tool(
-    spine_tools, "visualize_spine_segmentation",
+    spine_tools,
+    "visualize_spine_segmentation",
     """Create clinical visualization of spine segmentation.
 
     Generates a high-quality sagittal screenshot with distinct colors
@@ -711,7 +742,8 @@ visualize_spine_segmentation = _register_tool(
 )
 
 segment_vertebral_artery = _register_tool(
-    spine_tools, "segment_vertebral_artery",
+    spine_tools,
+    "segment_vertebral_artery",
     """Segment vertebral arteries from a CTA volume using SlicerVMTK.
 
     LONG OPERATION: This tool may take 1-5 minutes depending on volume size.
@@ -732,7 +764,8 @@ segment_vertebral_artery = _register_tool(
 )
 
 analyze_bone_quality = _register_tool(
-    spine_tools, "analyze_bone_quality",
+    spine_tools,
+    "analyze_bone_quality",
     """Analyze bone quality per vertebra using CT HU and BoneTexture metrics.
 
     LONG OPERATION: This tool may take 30 seconds to 3 minutes depending on vertebra count.
@@ -764,7 +797,8 @@ analyze_bone_quality = _register_tool(
 # =============================================================================
 
 workflow_modic_eval = _register_tool(
-    workflow_modic, "workflow_modic_eval",
+    workflow_modic,
+    "workflow_modic_eval",
     """Run Modic endplate and disc degeneration assessment from MRI.
 
     LONG OPERATION: May take 2-10 minutes depending on hardware and whether
@@ -791,13 +825,73 @@ workflow_modic_eval = _register_tool(
     """,
 )
 
+workflow_ccj_protocol = _register_tool(
+    workflow_ccj,
+    "workflow_ccj_protocol",
+    """Run craniocervical junction assessment protocol.
+
+    LONG OPERATION: May take 2-10 minutes depending on hardware and whether
+    segmentation is pre-computed.
+
+    Orchestrates: segment_spine, measure_ccj_angles, segment_vertebral_artery
+    (if CTA provided), analyze_bone_quality, capture_screenshot.
+
+    Args:
+        ct_volume_id: MRML node ID of CT volume
+        segmentation_node_id: MRML node ID of existing segmentation
+            (optional; runs segment_spine if not provided)
+        cta_volume_id: MRML node ID of CTA volume for VA assessment
+            (optional)
+        population: "adult" or "child" (affects ADI threshold)
+        include_bone_quality: Include C1-C2 HU analysis (default: True)
+
+    Returns:
+        Dict with ccj_angles (craniometry measurements), vertebral_artery
+        assessment, bone_quality, screenshots, population, and
+        steps_completed
+    """,
+)
+
+workflow_onco_spine = _register_tool(
+    workflow_onco,
+    "workflow_onco_spine",
+    """Run oncologic spine assessment: lesion detection, SINS, stability.
+
+    LONG OPERATION: May take 5-15 minutes depending on hardware and whether
+    segmentation is pre-computed.
+
+    Orchestrates: segment_spine, detect_metastatic_lesions_ct,
+    calculate_sins_score, measure_listhesis_ct, measure_spinal_canal_ct,
+    assess_osteoporosis_ct, detect_metastatic_lesions_mri (if MRI),
+    capture_screenshot.
+
+    Args:
+        ct_volume_id: MRML node ID of CT volume
+        region: Spine region - "cervical", "thoracic", "lumbar", or
+            "full" (default: "full")
+        t1_volume_id: MRML node ID of T1 MRI volume (optional, for
+            enhanced lesion detection)
+        t2_volume_id: MRML node ID of T2/STIR MRI volume (optional)
+        segmentation_node_id: MRML node ID of existing segmentation
+            (optional; runs segment_spine if not provided)
+        pain_type: "mechanical" or "non_mechanical" for SINS scoring
+            (optional)
+
+    Returns:
+        Dict with metastatic_lesions_ct, sins_scores, listhesis,
+        canal_stenosis, bone_quality, metastatic_lesions_mri (if MRI),
+        screenshots, region, pain_type, and steps_completed
+    """,
+)
+
 
 # =============================================================================
 # MRI Diagnostic Protocol Tools
 # =============================================================================
 
 classify_modic_changes = _register_tool(
-    diagnostic_tools_mri, "classify_modic_changes",
+    diagnostic_tools_mri,
+    "classify_modic_changes",
     """Classify Modic endplate changes using T1 and T2 MRI sequences.
 
     LONG OPERATION: Requires registration check + TotalSegmentator segmentation + analysis.
@@ -823,7 +917,8 @@ classify_modic_changes = _register_tool(
 )
 
 assess_disc_degeneration_mri = _register_tool(
-    diagnostic_tools_mri, "assess_disc_degeneration_mri",
+    diagnostic_tools_mri,
+    "assess_disc_degeneration_mri",
     """Assess intervertebral disc degeneration using Pfirrmann grading on T2 MRI.
 
     LONG OPERATION: Requires TotalSegmentator segmentation + per-disc analysis.
@@ -844,7 +939,8 @@ assess_disc_degeneration_mri = _register_tool(
 )
 
 detect_cord_compression_mri = _register_tool(
-    diagnostic_tools_mri, "detect_cord_compression_mri",
+    diagnostic_tools_mri,
+    "detect_cord_compression_mri",
     """Detect spinal cord compression on MRI with optional myelopathy assessment.
 
     LONG OPERATION: Requires TotalSegmentator segmentation + per-level analysis.
@@ -867,7 +963,8 @@ detect_cord_compression_mri = _register_tool(
 )
 
 detect_metastatic_lesions_mri = _register_tool(
-    diagnostic_tools_mri, "detect_metastatic_lesions_mri",
+    diagnostic_tools_mri,
+    "detect_metastatic_lesions_mri",
     """Detect metastatic lesions in the spine using T1 and T2/STIR MRI.
 
     LONG OPERATION: Requires registration + TotalSegmentator segmentation + per-vertebra analysis.
@@ -899,7 +996,8 @@ detect_metastatic_lesions_mri = _register_tool(
 # =============================================================================
 
 place_landmarks = _register_tool(
-    registration_tools, "place_landmarks",
+    registration_tools,
+    "place_landmarks",
     """Create a markup fiducial node with named control points in 3D Slicer.
 
     Places a set of RAS-coordinate landmarks as a vtkMRMLMarkupsFiducialNode.
@@ -917,7 +1015,8 @@ place_landmarks = _register_tool(
 )
 
 get_landmarks = _register_tool(
-    registration_tools, "get_landmarks",
+    registration_tools,
+    "get_landmarks",
     """Retrieve all control points from a markup fiducial node.
 
     Args:
@@ -931,7 +1030,8 @@ get_landmarks = _register_tool(
 )
 
 register_volumes = _register_tool(
-    registration_tools, "register_volumes",
+    registration_tools,
+    "register_volumes",
     """Perform intensity-based volume registration using BRAINSFit.
 
     LONG OPERATION: May take up to 5 minutes depending on volume size and transform type.
@@ -957,7 +1057,8 @@ register_volumes = _register_tool(
 )
 
 register_landmarks = _register_tool(
-    registration_tools, "register_landmarks",
+    registration_tools,
+    "register_landmarks",
     """Perform landmark-based registration using paired fiducial points.
 
     Computes a spatial transform that aligns moving landmarks to fixed landmarks.
@@ -975,7 +1076,8 @@ register_landmarks = _register_tool(
 )
 
 apply_transform = _register_tool(
-    registration_tools, "apply_transform",
+    registration_tools,
+    "apply_transform",
     """Apply a spatial transform to any transformable node.
 
     Sets the transform on the node. If harden is True, bakes the transform
@@ -997,7 +1099,8 @@ apply_transform = _register_tool(
 # =============================================================================
 
 enable_volume_rendering = _register_tool(
-    rendering_tools, "enable_volume_rendering",
+    rendering_tools,
+    "enable_volume_rendering",
     """Enable volume rendering visualization on a volume node.
 
     Creates or updates volume rendering display for the given volume.
@@ -1014,7 +1117,8 @@ enable_volume_rendering = _register_tool(
 )
 
 set_volume_rendering_property = _register_tool(
-    rendering_tools, "set_volume_rendering_property",
+    rendering_tools,
+    "set_volume_rendering_property",
     """Adjust volume rendering display properties on a volume node.
 
     Modifies opacity, window/level, or visibility of an existing volume
@@ -1033,7 +1137,8 @@ set_volume_rendering_property = _register_tool(
 )
 
 export_model = _register_tool(
-    rendering_tools, "export_model",
+    rendering_tools,
+    "export_model",
     """Export a model node to a 3D mesh file.
 
     Saves the model's polygon data to STL, OBJ, PLY, or VTK format.
@@ -1051,7 +1156,8 @@ export_model = _register_tool(
 )
 
 segmentation_to_models = _register_tool(
-    rendering_tools, "segmentation_to_models",
+    rendering_tools,
+    "segmentation_to_models",
     """Convert segmentation segments to individual model nodes.
 
     Creates a vtkMRMLModelNode for each segment by extracting its closed
@@ -1068,7 +1174,8 @@ segmentation_to_models = _register_tool(
 )
 
 capture_3d_view = _register_tool(
-    rendering_tools, "capture_3d_view",
+    rendering_tools,
+    "capture_3d_view",
     """Capture a screenshot of a 3D view to an image file.
 
     Renders the current 3D view and saves it as PNG, JPG, BMP, or TIFF.
@@ -1141,9 +1248,17 @@ def get_workflows() -> str:
 
 # Collect tool names for startup log
 _TOOL_NAMES = [
-    name for name, obj in sorted(locals().items())
-    if callable(obj) and not name.startswith("_") and name not in {
-        "get_scene", "get_volumes", "get_status", "get_workflows", "main",
+    name
+    for name, obj in sorted(locals().items())
+    if callable(obj)
+    and not name.startswith("_")
+    and name
+    not in {
+        "get_scene",
+        "get_volumes",
+        "get_status",
+        "get_workflows",
+        "main",
     }
 ]
 

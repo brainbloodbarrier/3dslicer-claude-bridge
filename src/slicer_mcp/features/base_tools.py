@@ -14,14 +14,19 @@ from typing import Any
 from slicer_mcp.core.constants import (
     AUDIT_CODE_MAX_LENGTH,
     AUDIT_RESULT_MAX_LENGTH,
+    BRAIN_EXTRACTION_TIMEOUT,
     DICOM_UID_PATTERN,
     FALLBACK_SAMPLE_DATASETS,
+    FORBIDDEN_PATH_COMPONENTS,
     MAX_DICOM_UID_LENGTH,
+    MAX_FOLDER_PATH_LENGTH,
     MAX_NODE_ID_LENGTH,
     MAX_PYTHON_CODE_LENGTH,
     MAX_SEGMENT_NAME_LENGTH,
     VALID_3D_AXES,
+    VALID_BRAIN_EXTRACTION_METHODS,
     VALID_GUI_MODES,
+    VALID_HDBET_DEVICES,
     VALID_LAYOUTS,
     VIEW_MAP,
 )
@@ -29,6 +34,26 @@ from slicer_mcp.core.parsing import (
     _parse_json_result,
 )  # noqa: F401 — re-exported for feature modules
 from slicer_mcp.core.slicer_client import SlicerConnectionError, get_client
+
+__all__ = [
+    "ValidationError",
+    "capture_screenshot",
+    "execute_python",
+    "import_dicom",
+    "list_dicom_series",
+    "list_dicom_studies",
+    "list_sample_data",
+    "list_scene_nodes",
+    "load_dicom_series",
+    "load_sample_data",
+    "measure_volume",
+    "run_brain_extraction",
+    "set_layout",
+    "validate_dicom_uid",
+    "validate_folder_path",
+    "validate_mrml_node_id",
+    "validate_segment_name",
+]
 
 logger = logging.getLogger("slicer-mcp")
 
@@ -315,8 +340,6 @@ def validate_folder_path(path: str) -> str:
     Raises:
         ValidationError: If path is invalid or unsafe
     """
-    from slicer_mcp.core.constants import FORBIDDEN_PATH_COMPONENTS, MAX_FOLDER_PATH_LENGTH
-
     if not path:
         raise ValidationError("Folder path cannot be empty", "folder_path", "")
 
@@ -1446,12 +1469,6 @@ def run_brain_extraction(
         ValidationError: If input parameters are invalid
         SlicerConnectionError: If Slicer is not reachable or processing fails
     """
-    from slicer_mcp.core.constants import (
-        BRAIN_EXTRACTION_TIMEOUT,
-        VALID_BRAIN_EXTRACTION_METHODS,
-        VALID_HDBET_DEVICES,
-    )
-
     # Validate input node ID
     input_node_id = validate_mrml_node_id(input_node_id)
 

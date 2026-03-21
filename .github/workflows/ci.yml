@@ -77,4 +77,4 @@ jobs:
 
       - name: Run tests with coverage
         if: matrix.python-version == '3.12'
-        run: uv run pytest --cov=slicer_mcp --cov-report=term-missing -m "not integration and not benchmark"
+        run: uv run pytest --cov=slicer_mcp --cov-report=term-missing --cov-fail-under=85 -m "not integration and not benchmark"

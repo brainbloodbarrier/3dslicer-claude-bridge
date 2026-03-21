@@ -7,6 +7,13 @@ from datetime import datetime, timezone
 from slicer_mcp.core.parsing import _parse_json_result
 from slicer_mcp.core.slicer_client import SlicerConnectionError, get_client
 
+__all__ = [
+    "get_scene_resource",
+    "get_status_resource",
+    "get_volumes_resource",
+    "get_workflows_resource",
+]
+
 logger = logging.getLogger("slicer-mcp")
 
 
@@ -220,7 +227,7 @@ _WORKFLOW_CATALOG: list[dict] = [
     },
     {
         "name": "workflow_ccj_protocol",
-        "status": "planned",
+        "status": "available",
         "description": (
             "Craniocervical junction protocol: craniometry, vertebral artery "
             "assessment, and bone quality analysis"
@@ -241,7 +248,7 @@ _WORKFLOW_CATALOG: list[dict] = [
     },
     {
         "name": "workflow_onco_spine",
-        "status": "planned",
+        "status": "available",
         "description": (
             "Oncologic spine assessment: lesion detection, SINS scoring, and stability analysis"
         ),

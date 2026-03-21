@@ -35,6 +35,15 @@ from slicer_mcp.features.spine.constants import (
 )
 from slicer_mcp.features.spine.tools import _build_totalseg_subprocess_block
 
+__all__ = [
+    "assess_osteoporosis_ct",
+    "calculate_sins_score",
+    "detect_metastatic_lesions_ct",
+    "detect_vertebral_fractures_ct",
+    "measure_listhesis_ct",
+    "measure_spinal_canal_ct",
+]
+
 logger = logging.getLogger("slicer-mcp")
 
 

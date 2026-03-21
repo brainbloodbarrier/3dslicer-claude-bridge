@@ -22,6 +22,16 @@ from slicer_mcp.features.base_tools import (
     validate_mrml_node_id,
 )
 
+__all__ = [
+    "apply_transform",
+    "get_landmarks",
+    "place_landmarks",
+    "register_landmarks",
+    "register_volumes",
+    "validate_landmark_label",
+    "validate_points",
+]
+
 logger = logging.getLogger("slicer-mcp")
 
 # Compiled pattern for landmark labels

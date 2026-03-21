@@ -1,8 +1,17 @@
 """Compatibility shim for relocated module."""
 
+import warnings
 from importlib import import_module as _import_module
 
 _module = _import_module("slicer_mcp.features.diagnostics.xray")
+
+warnings.warn(
+    "Importing from 'slicer_mcp.diagnostic_tools_xray' is deprecated. "
+    "Use 'slicer_mcp.features.diagnostics.xray' instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
 globals().update(
     {name: getattr(_module, name) for name in dir(_module) if not name.startswith("__")}
 )

@@ -35,7 +35,79 @@ from slicer_mcp.features.spine.constants import (
     VA_VESSELNESS_CONTRAST_MEASURE,
 )
 
+__all__ = [
+    "analyze_bone_quality",
+    "measure_ccj_angles",
+    "measure_spine_alignment",
+    "segment_spine",
+    "segment_vertebral_artery",
+    "visualize_spine_segmentation",
+]
+
 logger = logging.getLogger("slicer-mcp")
+
+
+def _kill_process_group_code(
+    proc_var: str = "proc",
+    os_mod: str = "os",
+    signal_mod: str = "signal",
+    time_mod: str = "time",
+    logging_alias: str = "_kpg_logging",
+    indent: str = "",
+) -> str:
+    """Return a code snippet that gracefully kills a subprocess process group.
+
+    Generates inline Python code for use inside Slicer-bound code templates.
+    The pattern is: SIGTERM -> sleep 1s -> SIGKILL -> proc.kill() fallback.
+    Silently catches ``ProcessLookupError``, ``PermissionError``, and ``OSError``.
+
+    Args:
+        proc_var: Variable name of the subprocess.Popen instance.
+        os_mod: Module name/alias for ``os`` in the generated code.
+        signal_mod: Module name/alias for ``signal`` in the generated code.
+        time_mod: Module name/alias for ``time`` in the generated code.
+        logging_alias: Alias for ``logging`` import in the generated code.
+        indent: Whitespace prefix for every generated line.
+
+    Returns:
+        Multi-line Python code string (no trailing newline).
+    """
+    i = indent
+    pid = f"{{{proc_var}.pid}}"
+    lines = [
+        f"{i}if {proc_var} is not None and {proc_var}.poll() is None:",
+        f"{i}    try:",
+        f"{i}        {os_mod}.killpg({os_mod}.getpgid({proc_var}.pid), {signal_mod}.SIGTERM)",
+        f"{i}    except ProcessLookupError:",
+        f"{i}        pass",
+        f"{i}    except PermissionError:",
+        f"{i}        import logging as {logging_alias}",
+        f'{i}        {logging_alias}.getLogger("slicer-mcp").warning(',
+        f'{i}            "Cannot kill TotalSegmentator process group"',
+        f'{i}            f" (PID {pid}): permission denied"',
+        f"{i}        )",
+        f"{i}    except OSError:",
+        f"{i}        pass",
+        f"{i}    {time_mod}.sleep(1)",
+        f"{i}    if {proc_var}.poll() is None:",
+        f"{i}        try:",
+        f"{i}            {os_mod}.killpg({os_mod}.getpgid({proc_var}.pid), {signal_mod}.SIGKILL)",
+        f"{i}        except ProcessLookupError:",
+        f"{i}            pass",
+        f"{i}        except PermissionError:",
+        f"{i}            import logging as {logging_alias}",
+        f'{i}            {logging_alias}.getLogger("slicer-mcp").warning(',
+        f'{i}                "Cannot kill TotalSegmentator process group"',
+        f'{i}                f" (PID {pid}): permission denied"',
+        f"{i}            )",
+        f"{i}        except OSError:",
+        f"{i}            pass",
+        f"{i}    try:",
+        f"{i}        {proc_var}.kill()",
+        f"{i}    except (ProcessLookupError, PermissionError, OSError):",
+        f"{i}        pass",
+    ]
+    return "\n".join(lines)
 
 
 # =============================================================================
@@ -912,33 +984,10 @@ else:
             _ts_elapsed += _ts_poll_interval
 
         # Kill process group if still running (resource_tracker hang)
-        if _ts_proc.poll() is None:
-            try:
-                _ts_os.killpg(_ts_os.getpgid(_ts_proc.pid), _ts_signal.SIGTERM)
-            except ProcessLookupError:
-                pass
-            except PermissionError:
-                import logging as _ts_logging
-                _ts_logging.getLogger("slicer-mcp").warning(
-                    "Cannot kill TotalSegmentator process group"
-                    f" (PID {{_ts_proc.pid}}): permission denied"
-                )
-            except OSError:
-                pass
-            _ts_time.sleep(1)
-            if _ts_proc.poll() is None:
-                try:
-                    _ts_os.killpg(_ts_os.getpgid(_ts_proc.pid), _ts_signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
-                except PermissionError:
-                    import logging as _ts_logging
-                    _ts_logging.getLogger("slicer-mcp").warning(
-                        "Cannot kill TotalSegmentator process group"
-                        f" (PID {{_ts_proc.pid}}): permission denied"
-                    )
-                except OSError:
-                    pass
+{_kill_process_group_code(
+    proc_var='_ts_proc', os_mod='_ts_os', signal_mod='_ts_signal',
+    time_mod='_ts_time', logging_alias='_ts_logging', indent='        ',
+)}
 
         if not _ts_os.path.exists(_ts_outputFile):
             raise RuntimeError("TotalSegmentator did not produce output within timeout")
@@ -955,19 +1004,10 @@ else:
         slicer.mrmlScene.RemoveNode({seg_var})
         raise ValueError(f"TotalSegmentator failed ({{type(_ts_e).__name__}}): {{_ts_e}}")
     finally:
-        if _ts_proc is not None and _ts_proc.poll() is None:
-            try:
-                _ts_os.killpg(_ts_os.getpgid(_ts_proc.pid), _ts_signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-            except PermissionError:
-                import logging as _ts_logging
-                _ts_logging.getLogger("slicer-mcp").warning(
-                    "Cannot kill TotalSegmentator process group"
-                    f" (PID {{_ts_proc.pid}}): permission denied"
-                )
-            except OSError:
-                pass
+{_kill_process_group_code(
+    proc_var='_ts_proc', os_mod='_ts_os', signal_mod='_ts_signal',
+    time_mod='_ts_time', logging_alias='_ts_logging', indent='        ',
+)}
         def _ts_rmtree_onerror(func, path, exc_info):
             import logging as _ts_log
             _ts_log.getLogger("slicer-mcp").warning(
@@ -1118,33 +1158,10 @@ try:
 
     # Kill the process group if still running (resource_tracker hang workaround)
     # Safe because start_new_session=True gives it its own process group
-    if proc.poll() is None:
-        try:
-            os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
-        except ProcessLookupError:
-            pass
-        except PermissionError:
-            import logging as _seg_logging
-            _seg_logging.getLogger("slicer-mcp").warning(
-                "Cannot kill TotalSegmentator process group"
-                f" (PID {{proc.pid}}): permission denied"
-            )
-        except OSError:
-            pass
-        time.sleep(1)
-        if proc.poll() is None:
-            try:
-                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-            except PermissionError:
-                import logging as _seg_logging
-                _seg_logging.getLogger("slicer-mcp").warning(
-                    "Cannot kill TotalSegmentator process group"
-                    f" (PID {{proc.pid}}): permission denied"
-                )
-            except OSError:
-                pass
+{_kill_process_group_code(
+    proc_var='proc', os_mod='os', signal_mod='signal',
+    time_mod='time', logging_alias='_seg_logging', indent='    ',
+)}
 
     if not os.path.exists(outputFile):
         raise RuntimeError("TotalSegmentator did not produce output file within timeout")
@@ -1163,19 +1180,10 @@ except Exception as e:
     raise ValueError(f"TotalSegmentator failed ({{type(e).__name__}}): {{e}}")
 finally:
     # Kill subprocess if still alive (handles exception during poll loop)
-    if proc is not None and proc.poll() is None:
-        try:
-            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-        except PermissionError:
-            import logging as _seg_logging
-            _seg_logging.getLogger("slicer-mcp").warning(
-                "Cannot kill TotalSegmentator process group"
-                f" (PID {{proc.pid}}): permission denied"
-            )
-        except OSError:
-            pass
+{_kill_process_group_code(
+    proc_var='proc', os_mod='os', signal_mod='signal',
+    time_mod='time', logging_alias='_seg_logging', indent='    ',
+)}
     # Clean up temp files (both success and failure paths)
     def _seg_rmtree_onerror(func, path, exc_info):
         import logging as _seg_log

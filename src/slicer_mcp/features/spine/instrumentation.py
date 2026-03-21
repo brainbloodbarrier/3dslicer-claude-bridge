@@ -43,6 +43,10 @@ from slicer_mcp.features.spine.constants import (
     VALID_SIDES,
 )
 
+__all__ = [
+    "plan_cervical_screws",
+]
+
 logger = logging.getLogger("slicer-mcp")
 
 
@@ -471,9 +475,7 @@ def _build_pedicle_code(
         Python code string for execution in Slicer.
     """
     angulation = TECHNIQUE_ANGULATION["pedicle"]
-    return (
-        _SLICER_HELPERS
-        + f"""
+    return _SLICER_HELPERS + f"""
 # === Pedicle Screw Planning ===
 seg_node_id = {safe_seg_id}
 level = {safe_level}
@@ -566,7 +568,6 @@ result = {{
 }}
 __execResult = result
 """
-    )
 
 
 def _build_lateral_mass_code(
@@ -610,9 +611,7 @@ def _build_lateral_mass_code(
         "anderson": "Anderson PA et al. Spine 1991",
     }
 
-    return (
-        _SLICER_HELPERS
-        + f"""
+    return _SLICER_HELPERS + f"""
 # === Lateral Mass Screw Planning ({variant_names[variant]}) ===
 seg_node_id = {safe_seg_id}
 level = {safe_level}
@@ -703,7 +702,6 @@ result = {{
 }}
 __execResult = result
 """
-    )
 
 
 def _build_transarticular_code(
@@ -728,9 +726,7 @@ def _build_transarticular_code(
         Python code string for execution in Slicer.
     """
     angulation = TECHNIQUE_ANGULATION["transarticular"]
-    return (
-        _SLICER_HELPERS
-        + f"""
+    return _SLICER_HELPERS + f"""
 # === Transarticular Screw Planning (Magerl) ===
 seg_node_id = {safe_seg_id}
 side = {safe_side}
@@ -867,7 +863,6 @@ result = {{
 }}
 __execResult = result
 """
-    )
 
 
 def _build_c1_lateral_mass_code(
@@ -890,9 +885,7 @@ def _build_c1_lateral_mass_code(
         Python code string for execution in Slicer.
     """
     angulation = TECHNIQUE_ANGULATION["c1_lateral_mass"]
-    return (
-        _SLICER_HELPERS
-        + f"""
+    return _SLICER_HELPERS + f"""
 # === C1 Lateral Mass Screw Planning (Harms/Goel) ===
 seg_node_id = {safe_seg_id}
 side = {safe_side}
@@ -983,7 +976,6 @@ result = {{
 }}
 __execResult = result
 """
-    )
 
 
 def _build_c2_pars_code(
@@ -1006,9 +998,7 @@ def _build_c2_pars_code(
         Python code string for execution in Slicer.
     """
     angulation = TECHNIQUE_ANGULATION["c2_pars"]
-    return (
-        _SLICER_HELPERS
-        + f"""
+    return _SLICER_HELPERS + f"""
 # === C2 Pars Interarticularis Screw Planning ===
 seg_node_id = {safe_seg_id}
 side = {safe_side}
@@ -1099,7 +1089,6 @@ result = {{
 }}
 __execResult = result
 """
-    )
 
 
 def _build_occipital_code(
@@ -1119,9 +1108,7 @@ def _build_occipital_code(
     Returns:
         Python code string for execution in Slicer.
     """
-    return (
-        _SLICER_HELPERS
-        + f"""
+    return _SLICER_HELPERS + f"""
 # === Occipital Screw Planning ===
 seg_node_id = {safe_seg_id}
 side = {safe_side}
@@ -1232,7 +1219,6 @@ result = {{
 }}
 __execResult = result
 """
-    )
 
 
 def _build_auto_analysis_code(
@@ -1253,9 +1239,7 @@ def _build_auto_analysis_code(
     Returns:
         Python code string for execution in Slicer.
     """
-    return (
-        _SLICER_HELPERS
-        + f"""
+    return _SLICER_HELPERS + f"""
 # === Auto Technique Analysis ===
 seg_node_id = {safe_seg_id}
 level = {safe_level}
@@ -1440,7 +1424,6 @@ result = {{
 }}
 __execResult = result
 """
-    )
 
 
 # =============================================================================

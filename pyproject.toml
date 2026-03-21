@@ -72,7 +72,6 @@ packages = ["src/slicer_mcp"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-asyncio_mode = "auto"
 markers = [
     "integration: marks tests requiring running Slicer instance (deselect with '-m \"not integration\"')",
     "benchmark: marks performance benchmark tests",

@@ -28,6 +28,16 @@ from slicer_mcp.features.base_tools import (
     validate_mrml_node_id,
 )
 
+__all__ = [
+    "capture_3d_view",
+    "enable_volume_rendering",
+    "export_model",
+    "segmentation_to_models",
+    "set_volume_rendering_property",
+    "validate_export_directory",
+    "validate_export_filename",
+]
+
 logger = logging.getLogger("slicer-mcp")
 
 # Compiled pattern for export filenames
@@ -785,7 +795,12 @@ def capture_3d_view(
                 "width",
                 str(width),
             )
-        assert height is not None  # guaranteed by (width is None) != (height is None) check above
+        if height is None:
+            raise ValidationError(
+                "height must be provided when width is specified",
+                "height",
+                "None",
+            )
         if not (CAPTURE_MIN_DIMENSION <= height <= CAPTURE_MAX_DIMENSION):
             raise ValidationError(
                 f"height must be in range [{CAPTURE_MIN_DIMENSION}, {CAPTURE_MAX_DIMENSION}], "

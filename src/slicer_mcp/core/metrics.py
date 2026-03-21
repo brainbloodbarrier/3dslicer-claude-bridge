@@ -32,6 +32,20 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from prometheus_client import Counter, Gauge, Histogram
 
+__all__ = [
+    "CIRCUIT_BREAKER_STATE",
+    "CIRCUIT_STATE_VALUES",
+    "METRICS_ENABLED",
+    "NullMetric",
+    "REQUEST_DURATION",
+    "REQUEST_TOTAL",
+    "RETRY_TOTAL",
+    "is_metrics_enabled",
+    "record_retry",
+    "track_request",
+    "update_circuit_breaker_state",
+]
+
 logger = logging.getLogger("slicer-mcp")
 
 METRICS_ENABLED = os.environ.get("SLICER_METRICS_ENABLED", "").lower() == "true"
