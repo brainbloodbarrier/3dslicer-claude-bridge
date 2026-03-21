@@ -6,7 +6,7 @@ from importlib import import_module as _import_module
 _module = _import_module("slicer_mcp.core.metrics")
 
 warnings.warn(
-    "Importing from 'slicer_mcp.metrics' is deprecated. " "Use 'slicer_mcp.core.metrics' instead.",
+    "Importing from 'slicer_mcp.metrics' is deprecated. Use 'slicer_mcp.core.metrics' instead.",
     DeprecationWarning,
     stacklevel=2,
 )

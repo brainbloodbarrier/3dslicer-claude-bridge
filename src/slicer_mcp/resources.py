@@ -6,8 +6,7 @@ from importlib import import_module as _import_module
 _module = _import_module("slicer_mcp.core.resources")
 
 warnings.warn(
-    "Importing from 'slicer_mcp.resources' is deprecated. "
-    "Use 'slicer_mcp.core.resources' instead.",
+    "Importing from 'slicer_mcp.resources' is deprecated. Use 'slicer_mcp.core.resources' instead.",
     DeprecationWarning,
     stacklevel=2,
 )

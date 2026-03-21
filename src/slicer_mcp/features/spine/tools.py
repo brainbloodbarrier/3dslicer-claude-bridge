@@ -985,10 +985,16 @@ else:
             _ts_elapsed += _ts_poll_interval
 
         # Kill process group if still running (resource_tracker hang)
-{_kill_process_group_code(
-    proc_var='_ts_proc', os_mod='_ts_os', signal_mod='_ts_signal',
-    time_mod='_ts_time', logging_alias='_ts_logging', indent='        ',
-)}
+{
+        _kill_process_group_code(
+            proc_var="_ts_proc",
+            os_mod="_ts_os",
+            signal_mod="_ts_signal",
+            time_mod="_ts_time",
+            logging_alias="_ts_logging",
+            indent="        ",
+        )
+    }
 
         if not _ts_os.path.exists(_ts_outputFile):
             raise RuntimeError("TotalSegmentator did not produce output within timeout")
@@ -1005,10 +1011,16 @@ else:
         slicer.mrmlScene.RemoveNode({seg_var})
         raise ValueError(f"TotalSegmentator failed ({{type(_ts_e).__name__}}): {{_ts_e}}")
     finally:
-{_kill_process_group_code(
-    proc_var='_ts_proc', os_mod='_ts_os', signal_mod='_ts_signal',
-    time_mod='_ts_time', logging_alias='_ts_logging', indent='        ',
-)}
+{
+        _kill_process_group_code(
+            proc_var="_ts_proc",
+            os_mod="_ts_os",
+            signal_mod="_ts_signal",
+            time_mod="_ts_time",
+            logging_alias="_ts_logging",
+            indent="        ",
+        )
+    }
         def _ts_rmtree_onerror(func, path, exc_info):
             import logging as _ts_log
             _ts_log.getLogger("slicer-mcp").warning(
@@ -1159,10 +1171,16 @@ try:
 
     # Kill the process group if still running (resource_tracker hang workaround)
     # Safe because start_new_session=True gives it its own process group
-{_kill_process_group_code(
-    proc_var='proc', os_mod='os', signal_mod='signal',
-    time_mod='time', logging_alias='_seg_logging', indent='    ',
-)}
+{
+        _kill_process_group_code(
+            proc_var="proc",
+            os_mod="os",
+            signal_mod="signal",
+            time_mod="time",
+            logging_alias="_seg_logging",
+            indent="    ",
+        )
+    }
 
     if not os.path.exists(outputFile):
         raise RuntimeError("TotalSegmentator did not produce output file within timeout")
@@ -1181,10 +1199,16 @@ except Exception as e:
     raise ValueError(f"TotalSegmentator failed ({{type(e).__name__}}): {{e}}")
 finally:
     # Kill subprocess if still alive (handles exception during poll loop)
-{_kill_process_group_code(
-    proc_var='proc', os_mod='os', signal_mod='signal',
-    time_mod='time', logging_alias='_seg_logging', indent='    ',
-)}
+{
+        _kill_process_group_code(
+            proc_var="proc",
+            os_mod="os",
+            signal_mod="signal",
+            time_mod="time",
+            logging_alias="_seg_logging",
+            indent="    ",
+        )
+    }
     # Clean up temp files (both success and failure paths)
     def _seg_rmtree_onerror(func, path, exc_info):
         import logging as _seg_log

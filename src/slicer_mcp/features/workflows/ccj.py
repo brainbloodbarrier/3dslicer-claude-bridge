@@ -121,7 +121,7 @@ def workflow_ccj_protocol(
     # ── Step 1: Segment spine (if needed) ───────────────
     if segmentation_node_id is None:
         logger.info(
-            "workflow_ccj_protocol: running segment_spine" " on CT volume",
+            "workflow_ccj_protocol: running segment_spine on CT volume",
         )
         seg_result = segment_spine(
             input_node_id=ct_volume_id,
@@ -133,7 +133,7 @@ def workflow_ccj_protocol(
         steps_completed.append("segment_spine")
     else:
         logger.info(
-            "workflow_ccj_protocol: using existing " "segmentation %s",
+            "workflow_ccj_protocol: using existing segmentation %s",
             segmentation_node_id,
         )
         steps_completed.append("segment_spine_skipped")
@@ -141,8 +141,7 @@ def workflow_ccj_protocol(
     # At this point segmentation_node_id is guaranteed non-None
     if segmentation_node_id is None:
         raise RuntimeError(
-            "segmentation_node_id should have been set by "
-            "segment_spine or provided by caller"
+            "segmentation_node_id should have been set by segment_spine or provided by caller"
         )
 
     # ── Step 2: Measure CCJ angles ──────────────────────
@@ -159,7 +158,7 @@ def workflow_ccj_protocol(
     va_result: dict[str, Any] | None = None
     if cta_volume_id is not None:
         logger.info(
-            "workflow_ccj_protocol: segmenting " "vertebral artery from CTA",
+            "workflow_ccj_protocol: segmenting vertebral artery from CTA",
         )
         va_result = segment_vertebral_artery(
             input_node_id=cta_volume_id,
@@ -172,7 +171,7 @@ def workflow_ccj_protocol(
     bone_result: dict[str, Any] | None = None
     if include_bone_quality:
         logger.info(
-            "workflow_ccj_protocol: analyzing bone " "quality",
+            "workflow_ccj_protocol: analyzing bone quality",
         )
         bone_result = analyze_bone_quality(
             input_node_id=ct_volume_id,
@@ -183,7 +182,7 @@ def workflow_ccj_protocol(
 
     # ── Step 5: Capture screenshots ─────────────────────
     logger.info(
-        "workflow_ccj_protocol: capturing sagittal " "screenshot",
+        "workflow_ccj_protocol: capturing sagittal screenshot",
     )
     try:
         screenshot = capture_screenshot(
@@ -198,7 +197,7 @@ def workflow_ccj_protocol(
         ValueError,
     ) as e:
         logger.warning(
-            "workflow_ccj_protocol: screenshot failed " "(non-fatal): %s",
+            "workflow_ccj_protocol: screenshot failed (non-fatal): %s",
             e,
         )
         # Screenshot failure is non-fatal for the workflow

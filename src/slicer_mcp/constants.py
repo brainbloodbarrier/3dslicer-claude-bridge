@@ -6,8 +6,7 @@ from importlib import import_module as _import_module
 _module = _import_module("slicer_mcp.core.constants")
 
 warnings.warn(
-    "Importing from 'slicer_mcp.constants' is deprecated. "
-    "Use 'slicer_mcp.core.constants' instead.",
+    "Importing from 'slicer_mcp.constants' is deprecated. Use 'slicer_mcp.core.constants' instead.",
     DeprecationWarning,
     stacklevel=2,
 )

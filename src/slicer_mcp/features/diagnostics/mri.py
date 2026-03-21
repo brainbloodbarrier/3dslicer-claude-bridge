@@ -1321,7 +1321,7 @@ def detect_metastatic_lesions_mri(
     valid_regions = VALID_MRI_REGIONS | {"full"}
     if region not in valid_regions:
         raise ValidationError(
-            f"Invalid region '{region}'. " f"Must be one of: {', '.join(sorted(valid_regions))}",
+            f"Invalid region '{region}'. Must be one of: {', '.join(sorted(valid_regions))}",
             "region",
             region,
         )

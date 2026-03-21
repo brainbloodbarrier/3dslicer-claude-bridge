@@ -93,7 +93,7 @@ def _validate_levels(levels: list[str] | None, default_levels: list[str]) -> lis
     for level in levels:
         if level not in all_vertebrae:
             raise ValidationError(
-                f"Invalid vertebral level '{level}'. " f"Must be one of: C1-C7, T1-T12, L1-L5",
+                f"Invalid vertebral level '{level}'. Must be one of: C1-C7, T1-T12, L1-L5",
                 field="levels",
                 value=level,
             )
@@ -115,8 +115,7 @@ def _validate_classification_system(system: str) -> str:
     valid = {"ao_spine", "genant", "denis", "all"}
     if system not in valid:
         raise ValidationError(
-            f"Invalid classification_system '{system}'. "
-            f"Must be one of: {', '.join(sorted(valid))}",
+            f"Invalid classification_system '{system}'. Must be one of: {', '.join(sorted(valid))}",
             field="classification_system",
             value=system,
         )
@@ -262,7 +261,7 @@ def _classify_sins_total(total: int) -> tuple[str, str]:
     low, high = SINS_RANGES["indeterminate"]
     if low <= total <= high:
         return "INDETERMINATE", (
-            f"Score {low}-{high}: Indeterminate stability. " f"Surgical consultation recommended."
+            f"Score {low}-{high}: Indeterminate stability. Surgical consultation recommended."
         )
     return "UNSTABLE", "Score 13-18: Unstable. Surgical intervention likely required."
 

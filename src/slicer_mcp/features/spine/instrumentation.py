@@ -167,7 +167,7 @@ def _validate_variant(variant: str | None, technique: str) -> str | None:
     variant = variant.lower().strip()
     if technique != "lateral_mass":
         raise ValidationError(
-            f"Variant parameter only applies to 'lateral_mass' technique, " f"not '{technique}'",
+            f"Variant parameter only applies to 'lateral_mass' technique, not '{technique}'",
             "variant",
             variant or "magerl",
         )
@@ -475,7 +475,9 @@ def _build_pedicle_code(
         Python code string for execution in Slicer.
     """
     angulation = TECHNIQUE_ANGULATION["pedicle"]
-    return _SLICER_HELPERS + f"""
+    return (
+        _SLICER_HELPERS
+        + f"""
 # === Pedicle Screw Planning ===
 seg_node_id = {safe_seg_id}
 level = {safe_level}
@@ -483,8 +485,8 @@ side = {safe_side}
 va_node_id = {safe_va_id}
 screw_diameter = {screw_diameter}
 screw_length = {screw_length}
-medial_deg = {angulation['medial_deg']}
-caudal_deg = {angulation['caudal_deg']}
+medial_deg = {angulation["medial_deg"]}
+caudal_deg = {angulation["caudal_deg"]}
 
 seg_node = slicer.mrmlScene.GetNodeByID(seg_node_id)
 if not seg_node:
@@ -568,6 +570,7 @@ result = {{
 }}
 __execResult = result
 """
+    )
 
 
 def _build_lateral_mass_code(
@@ -611,7 +614,9 @@ def _build_lateral_mass_code(
         "anderson": "Anderson PA et al. Spine 1991",
     }
 
-    return _SLICER_HELPERS + f"""
+    return (
+        _SLICER_HELPERS
+        + f"""
 # === Lateral Mass Screw Planning ({variant_names[variant]}) ===
 seg_node_id = {safe_seg_id}
 level = {safe_level}
@@ -702,6 +707,7 @@ result = {{
 }}
 __execResult = result
 """
+    )
 
 
 def _build_transarticular_code(
@@ -726,15 +732,17 @@ def _build_transarticular_code(
         Python code string for execution in Slicer.
     """
     angulation = TECHNIQUE_ANGULATION["transarticular"]
-    return _SLICER_HELPERS + f"""
+    return (
+        _SLICER_HELPERS
+        + f"""
 # === Transarticular Screw Planning (Magerl) ===
 seg_node_id = {safe_seg_id}
 side = {safe_side}
 va_node_id = {safe_va_id}
 screw_diameter = {screw_diameter}
 screw_length = {screw_length}
-medial_deg = {angulation['medial_deg']}
-cephalad_deg = {angulation['cephalad_deg']}
+medial_deg = {angulation["medial_deg"]}
+cephalad_deg = {angulation["cephalad_deg"]}
 isthmus_min_height = {ISTHMUS_MIN_HEIGHT_MM}
 isthmus_min_width = {ISTHMUS_MIN_WIDTH_MM}
 va_safety_dist = {VA_SAFETY_DISTANCE_MM}
@@ -863,6 +871,7 @@ result = {{
 }}
 __execResult = result
 """
+    )
 
 
 def _build_c1_lateral_mass_code(
@@ -885,15 +894,17 @@ def _build_c1_lateral_mass_code(
         Python code string for execution in Slicer.
     """
     angulation = TECHNIQUE_ANGULATION["c1_lateral_mass"]
-    return _SLICER_HELPERS + f"""
+    return (
+        _SLICER_HELPERS
+        + f"""
 # === C1 Lateral Mass Screw Planning (Harms/Goel) ===
 seg_node_id = {safe_seg_id}
 side = {safe_side}
 va_node_id = {safe_va_id}
 screw_diameter = {screw_diameter}
 screw_length = {screw_length}
-medial_deg = {angulation['medial_deg']}
-caudal_deg = {angulation['caudal_deg']}
+medial_deg = {angulation["medial_deg"]}
+caudal_deg = {angulation["caudal_deg"]}
 
 seg_node = slicer.mrmlScene.GetNodeByID(seg_node_id)
 if not seg_node:
@@ -976,6 +987,7 @@ result = {{
 }}
 __execResult = result
 """
+    )
 
 
 def _build_c2_pars_code(
@@ -998,15 +1010,17 @@ def _build_c2_pars_code(
         Python code string for execution in Slicer.
     """
     angulation = TECHNIQUE_ANGULATION["c2_pars"]
-    return _SLICER_HELPERS + f"""
+    return (
+        _SLICER_HELPERS
+        + f"""
 # === C2 Pars Interarticularis Screw Planning ===
 seg_node_id = {safe_seg_id}
 side = {safe_side}
 va_node_id = {safe_va_id}
 screw_diameter = {screw_diameter}
 screw_length = {screw_length}
-medial_deg = {angulation['medial_deg']}
-cephalad_deg = {angulation['cephalad_deg']}
+medial_deg = {angulation["medial_deg"]}
+cephalad_deg = {angulation["cephalad_deg"]}
 
 seg_node = slicer.mrmlScene.GetNodeByID(seg_node_id)
 if not seg_node:
@@ -1089,6 +1103,7 @@ result = {{
 }}
 __execResult = result
 """
+    )
 
 
 def _build_occipital_code(
@@ -1108,7 +1123,9 @@ def _build_occipital_code(
     Returns:
         Python code string for execution in Slicer.
     """
-    return _SLICER_HELPERS + f"""
+    return (
+        _SLICER_HELPERS
+        + f"""
 # === Occipital Screw Planning ===
 seg_node_id = {safe_seg_id}
 side = {safe_side}
@@ -1219,6 +1236,7 @@ result = {{
 }}
 __execResult = result
 """
+    )
 
 
 def _build_auto_analysis_code(
@@ -1239,7 +1257,9 @@ def _build_auto_analysis_code(
     Returns:
         Python code string for execution in Slicer.
     """
-    return _SLICER_HELPERS + f"""
+    return (
+        _SLICER_HELPERS
+        + f"""
 # === Auto Technique Analysis ===
 seg_node_id = {safe_seg_id}
 level = {safe_level}
@@ -1424,6 +1444,7 @@ result = {{
 }}
 __execResult = result
 """
+    )
 
 
 # =============================================================================
@@ -1584,8 +1605,7 @@ def plan_cervical_screws(
         )
 
         logger.info(
-            f"Cervical screw planning completed: technique={technique}, "
-            f"level={level}, side={side}"
+            f"Cervical screw planning completed: technique={technique}, level={level}, side={side}"
         )
 
         return result_data

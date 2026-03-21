@@ -59,8 +59,7 @@ def _validate_region(region: str) -> str:
     """
     if region not in SPINE_REGIONS:
         raise ValidationError(
-            f"Invalid region '{region}'. Must be one of: "
-            f"{', '.join(sorted(SPINE_REGIONS))}",
+            f"Invalid region '{region}'. Must be one of: {', '.join(sorted(SPINE_REGIONS))}",
             "region",
             region,
         )
@@ -169,7 +168,7 @@ def workflow_onco_spine(
         steps_completed.append("segment_spine")
     else:
         logger.info(
-            "workflow_onco_spine: using existing " "segmentation %s",
+            "workflow_onco_spine: using existing segmentation %s",
             segmentation_node_id,
         )
         steps_completed.append("segment_spine_skipped")
@@ -177,12 +176,11 @@ def workflow_onco_spine(
     # At this point segmentation_node_id is guaranteed non-None
     if segmentation_node_id is None:
         raise RuntimeError(
-            "segmentation_node_id should have been set by "
-            "segment_spine or provided by caller"
+            "segmentation_node_id should have been set by segment_spine or provided by caller"
         )
 
     # -- Step 2: Detect metastatic lesions on CT -----------------
-    logger.info("workflow_onco_spine: detecting metastatic " "lesions on CT")
+    logger.info("workflow_onco_spine: detecting metastatic lesions on CT")
     metastatic_ct = detect_metastatic_lesions_ct(
         volume_node_id=ct_volume_id,
         segmentation_node_id=segmentation_node_id,
@@ -228,7 +226,7 @@ def workflow_onco_spine(
     # -- Step 7: MRI lesion detection (optional) -----------------
     mri_result: dict[str, Any] | None = None
     if t1_volume_id is not None and t2_volume_id is not None:
-        logger.info("workflow_onco_spine: detecting metastatic " "lesions on MRI")
+        logger.info("workflow_onco_spine: detecting metastatic lesions on MRI")
         mri_result = detect_metastatic_lesions_mri(
             t1_node_id=t1_volume_id,
             t2_stir_node_id=t2_volume_id,
@@ -250,7 +248,7 @@ def workflow_onco_spine(
         ValueError,
     ) as e:
         logger.warning(
-            "workflow_onco_spine: screenshot failed " "(non-fatal): %s",
+            "workflow_onco_spine: screenshot failed (non-fatal): %s",
             e,
         )
 

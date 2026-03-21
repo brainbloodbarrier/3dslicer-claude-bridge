@@ -152,9 +152,7 @@ class TestGetStatusResource:
             mock_client.exec_python.return_value = {
                 "success": True,
                 "result": (
-                    '{"slicer_version": "5.6.2",'
-                    ' "scene_loaded": true,'
-                    ' "python_available": true}'
+                    '{"slicer_version": "5.6.2", "scene_loaded": true, "python_available": true}'
                 ),
             }
             mock_get_client.return_value = mock_client
@@ -216,9 +214,9 @@ class TestGetWorkflowsResource:
         valid_statuses = {"available", "planned"}
         result = json.loads(get_workflows_resource())
         for workflow in result["workflows"]:
-            assert (
-                workflow["status"] in valid_statuses
-            ), f"Unexpected status '{workflow['status']}' for {workflow['name']}"
+            assert workflow["status"] in valid_statuses, (
+                f"Unexpected status '{workflow['status']}' for {workflow['name']}"
+            )
 
     def test_modic_eval_is_available(self):
         """workflow_modic_eval is implemented and should be marked available."""
