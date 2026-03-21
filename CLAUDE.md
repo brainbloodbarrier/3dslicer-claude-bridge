@@ -6,7 +6,7 @@ Three layers: `server.py` (MCP registration) → `features/` (domain logic) → 
 
 ```
 src/slicer_mcp/
-├── server.py           # 46 @mcp.tool() + 4 @mcp.resource() wrappers
+├── server.py           # MCP tool + resource registration wrappers
 ├── core/               # HTTP client, circuit breaker, constants, metrics, resources
 ├── features/           # Domain tools: base, diagnostics/, spine/, workflows/, registration, rendering
 └── *.py (14 shims)     # Backward-compat re-exports → canonical core/ and features/ paths

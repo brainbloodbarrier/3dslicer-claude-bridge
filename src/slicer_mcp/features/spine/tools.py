@@ -59,7 +59,8 @@ def _kill_process_group_code(
 
     Generates inline Python code for use inside Slicer-bound code templates.
     The pattern is: SIGTERM -> sleep 1s -> SIGKILL -> proc.kill() fallback.
-    Silently catches ``ProcessLookupError``, ``PermissionError``, and ``OSError``.
+    Catches ``ProcessLookupError`` and ``OSError`` silently; logs a warning
+    for ``PermissionError``.
 
     Args:
         proc_var: Variable name of the subprocess.Popen instance.

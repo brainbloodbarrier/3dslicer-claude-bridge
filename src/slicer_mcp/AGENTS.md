@@ -10,7 +10,7 @@ Package root with three layers: `server.py` (registration), `core/` (infrastruct
 slicer_mcp/
 ├── __init__.py           # Exports: main, 4 exception classes, __version__
 ├── __main__.py           # python -m slicer_mcp entry point
-├── server.py             # 1515 LOC — ALL 46 @mcp.tool() + 4 @mcp.resource() wrappers
+├── server.py             # ALL @mcp.tool() + @mcp.resource() wrappers
 ├── core/                 # Infrastructure: HTTP transport, circuit breaker, constants, metrics
 ├── features/             # Domain logic: tools, diagnostics, spine, rendering, registration
 └── *.py (14 shims)       # importlib re-exports to canonical core/ and features/ paths
