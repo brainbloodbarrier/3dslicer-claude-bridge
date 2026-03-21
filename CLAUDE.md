@@ -20,7 +20,7 @@ Full architectural details: `src/slicer_mcp/AGENTS.md`
 # Tests (no Slicer required)
 uv run pytest -v -m "not integration and not benchmark"
 
-# Coverage
+# Coverage (85% enforced in CI on Python 3.12; currently 93%)
 uv run pytest --cov=slicer_mcp --cov-report=term-missing --cov-fail-under=85 -m "not integration and not benchmark"
 
 # Lint + format + type check
@@ -32,18 +32,20 @@ uv run mypy src/
 uv run pre-commit run --all-files
 ```
 
+Note: `uv sync` installs runtime deps only. Dev tools need: `uv pip install pytest-cov black mypy types-requests`
+
 ## Key Conventions
 
 - **New tools**: implement in `features/*.py`, register wrapper in `server.py`
 - **New code must import from canonical paths**: `slicer_mcp.core.*` or `slicer_mcp.features.*`
+- **Reuse canonical constants**: check `spine/constants.py` and `spine/tools.py` before defining new sets (e.g., `SPINE_REGIONS`, `VALID_POPULATIONS`, `SINS_PAIN_SCORES`)
 - **Error handling**: feature code raises `ValidationError` or `SlicerConnectionError`; `server.py:_handle_tool_error()` catches all
+- **No `assert` for validation/type narrowing**: use `ValidationError` (user input) or `RuntimeError` (internal invariants)
 - **Validation**: all user inputs validated before network calls (node IDs, paths, DICOM UIDs)
-- **Generated Python code**: use `json.dumps()` for parameter substitution (prevents injection)
+- **Generated Python code**: features build code strings executed in Slicer via `exec_python()`. Use `json.dumps()` for param substitution. Edits happen inside f-strings.
 - **Tests**: mock `get_client()` and `exec_python()` — never require a running Slicer instance for unit tests
 - **Commit style**: conventional commits (`feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:`)
 
-## Active Plans
+## Project Status
 
-- `docs/plans/2026-03-07-v2-roadmap.md` — v2 direction and phasing
-- `docs/plans/v2-workflow-surface.md` — workflow tier assignment (Tier 1/2/3)
-- `docs/plans/workflow-audit-results.md` — workflow doc vs tool signature audit
+`docs/plans/PROJECT_STATUS.md` — single tracking file (pending, blocked, completed work)
