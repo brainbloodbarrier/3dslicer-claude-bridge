@@ -10,9 +10,8 @@ from slicer_mcp.core.slicer_client import (
     SlicerTimeoutError,
 )
 from slicer_mcp.features.base_tools import ValidationError
+from slicer_mcp.features.spine.constants import SINS_PAIN_SCORES, SPINE_REGIONS
 from slicer_mcp.features.workflows.onco_spine import (
-    VALID_ONCO_REGIONS,
-    VALID_PAIN_TYPES,
     _validate_pain_type,
     _validate_region,
     workflow_onco_spine,
@@ -60,9 +59,13 @@ class TestValidatePainType:
     def test_valid_mechanical(self):
         assert _validate_pain_type("mechanical") == "mechanical"
 
-    def test_valid_non_mechanical(self):
-        result = _validate_pain_type("non_mechanical")
-        assert result == "non_mechanical"
+    def test_valid_occasional_non_mechanical(self):
+        result = _validate_pain_type("occasional_non_mechanical")
+        assert result == "occasional_non_mechanical"
+
+    def test_valid_pain_free(self):
+        result = _validate_pain_type("pain_free")
+        assert result == "pain_free"
 
     def test_valid_none(self):
         assert _validate_pain_type(None) is None
@@ -87,21 +90,22 @@ class TestConstants:
     """Test onco-spine workflow constants."""
 
     def test_valid_regions_contains_full(self):
-        assert "full" in VALID_ONCO_REGIONS
+        assert "full" in SPINE_REGIONS
 
     def test_valid_regions_contains_cervical(self):
-        assert "cervical" in VALID_ONCO_REGIONS
+        assert "cervical" in SPINE_REGIONS
 
     def test_valid_regions_contains_thoracic(self):
-        assert "thoracic" in VALID_ONCO_REGIONS
+        assert "thoracic" in SPINE_REGIONS
 
     def test_valid_regions_contains_lumbar(self):
-        assert "lumbar" in VALID_ONCO_REGIONS
+        assert "lumbar" in SPINE_REGIONS
 
     def test_valid_pain_types(self):
-        assert VALID_PAIN_TYPES == {
-            "mechanical",
-            "non_mechanical",
+        assert SINS_PAIN_SCORES == {
+            "mechanical": 3,
+            "occasional_non_mechanical": 1,
+            "pain_free": 0,
         }
 
 
@@ -533,7 +537,7 @@ class TestWorkflowOncoSpineHappyPath:
         mock_sins.assert_called_once_with(
             volume_node_id="vtkMRMLScalarVolumeNode1",
             segmentation_node_id=("vtkMRMLSegmentationNode1"),
-            pain_score="mechanical",
+            pain_score=3,
         )
 
     @patch(f"{_PATCH_PREFIX}.capture_screenshot")

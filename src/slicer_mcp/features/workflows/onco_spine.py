@@ -34,15 +34,15 @@ from slicer_mcp.features.diagnostics.ct import (
 from slicer_mcp.features.diagnostics.mri import (
     detect_metastatic_lesions_mri,
 )
+from slicer_mcp.features.spine.constants import (
+    SINS_PAIN_SCORES,
+    SPINE_REGIONS,
+)
 from slicer_mcp.features.spine.tools import segment_spine
 
 __all__ = ["workflow_onco_spine"]
 
 logger = logging.getLogger("slicer-mcp")
-
-VALID_ONCO_REGIONS = frozenset({"cervical", "thoracic", "lumbar", "full"})
-
-VALID_PAIN_TYPES = frozenset({"mechanical", "non_mechanical"})
 
 
 def _validate_region(region: str) -> str:
@@ -57,10 +57,10 @@ def _validate_region(region: str) -> str:
     Raises:
         ValidationError: If region is invalid
     """
-    if region not in VALID_ONCO_REGIONS:
+    if region not in SPINE_REGIONS:
         raise ValidationError(
             f"Invalid region '{region}'. Must be one of: "
-            f"{', '.join(sorted(VALID_ONCO_REGIONS))}",
+            f"{', '.join(sorted(SPINE_REGIONS))}",
             "region",
             region,
         )
@@ -73,7 +73,8 @@ def _validate_pain_type(
     """Validate pain_type parameter for onco-spine workflow.
 
     Args:
-        pain_type: Clinical pain type or None
+        pain_type: Clinical pain type or None. Valid values:
+            "mechanical", "occasional_non_mechanical", "pain_free"
 
     Returns:
         Validated pain_type string or None
@@ -81,10 +82,10 @@ def _validate_pain_type(
     Raises:
         ValidationError: If pain_type is invalid
     """
-    if pain_type is not None and pain_type not in VALID_PAIN_TYPES:
+    if pain_type is not None and pain_type not in SINS_PAIN_SCORES:
         raise ValidationError(
             f"Invalid pain_type '{pain_type}'. Must be one of: "
-            f"{', '.join(sorted(VALID_PAIN_TYPES))}",
+            f"{', '.join(sorted(SINS_PAIN_SCORES))}",
             "pain_type",
             pain_type,
         )
@@ -174,7 +175,11 @@ def workflow_onco_spine(
         steps_completed.append("segment_spine_skipped")
 
     # At this point segmentation_node_id is guaranteed non-None
-    assert segmentation_node_id is not None  # noqa: S101
+    if segmentation_node_id is None:
+        raise RuntimeError(
+            "segmentation_node_id should have been set by "
+            "segment_spine or provided by caller"
+        )
 
     # -- Step 2: Detect metastatic lesions on CT -----------------
     logger.info("workflow_onco_spine: detecting metastatic " "lesions on CT")
@@ -192,7 +197,7 @@ def workflow_onco_spine(
         "segmentation_node_id": segmentation_node_id,
     }
     if pain_type is not None:
-        sins_kwargs["pain_score"] = pain_type
+        sins_kwargs["pain_score"] = SINS_PAIN_SCORES[pain_type]
     sins_result = calculate_sins_score(**sins_kwargs)
     steps_completed.append("calculate_sins_score")
 

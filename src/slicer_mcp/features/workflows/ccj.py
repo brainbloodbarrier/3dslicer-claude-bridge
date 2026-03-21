@@ -25,6 +25,7 @@ from slicer_mcp.features.base_tools import (
     validate_mrml_node_id,
 )
 from slicer_mcp.features.spine.tools import (
+    VALID_POPULATIONS,
     analyze_bone_quality,
     measure_ccj_angles,
     segment_spine,
@@ -34,8 +35,6 @@ from slicer_mcp.features.spine.tools import (
 logger = logging.getLogger("slicer-mcp")
 
 __all__ = ["workflow_ccj_protocol"]
-
-VALID_POPULATIONS = {"adult", "child"}
 
 
 def _validate_population(population: str) -> str:
@@ -140,8 +139,11 @@ def workflow_ccj_protocol(
         steps_completed.append("segment_spine_skipped")
 
     # At this point segmentation_node_id is guaranteed non-None
-    # (either provided by caller or set in step 1)
-    assert segmentation_node_id is not None  # noqa: S101
+    if segmentation_node_id is None:
+        raise RuntimeError(
+            "segmentation_node_id should have been set by "
+            "segment_spine or provided by caller"
+        )
 
     # ── Step 2: Measure CCJ angles ──────────────────────
     logger.info(
