@@ -8,46 +8,24 @@ Replaces individual plan files (archived in `docs/plans/archive/`).
 - **Architecture**: Three layers (server.py → features/ → core/). No rewrites.
 - **Workflow tiers**: Tier 1 = MCP tools (server-side). Tier 2 = Claude commands (LLM-guided). Tier 3 = merge/deprecate.
 - **Tier 1** (implemented): `workflow_onco_spine`, `workflow_ccj_protocol`, `workflow_modic_eval`
-- **Tier 2** (keep as commands, fix docs): spine-eval, fracture-eval, screw-plan, full-spine-workup
-- **Tier 3** (merge/deprecate): construct-compare → merge into screw-plan; instability-protocol → deprecate
+- **Tier 2** (implemented): spine-eval, fracture-eval, screw-plan, full-spine-workup
+- **Tier 3** (done): construct-compare → merged into screw-plan; instability-protocol → deprecated
 - **Discoverability**: `slicer://workflows` resource lists workflow tools for Cursor/MCP clients
+- **Command docs**: `.claude/commands/*.md` — 9 workflow command files committed to repo
 
 ## Pending
 
-### Tier 3 Workflow Cleanup
-
-- [ ] Merge `construct-compare` guidance into `screw-plan.md` command doc
-- [ ] Deprecate `instability-protocol` command doc (landmark UX prerequisite not met)
-
-### Low-Priority Audit Fix
-
-- [ ] `screw-plan.md`: add `region="cervical"` to `analyze_bone_quality()` call
-
-## Blocked
-
-All items below require `.claude/commands/*.md` to be committed to this repo.
-
-### Audit Signature Fixes
-
-**Critical (blocks execution):**
-
-- [ ] `onco-spine.md`: remove `include_sins=true` from `detect_metastatic_lesions_ct()`. SINS is a separate tool.
-- [ ] `fracture-eval.md` + `full-spine-workup.md`: `detect_vertebral_fractures_xray()` missing required `landmarks_per_vertebra`. Add `place_landmarks()` + `get_landmarks()` steps.
-- [ ] `instability-protocol.md` + `full-spine-workup.md`: `measure_listhesis_dynamic_xray()` wrong param structure. Needs `volume_node_ids` (dict), `landmarks_per_position` (dict), `levels` (list).
-
-**High (param rename):**
-
-- [ ] `ccj-protocol.md` + `screw-plan.md`: `segment_vertebral_artery()` uses `volume_node_id` → should be `input_node_id`
-
-**Medium (param rename):**
-
-- [ ] `spine-eval.md`: `measure_spine_alignment()` uses `segmentation_id` → should be `segmentation_node_id`
-
-### Command Doc Validation (B-4)
-
-- [ ] After fixes above: validate all tool calls in all command docs against `features/` signatures
+No pending items at this time. All planned work has been completed.
 
 ## Completed Work
+
+### Command Docs (2026-03-21)
+
+Created all `.claude/commands/*.md` from scratch with correct tool signatures:
+- **Tier 1 refs**: modic-eval, ccj-protocol, onco-spine (point to MCP workflow tools)
+- **Tier 2 guides**: spine-eval, fracture-eval, screw-plan, full-spine-workup
+- **Tier 3**: construct-compare (merged → screw-plan), instability-protocol (deprecated)
+- All 6 audit signature mismatches resolved (correct params from source code)
 
 ### Code Review Fixes (2026-02 to 2026-03)
 
@@ -73,6 +51,7 @@ All items below require `.claude/commands/*.md` to be committed to this repo.
 | B-1 | Merged Dependabot PRs #44, #45 |
 | B-2 | Fixed rendering.py orphan node (Subject Hierarchy parenting) |
 | B-3 | PR #42 closed — TotalSeg subprocess already in canonical files |
+| B-4 | Command doc validation — completed via fresh creation with correct signatures |
 
 ### V2 Restructure + Full Sweep (2026-03)
 
@@ -83,24 +62,13 @@ All items below require `.claude/commands/*.md` to be committed to this repo.
 - `__all__` exports on 14 canonical modules
 - DeprecationWarning on 14 shim files
 - .gitignore, CLAUDE.md, README.md English, CI coverage enforcement
+- Plans consolidated into single PROJECT_STATUS.md
 
-## Reference
-
-### Tool Signatures (for Blocked Fixes)
-
-```python
-detect_metastatic_lesions_ct(volume_node_id, segmentation_node_id=None, region=None, include_posterior_elements=False)
-detect_vertebral_fractures_xray(volume_node_id, landmarks_per_vertebra, magnification_factor=1.0)
-measure_listhesis_dynamic_xray(volume_node_ids, landmarks_per_position, levels, region="lumbar", magnification_factor=1.0)
-segment_vertebral_artery(input_node_id, side=None, seed_points=None)
-measure_spine_alignment(segmentation_node_id, region=None)
-```
-
-### Archived Plans
+## Archived Plans
 
 Detailed historical plans in `docs/plans/archive/`:
 - `2026-02-24-code-review-fixes.md` — 13 code review tasks (all completed)
-- `2026-03-07-path-b-reliability.md` — 4 reliability tasks (3 done, 1 blocked)
+- `2026-03-07-path-b-reliability.md` — 4 reliability tasks (all completed)
 - `2026-03-07-v2-roadmap.md` — v2 strategic direction (achieved)
 - `v2-workflow-surface.md` — workflow tier system and tool signatures
 - `workflow-audit-results.md` — full audit with per-workflow tables
