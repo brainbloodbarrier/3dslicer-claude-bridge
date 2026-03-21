@@ -5,32 +5,29 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![MCP](https://img.shields.io/badge/MCP-compatible-purple.svg)](https://modelcontextprotocol.io)
 
-An MCP (Model Context Protocol) server that bridges Claude to
+An MCP (Model Context Protocol) server that bridges Claude Code and Cursor to
 [3D Slicer](https://www.slicer.org), enabling AI-assisted medical image
 analysis through natural language.
 
 ## Features
 
-- **46 MCP tools** spanning DICOM management, diagnostics (X-ray, CT, MRI),
-  spine surgery planning, volume rendering, and multi-step clinical workflows.
-- **4 MCP resources** for real-time scene inspection (`slicer://scene`,
+- **MCP tools** for diagnostics (X-ray, CT, MRI), spine surgery planning,
+  DICOM management, volume rendering, registration, and clinical workflows.
+- **MCP resources** for real-time scene inspection (`slicer://scene`,
   `slicer://volumes`, `slicer://status`, `slicer://workflows`).
-- **Spine-specific tooling** -- CCJ angles, sagittal/coronal balance,
-  Cobb angle, Pfirrmann grading, Modic classification, SINS scoring,
-  cervical screw planning, vertebral artery segmentation, and bone quality
-  analysis.
+- **Spine-specific tooling** -- CCJ craniometry, sagittal/coronal balance,
+  Cobb angles, Pfirrmann grading, Modic classification, SINS scoring,
+  cervical screw planning, vertebral artery segmentation, bone quality.
 - **Resilience** -- circuit breaker, retry with exponential backoff,
-  configurable timeouts, and graceful degradation.
+  configurable timeouts, graceful degradation.
 - **Security** -- input validation (MRML node IDs, DICOM UIDs, Unicode
-  normalization), audit logging with code hashing, path traversal prevention.
-- **Observability** -- JSON-structured logging, optional Prometheus metrics.
+  normalization), audit logging, path traversal prevention.
 
 ## Prerequisites
 
 - Python 3.10+
-- [3D Slicer](https://www.slicer.org) with the
-  [WebServer extension](https://github.com/Slicer/SlicerWeb) enabled
-- [uv](https://docs.astral.sh/uv/) (recommended) or pip
+- [3D Slicer](https://www.slicer.org) with the WebServer extension enabled
+- [uv](https://docs.astral.sh/uv/)
 
 ## Installation
 
@@ -42,23 +39,14 @@ uv sync
 
 ## Quick Start
 
-1. Open 3D Slicer and start the WebServer from
-   **Modules > Developer Tools > WebServer** (default port `2016`).
-
+1. In 3D Slicer, start **Modules > Developer Tools > WebServer**.
 2. Run the MCP server:
 
-   ```bash
-   uv run slicer-mcp
-   ```
+```bash
+uv run slicer-mcp
+```
 
-3. The server communicates over stdio using the MCP protocol. Point your MCP
-   client (Claude Code, Cursor, etc.) at it -- see
-   [MCP Client Setup](docs/guides/setup-mcp-clients.md) for details.
-
-## MCP Client Configuration
-
-Add the following to your MCP client config (e.g., `~/.claude.json` for
-Claude Code or `~/.cursor/mcp.json` for Cursor):
+3. Configure your MCP client:
 
 ```json
 {
@@ -79,65 +67,42 @@ Claude Code or `~/.cursor/mcp.json` for Cursor):
 }
 ```
 
-## Configuration
+Detailed setup guide: [docs/guides/setup-mcp-clients.md](docs/guides/setup-mcp-clients.md).
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `SLICER_URL` | `http://localhost:2016` | 3D Slicer WebServer URL |
-| `SLICER_TIMEOUT` | `30` | Request timeout in seconds |
+## Structure
 
-## Architecture
-
-```
+```text
 src/slicer_mcp/
-  core/           # Infrastructure: client, circuit breaker, constants, metrics, resources
-  features/       # Tool implementations
-    diagnostics/  # X-ray, CT, MRI diagnostic protocols
-    spine/        # Spine surgery planning and instrumentation
-    workflows/    # Multi-step clinical workflows (e.g., Modic evaluation)
-  server.py       # MCP server entry point and tool registration
+  core/       shared infrastructure (HTTP client, circuit breaker, constants)
+  features/   domain tools (diagnostics, spine, rendering, registration, workflows)
+  server.py   MCP tool and resource registration
+tests/        unit tests and benchmarks
+docs/         guides and plans
 ```
-
-The server registers all tools via `@mcp.tool()` decorators and delegates
-to feature modules. Each tool call is wrapped with centralized error handling
-that maps domain exceptions (`ValidationError`, `CircuitOpenError`,
-`SlicerTimeoutError`, `SlicerConnectionError`) to structured error responses.
-
-Communication with 3D Slicer happens over HTTP to the WebServer extension.
-Python code is executed in Slicer's interpreter via the `/exec` endpoint,
-with input validation and audit logging for security.
-
-## Docker
-
-```bash
-docker compose up
-```
-
-The container expects 3D Slicer to be running on the host. On Docker Desktop,
-`SLICER_URL` defaults to `http://host.docker.internal:2016`.
 
 ## Development
 
 ```bash
-# Install with dev dependencies
-uv sync
-
-# Run tests
-uv run pytest -v
-
-# Lint and format
+uv run pytest -v -m "not integration and not benchmark"
+uv run pytest -v -m integration
 uv run ruff check src tests
-uv run ruff format --check src tests
-
-# Type check
+uv run black --check src tests
 uv run mypy src/
-
-# Pre-commit hooks
-uv run pre-commit install
 uv run pre-commit run --all-files
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the full development guide.
+## Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SLICER_URL` | `http://localhost:2016` | 3D Slicer WebServer endpoint |
+| `SLICER_TIMEOUT` | `30` | HTTP request timeout (seconds) |
+
+## Related Documentation
+
+- [CLAUDE.md](CLAUDE.md)
+- [CONTRIBUTING.md](CONTRIBUTING.md)
+- [docs/guides/setup-mcp-clients.md](docs/guides/setup-mcp-clients.md)
 
 ## License
 

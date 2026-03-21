@@ -362,9 +362,9 @@ class TestPfirrmannGrading:
     def test_descriptions_are_non_empty(self):
         """All descriptions must be non-empty strings."""
         for grade_val, desc in PFIRRMANN_DESCRIPTIONS.items():
-            assert (
-                isinstance(desc, str) and len(desc) > 10
-            ), f"Pfirrmann description for grade {grade_val} is too short"
+            assert isinstance(desc, str) and len(desc) > 10, (
+                f"Pfirrmann description for grade {grade_val} is too short"
+            )
 
 
 # =============================================================================

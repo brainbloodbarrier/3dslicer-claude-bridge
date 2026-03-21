@@ -30,6 +30,17 @@ from slicer_mcp.core.metrics import (
     update_circuit_breaker_state,
 )
 
+__all__ = [
+    "SlicerClient",
+    "SlicerConnectionError",
+    "SlicerTimeoutError",
+    "get_circuit_breaker",
+    "get_client",
+    "reset_circuit_breaker",
+    "reset_client",
+    "with_retry",
+]
+
 # Type variable for generic return type
 T = TypeVar("T")
 

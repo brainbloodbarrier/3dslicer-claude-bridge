@@ -56,6 +56,13 @@ from slicer_mcp.features.spine.constants import (
 )
 from slicer_mcp.features.spine.tools import _build_totalseg_subprocess_block
 
+__all__ = [
+    "assess_disc_degeneration_mri",
+    "classify_modic_changes",
+    "detect_cord_compression_mri",
+    "detect_metastatic_lesions_mri",
+]
+
 logger = logging.getLogger("slicer-mcp")
 
 
@@ -1314,7 +1321,7 @@ def detect_metastatic_lesions_mri(
     valid_regions = VALID_MRI_REGIONS | {"full"}
     if region not in valid_regions:
         raise ValidationError(
-            f"Invalid region '{region}'. " f"Must be one of: {', '.join(sorted(valid_regions))}",
+            f"Invalid region '{region}'. Must be one of: {', '.join(sorted(valid_regions))}",
             "region",
             region,
         )

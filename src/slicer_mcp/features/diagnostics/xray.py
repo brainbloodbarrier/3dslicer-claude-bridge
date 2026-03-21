@@ -43,6 +43,15 @@ from slicer_mcp.features.spine.constants import (
     VERTEBRA_LEVEL_PATTERN,
 )
 
+__all__ = [
+    "classify_disc_degeneration_xray",
+    "measure_cobb_angle_xray",
+    "measure_coronal_balance_xray",
+    "measure_listhesis_dynamic_xray",
+    "measure_sagittal_balance_xray",
+    "detect_vertebral_fractures_xray",
+]
+
 logger = logging.getLogger("slicer-mcp")
 
 # =============================================================================
@@ -780,7 +789,9 @@ def measure_coronal_balance_xray(
             "coronal_cobb_severity": (
                 "mild"
                 if coronal_cobb < CORONAL_COBB_MILD_THRESHOLD_DEG
-                else "moderate" if coronal_cobb < CORONAL_COBB_MODERATE_THRESHOLD_DEG else "severe"
+                else "moderate"
+                if coronal_cobb < CORONAL_COBB_MODERATE_THRESHOLD_DEG
+                else "severe"
             ),
         },
         "magnification_factor": magnification_factor,

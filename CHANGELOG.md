@@ -8,16 +8,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- 46 MCP tools (diagnostics, spine planning, rendering, workflows)
+- 48 MCP tools (diagnostics, spine planning, rendering, workflows)
 - 4 MCP resources (`slicer://scene`, `slicer://volumes`, `slicer://status`, `slicer://workflows`)
 - X-ray diagnostic protocols (sagittal/coronal balance, Cobb angle, fracture detection)
 - CT diagnostic protocols (fractures, osteoporosis, metastases, SINS, listhesis, canal)
 - MRI diagnostic protocols (Modic, Pfirrmann, cord compression, metastases)
 - Spine surgery planning (cervical screws, CCJ angles, alignment, bone quality)
-- Workflow orchestration (Modic evaluation pipeline)
+- Workflow orchestration tools:
+  - `workflow_modic_eval` — MRI-based Modic/Pfirrmann/cord assessment
+  - `workflow_ccj_protocol` — craniocervical junction craniometry + VA + bone quality
+  - `workflow_onco_spine` — oncologic spine assessment (SINS, metastases, stability)
 - Volume rendering and 3D model export tools
 - Registration and landmark tools
 - CI/CD pipeline with GitHub Actions
+- CLAUDE.md project guidance file
+- .gitignore for Python, medical imaging, and IDE artifacts
+- CI coverage enforcement (--cov-fail-under=85)
+
+### Changed
+- README.md restored to English
+- `__all__` exports added to all canonical modules in `core/` and `features/`
+- `slicer://workflows` resource updated: ccj_protocol and onco_spine now "available"
+- Deferred imports in base_tools.py hoisted to top-level
+- Duplicated process cleanup code in spine/tools.py extracted to helper
+- CONTRIBUTING.md updated to reference v2 workflow surface doc
+
+### Deprecated
+- Root-level shim modules (e.g., `slicer_mcp.tools`) now emit DeprecationWarning;
+  use `slicer_mcp.features.*` or `slicer_mcp.core.*` instead
+
+### Fixed
+- `assert` in rendering.py replaced with proper `ValidationError` raise
+- Removed unused `asyncio_mode` config from pyproject.toml (no async tests)
+- Plan docs updated with completion status
 
 ## [0.9.0] - 2024-12-15
 

@@ -81,7 +81,7 @@ Please refer directly to the `CLAUDE.md` file in the root of the project. It is 
 For the current lightweight v2 direction, also check:
 
 - `docs/plans/2026-03-07-v2-roadmap.md`
-- `TODO.md`
+- `docs/plans/v2-workflow-surface.md`
 
 ## Questions?
 

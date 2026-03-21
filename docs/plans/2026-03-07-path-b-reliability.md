@@ -1,5 +1,11 @@
 # Path B: Reliability Hardening — Implementation Plan
 
+**STATUS:**
+- B-1 (Dependabot PRs #44, #45): MERGED (2026-03)
+- B-2 (rendering.py orphan node): FIXED (Subject Hierarchy parenting applied)
+- B-3 (PR #42 TotalSeg port): CLOSED — TotalSeg subprocess code already in canonical files
+- B-4 (command doc validation): PENDING — `.claude/commands/` not yet committed to repo
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Stabilize the existing codebase by porting PR #42's TotalSegmentator changes to the v2 structure, fixing the rendering.py orphan node bug, and merging Dependabot PRs.

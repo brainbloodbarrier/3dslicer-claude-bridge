@@ -41,4 +41,4 @@ General pre-operative spine evaluation. Adapts the pipeline based on available i
 - Start by identifying modalities from `list_scene_nodes()` and adapt the pipeline accordingly. Not all steps apply to every case.
 - X-ray measurements require manual landmark placement first -- prompt the user to place landmarks before calling measurement tools.
 - Reuse the segmentation node from step 2 across all CT and MRI tools to maintain consistency.
-- For region, use: `"cervical"`, `"thoracic"`, `"lumbar"`, or `"full"`.
+- For region, use anatomical labels: `"cervical"`, `"thoracic"`, `"lumbar"`, `"thoracolumbar"`, or `"full"`.

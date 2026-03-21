@@ -162,16 +162,16 @@ class TestWorkflowCcjProtocolHappyPath:
     """Test happy-path execution of workflow_ccj_protocol."""
 
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".capture_screenshot",
+        "slicer_mcp.features.workflows.ccj.capture_screenshot",
     )
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".analyze_bone_quality",
+        "slicer_mcp.features.workflows.ccj.analyze_bone_quality",
     )
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".measure_ccj_angles",
+        "slicer_mcp.features.workflows.ccj.measure_ccj_angles",
     )
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".segment_spine",
+        "slicer_mcp.features.workflows.ccj.segment_spine",
     )
     def test_full_pipeline(
         self,
@@ -225,16 +225,16 @@ class TestWorkflowCcjProtocolHappyPath:
         )
 
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".capture_screenshot",
+        "slicer_mcp.features.workflows.ccj.capture_screenshot",
     )
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".analyze_bone_quality",
+        "slicer_mcp.features.workflows.ccj.analyze_bone_quality",
     )
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".measure_ccj_angles",
+        "slicer_mcp.features.workflows.ccj.measure_ccj_angles",
     )
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".segment_spine",
+        "slicer_mcp.features.workflows.ccj.segment_spine",
     )
     def test_existing_segmentation_skips_segment_spine(
         self,
@@ -260,19 +260,19 @@ class TestWorkflowCcjProtocolHappyPath:
         assert "segment_spine" not in result["steps_completed"]
 
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".capture_screenshot",
+        "slicer_mcp.features.workflows.ccj.capture_screenshot",
     )
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".analyze_bone_quality",
+        "slicer_mcp.features.workflows.ccj.analyze_bone_quality",
     )
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".segment_vertebral_artery",
+        "slicer_mcp.features.workflows.ccj.segment_vertebral_artery",
     )
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".measure_ccj_angles",
+        "slicer_mcp.features.workflows.ccj.measure_ccj_angles",
     )
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".segment_spine",
+        "slicer_mcp.features.workflows.ccj.segment_spine",
     )
     def test_with_cta_includes_va_segmentation(
         self,
@@ -302,13 +302,13 @@ class TestWorkflowCcjProtocolHappyPath:
         )
 
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".capture_screenshot",
+        "slicer_mcp.features.workflows.ccj.capture_screenshot",
     )
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".measure_ccj_angles",
+        "slicer_mcp.features.workflows.ccj.measure_ccj_angles",
     )
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".segment_spine",
+        "slicer_mcp.features.workflows.ccj.segment_spine",
     )
     def test_without_cta_no_va_segmentation(
         self,
@@ -330,16 +330,16 @@ class TestWorkflowCcjProtocolHappyPath:
         assert "segment_vertebral_artery" not in result["steps_completed"]
 
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".capture_screenshot",
+        "slicer_mcp.features.workflows.ccj.capture_screenshot",
     )
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".analyze_bone_quality",
+        "slicer_mcp.features.workflows.ccj.analyze_bone_quality",
     )
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".measure_ccj_angles",
+        "slicer_mcp.features.workflows.ccj.measure_ccj_angles",
     )
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".segment_spine",
+        "slicer_mcp.features.workflows.ccj.segment_spine",
     )
     def test_bone_quality_enabled_by_default(
         self,
@@ -363,13 +363,13 @@ class TestWorkflowCcjProtocolHappyPath:
         mock_bone.assert_called_once()
 
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".capture_screenshot",
+        "slicer_mcp.features.workflows.ccj.capture_screenshot",
     )
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".measure_ccj_angles",
+        "slicer_mcp.features.workflows.ccj.measure_ccj_angles",
     )
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".segment_spine",
+        "slicer_mcp.features.workflows.ccj.segment_spine",
     )
     def test_bone_quality_disabled(
         self,
@@ -391,13 +391,13 @@ class TestWorkflowCcjProtocolHappyPath:
         assert "analyze_bone_quality" not in result["steps_completed"]
 
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".capture_screenshot",
+        "slicer_mcp.features.workflows.ccj.capture_screenshot",
     )
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".measure_ccj_angles",
+        "slicer_mcp.features.workflows.ccj.measure_ccj_angles",
     )
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".segment_spine",
+        "slicer_mcp.features.workflows.ccj.segment_spine",
     )
     def test_child_population(
         self,
@@ -432,7 +432,7 @@ class TestWorkflowCcjProtocolErrors:
     """Test error propagation from underlying tools."""
 
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".segment_spine",
+        "slicer_mcp.features.workflows.ccj.segment_spine",
     )
     def test_segment_spine_error_propagates(self, mock_segment):
         """SlicerConnectionError from segment_spine propagates."""
@@ -444,10 +444,10 @@ class TestWorkflowCcjProtocolErrors:
             )
 
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".measure_ccj_angles",
+        "slicer_mcp.features.workflows.ccj.measure_ccj_angles",
     )
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".segment_spine",
+        "slicer_mcp.features.workflows.ccj.segment_spine",
     )
     def test_ccj_angles_error_propagates(self, mock_segment, mock_ccj):
         """SlicerConnectionError from measure_ccj_angles propagates."""
@@ -462,13 +462,13 @@ class TestWorkflowCcjProtocolErrors:
             )
 
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".segment_vertebral_artery",
+        "slicer_mcp.features.workflows.ccj.segment_vertebral_artery",
     )
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".measure_ccj_angles",
+        "slicer_mcp.features.workflows.ccj.measure_ccj_angles",
     )
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".segment_spine",
+        "slicer_mcp.features.workflows.ccj.segment_spine",
     )
     def test_va_segmentation_error_propagates(self, mock_segment, mock_ccj, mock_va):
         """SlicerConnectionError from VA segmentation propagates."""
@@ -485,13 +485,13 @@ class TestWorkflowCcjProtocolErrors:
             )
 
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".analyze_bone_quality",
+        "slicer_mcp.features.workflows.ccj.analyze_bone_quality",
     )
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".measure_ccj_angles",
+        "slicer_mcp.features.workflows.ccj.measure_ccj_angles",
     )
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".segment_spine",
+        "slicer_mcp.features.workflows.ccj.segment_spine",
     )
     def test_bone_quality_error_propagates(self, mock_segment, mock_ccj, mock_bone):
         """SlicerConnectionError from bone quality propagates."""
@@ -507,16 +507,16 @@ class TestWorkflowCcjProtocolErrors:
             )
 
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".capture_screenshot",
+        "slicer_mcp.features.workflows.ccj.capture_screenshot",
     )
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".analyze_bone_quality",
+        "slicer_mcp.features.workflows.ccj.analyze_bone_quality",
     )
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".measure_ccj_angles",
+        "slicer_mcp.features.workflows.ccj.measure_ccj_angles",
     )
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".segment_spine",
+        "slicer_mcp.features.workflows.ccj.segment_spine",
     )
     def test_screenshot_failure_is_nonfatal(
         self,
@@ -542,16 +542,16 @@ class TestWorkflowCcjProtocolErrors:
         assert "capture_screenshot" not in result["steps_completed"]
 
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".capture_screenshot",
+        "slicer_mcp.features.workflows.ccj.capture_screenshot",
     )
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".analyze_bone_quality",
+        "slicer_mcp.features.workflows.ccj.analyze_bone_quality",
     )
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".measure_ccj_angles",
+        "slicer_mcp.features.workflows.ccj.measure_ccj_angles",
     )
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".segment_spine",
+        "slicer_mcp.features.workflows.ccj.segment_spine",
     )
     def test_screenshot_value_error_is_nonfatal(
         self,
@@ -576,16 +576,16 @@ class TestWorkflowCcjProtocolErrors:
         assert len(result["screenshots"]) == 0
 
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".capture_screenshot",
+        "slicer_mcp.features.workflows.ccj.capture_screenshot",
     )
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".analyze_bone_quality",
+        "slicer_mcp.features.workflows.ccj.analyze_bone_quality",
     )
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".measure_ccj_angles",
+        "slicer_mcp.features.workflows.ccj.measure_ccj_angles",
     )
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".segment_spine",
+        "slicer_mcp.features.workflows.ccj.segment_spine",
     )
     def test_screenshot_timeout_is_nonfatal(
         self,
@@ -609,16 +609,16 @@ class TestWorkflowCcjProtocolErrors:
         assert "capture_screenshot" not in result["steps_completed"]
 
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".capture_screenshot",
+        "slicer_mcp.features.workflows.ccj.capture_screenshot",
     )
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".analyze_bone_quality",
+        "slicer_mcp.features.workflows.ccj.analyze_bone_quality",
     )
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".measure_ccj_angles",
+        "slicer_mcp.features.workflows.ccj.measure_ccj_angles",
     )
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".segment_spine",
+        "slicer_mcp.features.workflows.ccj.segment_spine",
     )
     def test_screenshot_circuit_open_is_nonfatal(
         self,
@@ -646,7 +646,7 @@ class TestWorkflowCcjProtocolErrors:
         assert "capture_screenshot" not in result["steps_completed"]
 
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".measure_ccj_angles",
+        "slicer_mcp.features.workflows.ccj.measure_ccj_angles",
     )
     def test_validation_error_from_tool_propagates(self, mock_ccj):
         """ValidationError raised inside a tool propagates."""
@@ -672,16 +672,16 @@ class TestWorkflowCcjProtocolResultStructure:
     """Test that the result dict has expected keys."""
 
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".capture_screenshot",
+        "slicer_mcp.features.workflows.ccj.capture_screenshot",
     )
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".analyze_bone_quality",
+        "slicer_mcp.features.workflows.ccj.analyze_bone_quality",
     )
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".measure_ccj_angles",
+        "slicer_mcp.features.workflows.ccj.measure_ccj_angles",
     )
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".segment_spine",
+        "slicer_mcp.features.workflows.ccj.segment_spine",
     )
     def test_result_has_all_expected_keys(
         self,
@@ -712,16 +712,16 @@ class TestWorkflowCcjProtocolResultStructure:
         assert set(result.keys()) == expected_keys
 
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".capture_screenshot",
+        "slicer_mcp.features.workflows.ccj.capture_screenshot",
     )
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".analyze_bone_quality",
+        "slicer_mcp.features.workflows.ccj.analyze_bone_quality",
     )
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".measure_ccj_angles",
+        "slicer_mcp.features.workflows.ccj.measure_ccj_angles",
     )
     @patch(
-        "slicer_mcp.features.workflows.ccj" ".segment_spine",
+        "slicer_mcp.features.workflows.ccj.segment_spine",
     )
     def test_default_population_is_adult(
         self,

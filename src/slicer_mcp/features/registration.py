@@ -22,6 +22,16 @@ from slicer_mcp.features.base_tools import (
     validate_mrml_node_id,
 )
 
+__all__ = [
+    "apply_transform",
+    "get_landmarks",
+    "place_landmarks",
+    "register_landmarks",
+    "register_volumes",
+    "validate_landmark_label",
+    "validate_points",
+]
+
 logger = logging.getLogger("slicer-mcp")
 
 # Compiled pattern for landmark labels
@@ -106,7 +116,7 @@ def validate_points(points: list[list[float]]) -> list[list[float]]:
         for j, coord in enumerate(point):
             if not isinstance(coord, (int, float)):
                 raise ValidationError(
-                    f"Coordinate {j} of point {i} must be numeric, " f"got {type(coord).__name__}",
+                    f"Coordinate {j} of point {i} must be numeric, got {type(coord).__name__}",
                     "points",
                     str(coord)[:50],
                 )
@@ -619,9 +629,7 @@ def register_volumes(
         return result
 
     except Exception:
-        logger.error(
-            f"Volume registration failed: fixed={fixed_node_id}, " f"moving={moving_node_id}"
-        )
+        logger.error(f"Volume registration failed: fixed={fixed_node_id}, moving={moving_node_id}")
         raise
 
 
@@ -720,8 +728,7 @@ def apply_transform(
         result = _parse_json_result(exec_result.get("result", ""), "apply transform")
 
         logger.info(
-            f"Transform applied: node={node_id}, transform={transform_node_id}, "
-            f"hardened={harden}"
+            f"Transform applied: node={node_id}, transform={transform_node_id}, hardened={harden}"
         )
 
         return result

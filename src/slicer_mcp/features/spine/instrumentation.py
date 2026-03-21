@@ -43,6 +43,10 @@ from slicer_mcp.features.spine.constants import (
     VALID_SIDES,
 )
 
+__all__ = [
+    "plan_cervical_screws",
+]
+
 logger = logging.getLogger("slicer-mcp")
 
 
@@ -163,7 +167,7 @@ def _validate_variant(variant: str | None, technique: str) -> str | None:
     variant = variant.lower().strip()
     if technique != "lateral_mass":
         raise ValidationError(
-            f"Variant parameter only applies to 'lateral_mass' technique, " f"not '{technique}'",
+            f"Variant parameter only applies to 'lateral_mass' technique, not '{technique}'",
             "variant",
             variant or "magerl",
         )
@@ -481,8 +485,8 @@ side = {safe_side}
 va_node_id = {safe_va_id}
 screw_diameter = {screw_diameter}
 screw_length = {screw_length}
-medial_deg = {angulation['medial_deg']}
-caudal_deg = {angulation['caudal_deg']}
+medial_deg = {angulation["medial_deg"]}
+caudal_deg = {angulation["caudal_deg"]}
 
 seg_node = slicer.mrmlScene.GetNodeByID(seg_node_id)
 if not seg_node:
@@ -737,8 +741,8 @@ side = {safe_side}
 va_node_id = {safe_va_id}
 screw_diameter = {screw_diameter}
 screw_length = {screw_length}
-medial_deg = {angulation['medial_deg']}
-cephalad_deg = {angulation['cephalad_deg']}
+medial_deg = {angulation["medial_deg"]}
+cephalad_deg = {angulation["cephalad_deg"]}
 isthmus_min_height = {ISTHMUS_MIN_HEIGHT_MM}
 isthmus_min_width = {ISTHMUS_MIN_WIDTH_MM}
 va_safety_dist = {VA_SAFETY_DISTANCE_MM}
@@ -899,8 +903,8 @@ side = {safe_side}
 va_node_id = {safe_va_id}
 screw_diameter = {screw_diameter}
 screw_length = {screw_length}
-medial_deg = {angulation['medial_deg']}
-caudal_deg = {angulation['caudal_deg']}
+medial_deg = {angulation["medial_deg"]}
+caudal_deg = {angulation["caudal_deg"]}
 
 seg_node = slicer.mrmlScene.GetNodeByID(seg_node_id)
 if not seg_node:
@@ -1015,8 +1019,8 @@ side = {safe_side}
 va_node_id = {safe_va_id}
 screw_diameter = {screw_diameter}
 screw_length = {screw_length}
-medial_deg = {angulation['medial_deg']}
-cephalad_deg = {angulation['cephalad_deg']}
+medial_deg = {angulation["medial_deg"]}
+cephalad_deg = {angulation["cephalad_deg"]}
 
 seg_node = slicer.mrmlScene.GetNodeByID(seg_node_id)
 if not seg_node:
@@ -1601,8 +1605,7 @@ def plan_cervical_screws(
         )
 
         logger.info(
-            f"Cervical screw planning completed: technique={technique}, "
-            f"level={level}, side={side}"
+            f"Cervical screw planning completed: technique={technique}, level={level}, side={side}"
         )
 
         return result_data

@@ -784,8 +784,9 @@ class TestDetectMetastaticLesionsMri:
 
             assert result["suspicious_lesions"][0]["lesion_type"] == "blastic"
             assert result["posterior_element_involvement"] is True
-            assert "posterior_element_involvement" in (
-                result["suspicious_lesions"][0]["fracture_features"]
+            assert (
+                "posterior_element_involvement"
+                in (result["suspicious_lesions"][0]["fracture_features"])
             )
 
     def test_mixed_lesion_detection(self):
