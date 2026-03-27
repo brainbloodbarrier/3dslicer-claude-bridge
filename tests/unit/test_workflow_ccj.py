@@ -1,5 +1,6 @@
 """Unit tests for the workflow_ccj_protocol workflow tool."""
 
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -23,25 +24,14 @@ from slicer_mcp.features.workflows.ccj import (
 class TestValidatePopulation:
     """Test population parameter validation for CCJ workflow."""
 
-    def test_valid_adult(self):
-        assert _validate_population("adult") == "adult"
+    @pytest.mark.parametrize("population", ["adult", "child"])
+    def test_valid_populations(self, population):
+        assert _validate_population(population) == population
 
-    def test_valid_child(self):
-        assert _validate_population("child") == "child"
-
-    def test_invalid_infant(self):
+    @pytest.mark.parametrize("population", ["infant", "", "elderly", "ADULT"])
+    def test_invalid_populations(self, population):
         with pytest.raises(ValidationError) as exc_info:
-            _validate_population("infant")
-        assert exc_info.value.field == "population"
-
-    def test_invalid_empty(self):
-        with pytest.raises(ValidationError) as exc_info:
-            _validate_population("")
-        assert exc_info.value.field == "population"
-
-    def test_invalid_arbitrary(self):
-        with pytest.raises(ValidationError) as exc_info:
-            _validate_population("elderly")
+            _validate_population(population)
         assert exc_info.value.field == "population"
 
 
@@ -92,6 +82,30 @@ MOCK_SCREENSHOT_RESULT = {
     "view_type": "sagittal",
 }
 
+_PATCH_PREFIX = "slicer_mcp.features.workflows.ccj"
+
+
+@pytest.fixture()
+def ccj_mocks():
+    """Patch all CCJ pipeline tools and return mocks in a namespace."""
+    with (
+        patch(f"{_PATCH_PREFIX}.segment_spine") as m_segment,
+        patch(f"{_PATCH_PREFIX}.measure_ccj_angles") as m_ccj,
+        patch(f"{_PATCH_PREFIX}.analyze_bone_quality") as m_bone,
+        patch(f"{_PATCH_PREFIX}.capture_screenshot") as m_screenshot,
+    ):
+        m_segment.return_value = MOCK_SEGMENT_RESULT
+        m_ccj.return_value = MOCK_CCJ_RESULT
+        m_bone.return_value = MOCK_BONE_RESULT
+        m_screenshot.return_value = MOCK_SCREENSHOT_RESULT
+
+        yield SimpleNamespace(
+            segment=m_segment,
+            ccj=m_ccj,
+            bone=m_bone,
+            screenshot=m_screenshot,
+        )
+
 
 # =============================================================================
 # Input Validation Tests
@@ -101,56 +115,48 @@ MOCK_SCREENSHOT_RESULT = {
 class TestWorkflowCcjProtocolValidation:
     """Test input validation for workflow_ccj_protocol."""
 
-    def test_invalid_ct_node_id(self):
-        """Invalid CT node ID raises ValidationError."""
+    @pytest.mark.parametrize(
+        "kwargs, field",
+        [
+            ({"ct_volume_id": "1invalid"}, "node_id"),
+            (
+                {
+                    "ct_volume_id": "vtkMRMLScalarVolumeNode1",
+                    "segmentation_node_id": "123bad",
+                },
+                "node_id",
+            ),
+            (
+                {
+                    "ct_volume_id": "vtkMRMLScalarVolumeNode1",
+                    "cta_volume_id": "DROP TABLE",
+                },
+                "node_id",
+            ),
+            (
+                {
+                    "ct_volume_id": "vtkMRMLScalarVolumeNode1",
+                    "population": "infant",
+                },
+                "population",
+            ),
+            (
+                {
+                    "ct_volume_id": "vtkMRMLScalarVolumeNode1",
+                    "population": "elderly",
+                },
+                "population",
+            ),
+        ],
+    )
+    def test_invalid_inputs(self, kwargs, field):
         with pytest.raises(ValidationError) as exc_info:
-            workflow_ccj_protocol(
-                ct_volume_id="1invalid",
-            )
-        assert exc_info.value.field == "node_id"
-
-    def test_invalid_segmentation_node_id(self):
-        """Invalid segmentation node ID raises ValidationError."""
-        with pytest.raises(ValidationError) as exc_info:
-            workflow_ccj_protocol(
-                ct_volume_id="vtkMRMLScalarVolumeNode1",
-                segmentation_node_id="123bad",
-            )
-        assert exc_info.value.field == "node_id"
-
-    def test_invalid_cta_node_id(self):
-        """Invalid CTA node ID raises ValidationError."""
-        with pytest.raises(ValidationError) as exc_info:
-            workflow_ccj_protocol(
-                ct_volume_id="vtkMRMLScalarVolumeNode1",
-                cta_volume_id="DROP TABLE",
-            )
-        assert exc_info.value.field == "node_id"
-
-    def test_invalid_population(self):
-        """Invalid population raises ValidationError."""
-        with pytest.raises(ValidationError) as exc_info:
-            workflow_ccj_protocol(
-                ct_volume_id="vtkMRMLScalarVolumeNode1",
-                population="infant",
-            )
-        assert exc_info.value.field == "population"
+            workflow_ccj_protocol(**kwargs)
+        assert exc_info.value.field == field
 
     def test_empty_ct_node_id(self):
-        """Empty CT node ID raises ValidationError."""
         with pytest.raises(ValidationError):
-            workflow_ccj_protocol(
-                ct_volume_id="",
-            )
-
-    def test_population_elderly_rejected(self):
-        """Population 'elderly' is not valid."""
-        with pytest.raises(ValidationError) as exc_info:
-            workflow_ccj_protocol(
-                ct_volume_id="vtkMRMLScalarVolumeNode1",
-                population="elderly",
-            )
-        assert exc_info.value.field == "population"
+            workflow_ccj_protocol(ct_volume_id="")
 
 
 # =============================================================================
@@ -161,34 +167,9 @@ class TestWorkflowCcjProtocolValidation:
 class TestWorkflowCcjProtocolHappyPath:
     """Test happy-path execution of workflow_ccj_protocol."""
 
-    @patch(
-        "slicer_mcp.features.workflows.ccj.capture_screenshot",
-    )
-    @patch(
-        "slicer_mcp.features.workflows.ccj.analyze_bone_quality",
-    )
-    @patch(
-        "slicer_mcp.features.workflows.ccj.measure_ccj_angles",
-    )
-    @patch(
-        "slicer_mcp.features.workflows.ccj.segment_spine",
-    )
-    def test_full_pipeline(
-        self,
-        mock_segment,
-        mock_ccj,
-        mock_bone,
-        mock_screenshot,
-    ):
+    def test_full_pipeline(self, ccj_mocks):
         """Full pipeline with segmentation."""
-        mock_segment.return_value = MOCK_SEGMENT_RESULT
-        mock_ccj.return_value = MOCK_CCJ_RESULT
-        mock_bone.return_value = MOCK_BONE_RESULT
-        mock_screenshot.return_value = MOCK_SCREENSHOT_RESULT
-
-        result = workflow_ccj_protocol(
-            ct_volume_id="vtkMRMLScalarVolumeNode1",
-        )
+        result = workflow_ccj_protocol(ct_volume_id="vtkMRMLScalarVolumeNode1")
 
         assert result["segmentation_node_id"] == "vtkMRMLSegmentationNode1"
         assert result["ccj_angles"] == MOCK_CCJ_RESULT
@@ -196,131 +177,60 @@ class TestWorkflowCcjProtocolHappyPath:
         assert result["bone_quality"] == MOCK_BONE_RESULT
         assert result["population"] == "adult"
         assert len(result["screenshots"]) == 1
-        assert "segment_spine" in result["steps_completed"]
-        assert "measure_ccj_angles" in result["steps_completed"]
-        assert "analyze_bone_quality" in result["steps_completed"]
-        assert "capture_screenshot" in result["steps_completed"]
-        # VA should NOT be run without CTA
+
+        expected_steps = {
+            "segment_spine",
+            "measure_ccj_angles",
+            "analyze_bone_quality",
+            "capture_screenshot",
+        }
+        assert expected_steps.issubset(set(result["steps_completed"]))
         assert "segment_vertebral_artery" not in result["steps_completed"]
 
-        # Verify segment_spine called correctly
-        mock_segment.assert_called_once_with(
+        ccj_mocks.segment.assert_called_once_with(
             input_node_id="vtkMRMLScalarVolumeNode1",
             region="cervical",
             include_discs=False,
             include_spinal_cord=False,
         )
-
-        # Verify CCJ angles called correctly
-        mock_ccj.assert_called_once_with(
-            segmentation_node_id=("vtkMRMLSegmentationNode1"),
+        ccj_mocks.ccj.assert_called_once_with(
+            segmentation_node_id="vtkMRMLSegmentationNode1",
             population="adult",
         )
-
-        # Verify bone quality called correctly
-        mock_bone.assert_called_once_with(
+        ccj_mocks.bone.assert_called_once_with(
             input_node_id="vtkMRMLScalarVolumeNode1",
-            segmentation_node_id=("vtkMRMLSegmentationNode1"),
+            segmentation_node_id="vtkMRMLSegmentationNode1",
             region="cervical",
         )
 
-    @patch(
-        "slicer_mcp.features.workflows.ccj.capture_screenshot",
-    )
-    @patch(
-        "slicer_mcp.features.workflows.ccj.analyze_bone_quality",
-    )
-    @patch(
-        "slicer_mcp.features.workflows.ccj.measure_ccj_angles",
-    )
-    @patch(
-        "slicer_mcp.features.workflows.ccj.segment_spine",
-    )
-    def test_existing_segmentation_skips_segment_spine(
-        self,
-        mock_segment,
-        mock_ccj,
-        mock_bone,
-        mock_screenshot,
-    ):
+    def test_existing_segmentation_skips_segment_spine(self, ccj_mocks):
         """Existing segmentation skips segment_spine."""
-        mock_ccj.return_value = MOCK_CCJ_RESULT
-        mock_bone.return_value = MOCK_BONE_RESULT
-        mock_screenshot.return_value = MOCK_SCREENSHOT_RESULT
-
         result = workflow_ccj_protocol(
             ct_volume_id="vtkMRMLScalarVolumeNode1",
-            segmentation_node_id=("vtkMRMLSegmentationNode5"),
+            segmentation_node_id="vtkMRMLSegmentationNode5",
         )
 
-        # segment_spine should NOT have been called
-        mock_segment.assert_not_called()
+        ccj_mocks.segment.assert_not_called()
         assert result["segmentation_node_id"] == "vtkMRMLSegmentationNode5"
         assert "segment_spine_skipped" in result["steps_completed"]
         assert "segment_spine" not in result["steps_completed"]
 
-    @patch(
-        "slicer_mcp.features.workflows.ccj.capture_screenshot",
-    )
-    @patch(
-        "slicer_mcp.features.workflows.ccj.analyze_bone_quality",
-    )
-    @patch(
-        "slicer_mcp.features.workflows.ccj.segment_vertebral_artery",
-    )
-    @patch(
-        "slicer_mcp.features.workflows.ccj.measure_ccj_angles",
-    )
-    @patch(
-        "slicer_mcp.features.workflows.ccj.segment_spine",
-    )
-    def test_with_cta_includes_va_segmentation(
-        self,
-        mock_segment,
-        mock_ccj,
-        mock_va,
-        mock_bone,
-        mock_screenshot,
-    ):
+    def test_with_cta_includes_va_segmentation(self, ccj_mocks):
         """CTA volume triggers vertebral artery segmentation."""
-        mock_segment.return_value = MOCK_SEGMENT_RESULT
-        mock_ccj.return_value = MOCK_CCJ_RESULT
-        mock_va.return_value = MOCK_VA_RESULT
-        mock_bone.return_value = MOCK_BONE_RESULT
-        mock_screenshot.return_value = MOCK_SCREENSHOT_RESULT
+        with patch(f"{_PATCH_PREFIX}.segment_vertebral_artery") as m_va:
+            m_va.return_value = MOCK_VA_RESULT
 
-        result = workflow_ccj_protocol(
-            ct_volume_id="vtkMRMLScalarVolumeNode1",
-            cta_volume_id="vtkMRMLScalarVolumeNode2",
-        )
+            result = workflow_ccj_protocol(
+                ct_volume_id="vtkMRMLScalarVolumeNode1",
+                cta_volume_id="vtkMRMLScalarVolumeNode2",
+            )
 
-        assert result["vertebral_artery"] == MOCK_VA_RESULT
-        assert "segment_vertebral_artery" in result["steps_completed"]
+            assert result["vertebral_artery"] == MOCK_VA_RESULT
+            assert "segment_vertebral_artery" in result["steps_completed"]
+            m_va.assert_called_once_with(input_node_id="vtkMRMLScalarVolumeNode2")
 
-        mock_va.assert_called_once_with(
-            input_node_id="vtkMRMLScalarVolumeNode2",
-        )
-
-    @patch(
-        "slicer_mcp.features.workflows.ccj.capture_screenshot",
-    )
-    @patch(
-        "slicer_mcp.features.workflows.ccj.measure_ccj_angles",
-    )
-    @patch(
-        "slicer_mcp.features.workflows.ccj.segment_spine",
-    )
-    def test_without_cta_no_va_segmentation(
-        self,
-        mock_segment,
-        mock_ccj,
-        mock_screenshot,
-    ):
+    def test_without_cta_no_va_segmentation(self, ccj_mocks):
         """No CTA volume means no VA segmentation."""
-        mock_segment.return_value = MOCK_SEGMENT_RESULT
-        mock_ccj.return_value = MOCK_CCJ_RESULT
-        mock_screenshot.return_value = MOCK_SCREENSHOT_RESULT
-
         result = workflow_ccj_protocol(
             ct_volume_id="vtkMRMLScalarVolumeNode1",
             include_bone_quality=False,
@@ -329,59 +239,16 @@ class TestWorkflowCcjProtocolHappyPath:
         assert result["vertebral_artery"] is None
         assert "segment_vertebral_artery" not in result["steps_completed"]
 
-    @patch(
-        "slicer_mcp.features.workflows.ccj.capture_screenshot",
-    )
-    @patch(
-        "slicer_mcp.features.workflows.ccj.analyze_bone_quality",
-    )
-    @patch(
-        "slicer_mcp.features.workflows.ccj.measure_ccj_angles",
-    )
-    @patch(
-        "slicer_mcp.features.workflows.ccj.segment_spine",
-    )
-    def test_bone_quality_enabled_by_default(
-        self,
-        mock_segment,
-        mock_ccj,
-        mock_bone,
-        mock_screenshot,
-    ):
+    def test_bone_quality_enabled_by_default(self, ccj_mocks):
         """Bone quality analysis runs by default."""
-        mock_segment.return_value = MOCK_SEGMENT_RESULT
-        mock_ccj.return_value = MOCK_CCJ_RESULT
-        mock_bone.return_value = MOCK_BONE_RESULT
-        mock_screenshot.return_value = MOCK_SCREENSHOT_RESULT
-
-        result = workflow_ccj_protocol(
-            ct_volume_id="vtkMRMLScalarVolumeNode1",
-        )
+        result = workflow_ccj_protocol(ct_volume_id="vtkMRMLScalarVolumeNode1")
 
         assert result["bone_quality"] == MOCK_BONE_RESULT
         assert "analyze_bone_quality" in result["steps_completed"]
-        mock_bone.assert_called_once()
+        ccj_mocks.bone.assert_called_once()
 
-    @patch(
-        "slicer_mcp.features.workflows.ccj.capture_screenshot",
-    )
-    @patch(
-        "slicer_mcp.features.workflows.ccj.measure_ccj_angles",
-    )
-    @patch(
-        "slicer_mcp.features.workflows.ccj.segment_spine",
-    )
-    def test_bone_quality_disabled(
-        self,
-        mock_segment,
-        mock_ccj,
-        mock_screenshot,
-    ):
+    def test_bone_quality_disabled(self, ccj_mocks):
         """Bone quality analysis can be disabled."""
-        mock_segment.return_value = MOCK_SEGMENT_RESULT
-        mock_ccj.return_value = MOCK_CCJ_RESULT
-        mock_screenshot.return_value = MOCK_SCREENSHOT_RESULT
-
         result = workflow_ccj_protocol(
             ct_volume_id="vtkMRMLScalarVolumeNode1",
             include_bone_quality=False,
@@ -390,26 +257,8 @@ class TestWorkflowCcjProtocolHappyPath:
         assert result["bone_quality"] is None
         assert "analyze_bone_quality" not in result["steps_completed"]
 
-    @patch(
-        "slicer_mcp.features.workflows.ccj.capture_screenshot",
-    )
-    @patch(
-        "slicer_mcp.features.workflows.ccj.measure_ccj_angles",
-    )
-    @patch(
-        "slicer_mcp.features.workflows.ccj.segment_spine",
-    )
-    def test_child_population(
-        self,
-        mock_segment,
-        mock_ccj,
-        mock_screenshot,
-    ):
+    def test_child_population(self, ccj_mocks):
         """Child population is passed through."""
-        mock_segment.return_value = MOCK_SEGMENT_RESULT
-        mock_ccj.return_value = MOCK_CCJ_RESULT
-        mock_screenshot.return_value = MOCK_SCREENSHOT_RESULT
-
         result = workflow_ccj_protocol(
             ct_volume_id="vtkMRMLScalarVolumeNode1",
             population="child",
@@ -417,8 +266,8 @@ class TestWorkflowCcjProtocolHappyPath:
         )
 
         assert result["population"] == "child"
-        mock_ccj.assert_called_once_with(
-            segmentation_node_id=("vtkMRMLSegmentationNode1"),
+        ccj_mocks.ccj.assert_called_once_with(
+            segmentation_node_id="vtkMRMLSegmentationNode1",
             population="child",
         )
 
@@ -431,235 +280,71 @@ class TestWorkflowCcjProtocolHappyPath:
 class TestWorkflowCcjProtocolErrors:
     """Test error propagation from underlying tools."""
 
-    @patch(
-        "slicer_mcp.features.workflows.ccj.segment_spine",
-    )
+    @patch(f"{_PATCH_PREFIX}.segment_spine")
     def test_segment_spine_error_propagates(self, mock_segment):
-        """SlicerConnectionError from segment_spine propagates."""
         mock_segment.side_effect = SlicerConnectionError("Slicer not responding")
-
         with pytest.raises(SlicerConnectionError):
-            workflow_ccj_protocol(
-                ct_volume_id="vtkMRMLScalarVolumeNode1",
-            )
+            workflow_ccj_protocol(ct_volume_id="vtkMRMLScalarVolumeNode1")
 
-    @patch(
-        "slicer_mcp.features.workflows.ccj.measure_ccj_angles",
-    )
-    @patch(
-        "slicer_mcp.features.workflows.ccj.segment_spine",
-    )
+    @patch(f"{_PATCH_PREFIX}.measure_ccj_angles")
+    @patch(f"{_PATCH_PREFIX}.segment_spine")
     def test_ccj_angles_error_propagates(self, mock_segment, mock_ccj):
-        """SlicerConnectionError from measure_ccj_angles propagates."""
         mock_segment.return_value = MOCK_SEGMENT_RESULT
-        mock_ccj.side_effect = SlicerConnectionError(
-            "CCJ analysis failed",
-        )
-
+        mock_ccj.side_effect = SlicerConnectionError("CCJ analysis failed")
         with pytest.raises(SlicerConnectionError):
-            workflow_ccj_protocol(
-                ct_volume_id="vtkMRMLScalarVolumeNode1",
-            )
+            workflow_ccj_protocol(ct_volume_id="vtkMRMLScalarVolumeNode1")
 
-    @patch(
-        "slicer_mcp.features.workflows.ccj.segment_vertebral_artery",
-    )
-    @patch(
-        "slicer_mcp.features.workflows.ccj.measure_ccj_angles",
-    )
-    @patch(
-        "slicer_mcp.features.workflows.ccj.segment_spine",
-    )
+    @patch(f"{_PATCH_PREFIX}.segment_vertebral_artery")
+    @patch(f"{_PATCH_PREFIX}.measure_ccj_angles")
+    @patch(f"{_PATCH_PREFIX}.segment_spine")
     def test_va_segmentation_error_propagates(self, mock_segment, mock_ccj, mock_va):
-        """SlicerConnectionError from VA segmentation propagates."""
         mock_segment.return_value = MOCK_SEGMENT_RESULT
         mock_ccj.return_value = MOCK_CCJ_RESULT
-        mock_va.side_effect = SlicerConnectionError(
-            "VA segmentation failed",
-        )
-
+        mock_va.side_effect = SlicerConnectionError("VA segmentation failed")
         with pytest.raises(SlicerConnectionError):
             workflow_ccj_protocol(
                 ct_volume_id="vtkMRMLScalarVolumeNode1",
-                cta_volume_id=("vtkMRMLScalarVolumeNode2"),
+                cta_volume_id="vtkMRMLScalarVolumeNode2",
             )
 
-    @patch(
-        "slicer_mcp.features.workflows.ccj.analyze_bone_quality",
-    )
-    @patch(
-        "slicer_mcp.features.workflows.ccj.measure_ccj_angles",
-    )
-    @patch(
-        "slicer_mcp.features.workflows.ccj.segment_spine",
-    )
+    @patch(f"{_PATCH_PREFIX}.analyze_bone_quality")
+    @patch(f"{_PATCH_PREFIX}.measure_ccj_angles")
+    @patch(f"{_PATCH_PREFIX}.segment_spine")
     def test_bone_quality_error_propagates(self, mock_segment, mock_ccj, mock_bone):
-        """SlicerConnectionError from bone quality propagates."""
         mock_segment.return_value = MOCK_SEGMENT_RESULT
         mock_ccj.return_value = MOCK_CCJ_RESULT
-        mock_bone.side_effect = SlicerConnectionError(
-            "Bone quality analysis failed",
-        )
-
+        mock_bone.side_effect = SlicerConnectionError("Bone quality analysis failed")
         with pytest.raises(SlicerConnectionError):
-            workflow_ccj_protocol(
-                ct_volume_id="vtkMRMLScalarVolumeNode1",
-            )
+            workflow_ccj_protocol(ct_volume_id="vtkMRMLScalarVolumeNode1")
 
-    @patch(
-        "slicer_mcp.features.workflows.ccj.capture_screenshot",
+    @pytest.mark.parametrize(
+        "error",
+        [
+            SlicerConnectionError("Screenshot failed"),
+            SlicerTimeoutError("Screenshot timed out"),
+            CircuitOpenError("Circuit breaker is open", "slicer", 30.0),
+            ValueError("Invalid view type"),
+        ],
+        ids=["connection", "timeout", "circuit_open", "value_error"],
     )
-    @patch(
-        "slicer_mcp.features.workflows.ccj.analyze_bone_quality",
-    )
-    @patch(
-        "slicer_mcp.features.workflows.ccj.measure_ccj_angles",
-    )
-    @patch(
-        "slicer_mcp.features.workflows.ccj.segment_spine",
-    )
-    def test_screenshot_failure_is_nonfatal(
-        self,
-        mock_segment,
-        mock_ccj,
-        mock_bone,
-        mock_screenshot,
-    ):
-        """Screenshot failure does not abort the workflow."""
-        mock_segment.return_value = MOCK_SEGMENT_RESULT
-        mock_ccj.return_value = MOCK_CCJ_RESULT
-        mock_bone.return_value = MOCK_BONE_RESULT
-        mock_screenshot.side_effect = SlicerConnectionError("Screenshot failed")
+    def test_screenshot_failure_is_nonfatal(self, ccj_mocks, error):
+        """Screenshot failures of any type do not abort the workflow."""
+        ccj_mocks.screenshot.side_effect = error
 
-        result = workflow_ccj_protocol(
-            ct_volume_id="vtkMRMLScalarVolumeNode1",
-        )
+        result = workflow_ccj_protocol(ct_volume_id="vtkMRMLScalarVolumeNode1")
 
-        # Workflow should still succeed
         assert result["ccj_angles"] == MOCK_CCJ_RESULT
         assert result["bone_quality"] == MOCK_BONE_RESULT
         assert len(result["screenshots"]) == 0
         assert "capture_screenshot" not in result["steps_completed"]
 
-    @patch(
-        "slicer_mcp.features.workflows.ccj.capture_screenshot",
-    )
-    @patch(
-        "slicer_mcp.features.workflows.ccj.analyze_bone_quality",
-    )
-    @patch(
-        "slicer_mcp.features.workflows.ccj.measure_ccj_angles",
-    )
-    @patch(
-        "slicer_mcp.features.workflows.ccj.segment_spine",
-    )
-    def test_screenshot_value_error_is_nonfatal(
-        self,
-        mock_segment,
-        mock_ccj,
-        mock_bone,
-        mock_screenshot,
-    ):
-        """ValueError from screenshot does not abort."""
-        mock_segment.return_value = MOCK_SEGMENT_RESULT
-        mock_ccj.return_value = MOCK_CCJ_RESULT
-        mock_bone.return_value = MOCK_BONE_RESULT
-        mock_screenshot.side_effect = ValueError(
-            "Invalid view type",
-        )
-
-        result = workflow_ccj_protocol(
-            ct_volume_id="vtkMRMLScalarVolumeNode1",
-        )
-
-        assert result["ccj_angles"] == MOCK_CCJ_RESULT
-        assert len(result["screenshots"]) == 0
-
-    @patch(
-        "slicer_mcp.features.workflows.ccj.capture_screenshot",
-    )
-    @patch(
-        "slicer_mcp.features.workflows.ccj.analyze_bone_quality",
-    )
-    @patch(
-        "slicer_mcp.features.workflows.ccj.measure_ccj_angles",
-    )
-    @patch(
-        "slicer_mcp.features.workflows.ccj.segment_spine",
-    )
-    def test_screenshot_timeout_is_nonfatal(
-        self,
-        mock_segment,
-        mock_ccj,
-        mock_bone,
-        mock_screenshot,
-    ):
-        """SlicerTimeoutError from screenshot is non-fatal."""
-        mock_segment.return_value = MOCK_SEGMENT_RESULT
-        mock_ccj.return_value = MOCK_CCJ_RESULT
-        mock_bone.return_value = MOCK_BONE_RESULT
-        mock_screenshot.side_effect = SlicerTimeoutError("Screenshot timed out")
-
-        result = workflow_ccj_protocol(
-            ct_volume_id="vtkMRMLScalarVolumeNode1",
-        )
-
-        assert result["ccj_angles"] == MOCK_CCJ_RESULT
-        assert len(result["screenshots"]) == 0
-        assert "capture_screenshot" not in result["steps_completed"]
-
-    @patch(
-        "slicer_mcp.features.workflows.ccj.capture_screenshot",
-    )
-    @patch(
-        "slicer_mcp.features.workflows.ccj.analyze_bone_quality",
-    )
-    @patch(
-        "slicer_mcp.features.workflows.ccj.measure_ccj_angles",
-    )
-    @patch(
-        "slicer_mcp.features.workflows.ccj.segment_spine",
-    )
-    def test_screenshot_circuit_open_is_nonfatal(
-        self,
-        mock_segment,
-        mock_ccj,
-        mock_bone,
-        mock_screenshot,
-    ):
-        """CircuitOpenError from screenshot is non-fatal."""
-        mock_segment.return_value = MOCK_SEGMENT_RESULT
-        mock_ccj.return_value = MOCK_CCJ_RESULT
-        mock_bone.return_value = MOCK_BONE_RESULT
-        mock_screenshot.side_effect = CircuitOpenError(
-            "Circuit breaker is open",
-            "slicer",
-            30.0,
-        )
-
-        result = workflow_ccj_protocol(
-            ct_volume_id="vtkMRMLScalarVolumeNode1",
-        )
-
-        assert result["ccj_angles"] == MOCK_CCJ_RESULT
-        assert len(result["screenshots"]) == 0
-        assert "capture_screenshot" not in result["steps_completed"]
-
-    @patch(
-        "slicer_mcp.features.workflows.ccj.measure_ccj_angles",
-    )
+    @patch(f"{_PATCH_PREFIX}.measure_ccj_angles")
     def test_validation_error_from_tool_propagates(self, mock_ccj):
-        """ValidationError raised inside a tool propagates."""
-        mock_ccj.side_effect = ValidationError(
-            "Bad input",
-            "segmentation_node_id",
-            "bad",
-        )
-
+        mock_ccj.side_effect = ValidationError("Bad input", "segmentation_node_id", "bad")
         with pytest.raises(ValidationError):
             workflow_ccj_protocol(
                 ct_volume_id="vtkMRMLScalarVolumeNode1",
-                segmentation_node_id=("vtkMRMLSegmentationNode1"),
+                segmentation_node_id="vtkMRMLSegmentationNode1",
             )
 
 
@@ -671,35 +356,8 @@ class TestWorkflowCcjProtocolErrors:
 class TestWorkflowCcjProtocolResultStructure:
     """Test that the result dict has expected keys."""
 
-    @patch(
-        "slicer_mcp.features.workflows.ccj.capture_screenshot",
-    )
-    @patch(
-        "slicer_mcp.features.workflows.ccj.analyze_bone_quality",
-    )
-    @patch(
-        "slicer_mcp.features.workflows.ccj.measure_ccj_angles",
-    )
-    @patch(
-        "slicer_mcp.features.workflows.ccj.segment_spine",
-    )
-    def test_result_has_all_expected_keys(
-        self,
-        mock_segment,
-        mock_ccj,
-        mock_bone,
-        mock_screenshot,
-    ):
-        """Result dict contains all documented keys."""
-        mock_segment.return_value = MOCK_SEGMENT_RESULT
-        mock_ccj.return_value = MOCK_CCJ_RESULT
-        mock_bone.return_value = MOCK_BONE_RESULT
-        mock_screenshot.return_value = MOCK_SCREENSHOT_RESULT
-
-        result = workflow_ccj_protocol(
-            ct_volume_id="vtkMRMLScalarVolumeNode1",
-        )
-
+    def test_result_has_all_expected_keys(self, ccj_mocks):
+        result = workflow_ccj_protocol(ct_volume_id="vtkMRMLScalarVolumeNode1")
         expected_keys = {
             "segmentation_node_id",
             "ccj_angles",
@@ -711,33 +369,6 @@ class TestWorkflowCcjProtocolResultStructure:
         }
         assert set(result.keys()) == expected_keys
 
-    @patch(
-        "slicer_mcp.features.workflows.ccj.capture_screenshot",
-    )
-    @patch(
-        "slicer_mcp.features.workflows.ccj.analyze_bone_quality",
-    )
-    @patch(
-        "slicer_mcp.features.workflows.ccj.measure_ccj_angles",
-    )
-    @patch(
-        "slicer_mcp.features.workflows.ccj.segment_spine",
-    )
-    def test_default_population_is_adult(
-        self,
-        mock_segment,
-        mock_ccj,
-        mock_bone,
-        mock_screenshot,
-    ):
-        """Default population should be adult."""
-        mock_segment.return_value = MOCK_SEGMENT_RESULT
-        mock_ccj.return_value = MOCK_CCJ_RESULT
-        mock_bone.return_value = MOCK_BONE_RESULT
-        mock_screenshot.return_value = MOCK_SCREENSHOT_RESULT
-
-        result = workflow_ccj_protocol(
-            ct_volume_id="vtkMRMLScalarVolumeNode1",
-        )
-
+    def test_default_population_is_adult(self, ccj_mocks):
+        result = workflow_ccj_protocol(ct_volume_id="vtkMRMLScalarVolumeNode1")
         assert result["population"] == "adult"

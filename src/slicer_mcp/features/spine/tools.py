@@ -1009,7 +1009,9 @@ else:
 
     except Exception as _ts_e:
         slicer.mrmlScene.RemoveNode({seg_var})
-        raise ValueError(f"TotalSegmentator failed ({{type(_ts_e).__name__}}): {{_ts_e}}")
+        raise ValueError(
+            f"TotalSegmentator failed ({{type(_ts_e).__name__}}): {{_ts_e}}"
+        ) from _ts_e
     finally:
 {
         _kill_process_group_code(
@@ -1196,7 +1198,7 @@ try:
 
 except Exception as e:
     slicer.mrmlScene.RemoveNode(outputSeg)
-    raise ValueError(f"TotalSegmentator failed ({{type(e).__name__}}): {{e}}")
+    raise ValueError(f"TotalSegmentator failed ({{type(e).__name__}}): {{e}}") from e
 finally:
     # Kill subprocess if still alive (handles exception during poll loop)
 {

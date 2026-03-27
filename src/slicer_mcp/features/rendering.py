@@ -542,18 +542,13 @@ def enable_volume_rendering(
 
     python_code = _build_enable_volume_rendering_code(safe_node_id, safe_preset, safe_visible)
 
-    try:
-        exec_result = client.exec_python(python_code, timeout=VOLUME_RENDERING_TIMEOUT)
+    exec_result = client.exec_python(python_code, timeout=VOLUME_RENDERING_TIMEOUT)
 
-        result = _parse_json_result(exec_result.get("result", ""), "enable volume rendering")
+    result = _parse_json_result(exec_result.get("result", ""), "enable volume rendering")
 
-        logger.info(f"Volume rendering enabled: node={node_id}, preset={preset}, visible={visible}")
+    logger.info(f"Volume rendering enabled: node={node_id}, preset={preset}, visible={visible}")
 
-        return result
-
-    except Exception:
-        logger.error(f"Enable volume rendering failed for {node_id}")
-        raise
+    return result
 
 
 def set_volume_rendering_property(
@@ -617,18 +612,13 @@ def set_volume_rendering_property(
         safe_node_id, safe_opacity_scale, safe_window, safe_level, safe_visible
     )
 
-    try:
-        exec_result = client.exec_python(python_code, timeout=VOLUME_RENDERING_TIMEOUT)
+    exec_result = client.exec_python(python_code, timeout=VOLUME_RENDERING_TIMEOUT)
 
-        result = _parse_json_result(exec_result.get("result", ""), "set volume rendering property")
+    result = _parse_json_result(exec_result.get("result", ""), "set volume rendering property")
 
-        logger.info(f"Volume rendering property updated: node={node_id}")
+    logger.info(f"Volume rendering property updated: node={node_id}")
 
-        return result
-
-    except Exception:
-        logger.error(f"Set volume rendering property failed for {node_id}")
-        raise
+    return result
 
 
 def export_model(
@@ -677,20 +667,13 @@ def export_model(
 
     python_code = _build_export_model_code(safe_node_id, safe_output_path, safe_format)
 
-    try:
-        exec_result = client.exec_python(python_code, timeout=MODEL_EXPORT_TIMEOUT)
+    exec_result = client.exec_python(python_code, timeout=MODEL_EXPORT_TIMEOUT)
 
-        result = _parse_json_result(exec_result.get("result", ""), "export model")
+    result = _parse_json_result(exec_result.get("result", ""), "export model")
 
-        logger.info(
-            f"Model exported: node={node_id}, path={output_path}, format={file_format_upper}"
-        )
+    logger.info(f"Model exported: node={node_id}, path={output_path}, format={file_format_upper}")
 
-        return result
-
-    except Exception:
-        logger.error(f"Export model failed for {node_id}")
-        raise
+    return result
 
 
 def segmentation_to_models(
@@ -723,22 +706,17 @@ def segmentation_to_models(
 
     python_code = _build_segmentation_to_models_code(safe_segmentation_id, safe_segment_ids)
 
-    try:
-        exec_result = client.exec_python(python_code, timeout=MODEL_EXPORT_TIMEOUT)
+    exec_result = client.exec_python(python_code, timeout=MODEL_EXPORT_TIMEOUT)
 
-        result = _parse_json_result(exec_result.get("result", ""), "segmentation to models")
+    result = _parse_json_result(exec_result.get("result", ""), "segmentation to models")
 
-        logger.info(
-            f"Segmentation converted to models: "
-            f"segmentation={segmentation_node_id}, "
-            f"model_count={result.get('model_count', 0)}"
-        )
+    logger.info(
+        f"Segmentation converted to models: "
+        f"segmentation={segmentation_node_id}, "
+        f"model_count={result.get('model_count', 0)}"
+    )
 
-        return result
-
-    except Exception:
-        logger.error(f"Segmentation to models failed for {segmentation_node_id}")
-        raise
+    return result
 
 
 def capture_3d_view(
@@ -827,15 +805,10 @@ def capture_3d_view(
         safe_output_path, safe_width, safe_height, safe_view_id
     )
 
-    try:
-        exec_result = client.exec_python(python_code, timeout=CAPTURE_3D_VIEW_TIMEOUT)
+    exec_result = client.exec_python(python_code, timeout=CAPTURE_3D_VIEW_TIMEOUT)
 
-        result = _parse_json_result(exec_result.get("result", ""), "capture 3D view")
+    result = _parse_json_result(exec_result.get("result", ""), "capture 3D view")
 
-        logger.info(f"3D view captured: path={output_path}")
+    logger.info(f"3D view captured: path={output_path}")
 
-        return result
-
-    except Exception:
-        logger.error(f"Capture 3D view failed: path={output_path}")
-        raise
+    return result

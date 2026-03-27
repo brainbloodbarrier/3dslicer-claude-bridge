@@ -1260,6 +1260,8 @@ level_upper = level.upper()
 
 if level_upper == 'OCCIPUT':
     # Occipital → only option is occipital screws
+    _occipital_confidence = 'high'
+    _occipital_warning = None
     try:
         segmentation = seg_node.GetSegmentation()
         for i in range(segmentation.GetNumberOfSegments()):
@@ -1270,13 +1272,17 @@ if level_upper == 'OCCIPUT':
                 thickness = geo['dimensions_mm'][1] * 0.6
                 analysis['occipital_thickness_mm'] = round(thickness, 1)
                 break
-    except Exception:
-        pass
-    recommendations.append({{
+    except Exception as _occ_err:
+        _occipital_confidence = 'low'
+        _occipital_warning = 'Occipital thickness measurement failed: ' + str(_occ_err)
+    _occ_rec = {{
         'technique': 'occipital',
-        'confidence': 'high',
+        'confidence': _occipital_confidence,
         'rationale': 'Only technique available for occipital fixation',
-    }})
+    }}
+    if _occipital_warning:
+        _occ_rec['warning'] = _occipital_warning
+    recommendations.append(_occ_rec)
 
 elif level_upper == 'C1':
     # C1 → Harms/Goel (C1 lateral mass)
