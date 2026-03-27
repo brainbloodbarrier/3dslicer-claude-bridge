@@ -6,14 +6,14 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from slicer_mcp.core.resources import _iso_timestamp
-from slicer_mcp.resources import (
+from slicer_mcp.core.resources import (
+    _iso_timestamp,
     get_scene_resource,
     get_status_resource,
     get_volumes_resource,
     get_workflows_resource,
 )
-from slicer_mcp.slicer_client import SlicerConnectionError
+from slicer_mcp.core.slicer_client import SlicerConnectionError
 
 
 class TestIsoTimestamp:
@@ -214,9 +214,9 @@ class TestGetWorkflowsResource:
         valid_statuses = {"available", "planned"}
         result = json.loads(get_workflows_resource())
         for workflow in result["workflows"]:
-            assert workflow["status"] in valid_statuses, (
-                f"Unexpected status '{workflow['status']}' for {workflow['name']}"
-            )
+            assert (
+                workflow["status"] in valid_statuses
+            ), f"Unexpected status '{workflow['status']}' for {workflow['name']}"
 
     def test_modic_eval_is_available(self):
         """workflow_modic_eval is implemented and should be marked available."""

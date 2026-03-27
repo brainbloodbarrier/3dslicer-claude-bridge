@@ -1046,7 +1046,7 @@ class TestServerRegistration:
 
     def test_diagnostic_tools_importable(self):
         """Verify diagnostic_tools_ct module is importable."""
-        from slicer_mcp import diagnostic_tools_ct
+        from slicer_mcp.features.diagnostics import ct as diagnostic_tools_ct
 
         assert hasattr(diagnostic_tools_ct, "detect_vertebral_fractures_ct")
         assert hasattr(diagnostic_tools_ct, "assess_osteoporosis_ct")
@@ -1055,8 +1055,9 @@ class TestServerRegistration:
         assert hasattr(diagnostic_tools_ct, "measure_listhesis_ct")
         assert hasattr(diagnostic_tools_ct, "measure_spinal_canal_ct")
 
+    @pytest.mark.filterwarnings("ignore::DeprecationWarning")
     def test_spine_constants_importable(self):
-        """Verify spine_constants module is importable."""
+        """Verify spine_constants shim module is importable (backward compat)."""
         from slicer_mcp import spine_constants
 
         assert hasattr(spine_constants, "GENANT_THRESHOLDS")

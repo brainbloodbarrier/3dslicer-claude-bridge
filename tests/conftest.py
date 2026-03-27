@@ -4,7 +4,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from slicer_mcp.slicer_client import SlicerClient
+from slicer_mcp.core.slicer_client import SlicerClient
 
 
 @pytest.fixture(autouse=True)
@@ -14,7 +14,7 @@ def reset_circuit_breaker():
     This fixture runs automatically for all tests to prevent state leakage
     between tests that might trip the circuit breaker.
     """
-    from slicer_mcp.slicer_client import reset_circuit_breaker as reset_cb
+    from slicer_mcp.core.slicer_client import reset_circuit_breaker as reset_cb
 
     reset_cb()
     yield

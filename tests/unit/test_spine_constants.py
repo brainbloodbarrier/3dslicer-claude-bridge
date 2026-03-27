@@ -1,6 +1,6 @@
 """Unit tests for spine anatomical constants."""
 
-from slicer_mcp.spine_constants import (
+from slicer_mcp.features.spine.constants import (
     CCJ_NORMAL_RANGES,
     CERVICAL_LATERAL_MASS_HEIGHT,
     CERVICAL_LATERAL_MASS_SCREW_DEFAULTS,
@@ -242,7 +242,7 @@ class TestSINSClassification:
 
     def test_sins_component_scores_non_negative(self):
         """All SINS component scores must be non-negative integers."""
-        from slicer_mcp.spine_constants import (
+        from slicer_mcp.features.spine.constants import (
             SINS_ALIGNMENT_SCORES,
             SINS_COLLAPSE_SCORES,
             SINS_LESION_SCORES,
@@ -362,9 +362,9 @@ class TestPfirrmannGrading:
     def test_descriptions_are_non_empty(self):
         """All descriptions must be non-empty strings."""
         for grade_val, desc in PFIRRMANN_DESCRIPTIONS.items():
-            assert isinstance(desc, str) and len(desc) > 10, (
-                f"Pfirrmann description for grade {grade_val} is too short"
-            )
+            assert (
+                isinstance(desc, str) and len(desc) > 10
+            ), f"Pfirrmann description for grade {grade_val} is too short"
 
 
 # =============================================================================
