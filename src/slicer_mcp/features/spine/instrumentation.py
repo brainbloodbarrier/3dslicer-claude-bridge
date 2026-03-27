@@ -475,9 +475,7 @@ def _build_pedicle_code(
         Python code string for execution in Slicer.
     """
     angulation = TECHNIQUE_ANGULATION["pedicle"]
-    return (
-        _SLICER_HELPERS
-        + f"""
+    return _SLICER_HELPERS + f"""
 # === Pedicle Screw Planning ===
 seg_node_id = {safe_seg_id}
 level = {safe_level}
@@ -570,7 +568,6 @@ result = {{
 }}
 __execResult = result
 """
-    )
 
 
 def _build_lateral_mass_code(
@@ -614,9 +611,7 @@ def _build_lateral_mass_code(
         "anderson": "Anderson PA et al. Spine 1991",
     }
 
-    return (
-        _SLICER_HELPERS
-        + f"""
+    return _SLICER_HELPERS + f"""
 # === Lateral Mass Screw Planning ({variant_names[variant]}) ===
 seg_node_id = {safe_seg_id}
 level = {safe_level}
@@ -707,7 +702,6 @@ result = {{
 }}
 __execResult = result
 """
-    )
 
 
 def _build_transarticular_code(
@@ -732,9 +726,7 @@ def _build_transarticular_code(
         Python code string for execution in Slicer.
     """
     angulation = TECHNIQUE_ANGULATION["transarticular"]
-    return (
-        _SLICER_HELPERS
-        + f"""
+    return _SLICER_HELPERS + f"""
 # === Transarticular Screw Planning (Magerl) ===
 seg_node_id = {safe_seg_id}
 side = {safe_side}
@@ -871,7 +863,6 @@ result = {{
 }}
 __execResult = result
 """
-    )
 
 
 def _build_c1_lateral_mass_code(
@@ -894,9 +885,7 @@ def _build_c1_lateral_mass_code(
         Python code string for execution in Slicer.
     """
     angulation = TECHNIQUE_ANGULATION["c1_lateral_mass"]
-    return (
-        _SLICER_HELPERS
-        + f"""
+    return _SLICER_HELPERS + f"""
 # === C1 Lateral Mass Screw Planning (Harms/Goel) ===
 seg_node_id = {safe_seg_id}
 side = {safe_side}
@@ -987,7 +976,6 @@ result = {{
 }}
 __execResult = result
 """
-    )
 
 
 def _build_c2_pars_code(
@@ -1010,9 +998,7 @@ def _build_c2_pars_code(
         Python code string for execution in Slicer.
     """
     angulation = TECHNIQUE_ANGULATION["c2_pars"]
-    return (
-        _SLICER_HELPERS
-        + f"""
+    return _SLICER_HELPERS + f"""
 # === C2 Pars Interarticularis Screw Planning ===
 seg_node_id = {safe_seg_id}
 side = {safe_side}
@@ -1103,7 +1089,6 @@ result = {{
 }}
 __execResult = result
 """
-    )
 
 
 def _build_occipital_code(
@@ -1123,9 +1108,7 @@ def _build_occipital_code(
     Returns:
         Python code string for execution in Slicer.
     """
-    return (
-        _SLICER_HELPERS
-        + f"""
+    return _SLICER_HELPERS + f"""
 # === Occipital Screw Planning ===
 seg_node_id = {safe_seg_id}
 side = {safe_side}
@@ -1236,7 +1219,6 @@ result = {{
 }}
 __execResult = result
 """
-    )
 
 
 def _build_auto_analysis_code(
@@ -1257,9 +1239,7 @@ def _build_auto_analysis_code(
     Returns:
         Python code string for execution in Slicer.
     """
-    return (
-        _SLICER_HELPERS
-        + f"""
+    return _SLICER_HELPERS + f"""
 # === Auto Technique Analysis ===
 seg_node_id = {safe_seg_id}
 level = {safe_level}
@@ -1280,6 +1260,8 @@ level_upper = level.upper()
 
 if level_upper == 'OCCIPUT':
     # Occipital → only option is occipital screws
+    _occipital_confidence = 'high'
+    _occipital_warning = None
     try:
         segmentation = seg_node.GetSegmentation()
         for i in range(segmentation.GetNumberOfSegments()):
@@ -1290,13 +1272,17 @@ if level_upper == 'OCCIPUT':
                 thickness = geo['dimensions_mm'][1] * 0.6
                 analysis['occipital_thickness_mm'] = round(thickness, 1)
                 break
-    except Exception:
-        pass
-    recommendations.append({{
+    except Exception as _occ_err:
+        _occipital_confidence = 'low'
+        _occipital_warning = 'Occipital thickness measurement failed: ' + str(_occ_err)
+    _occ_rec = {{
         'technique': 'occipital',
-        'confidence': 'high',
+        'confidence': _occipital_confidence,
         'rationale': 'Only technique available for occipital fixation',
-    }})
+    }}
+    if _occipital_warning:
+        _occ_rec['warning'] = _occipital_warning
+    recommendations.append(_occ_rec)
 
 elif level_upper == 'C1':
     # C1 → Harms/Goel (C1 lateral mass)
@@ -1339,8 +1325,14 @@ elif level_upper == 'C1C2':
                              'High risk — consider alternative.',
                 'va_required': True,
             }})
-    except ValueError:
-        pass
+    except ValueError as _c1c2_err:
+        recommendations.append({{
+            'technique': 'transarticular',
+            'confidence': 'low',
+            'rationale': 'Isthmus geometry could not be assessed',
+            'warning': 'C2 geometry measurement failed: ' + str(_c1c2_err),
+            'va_required': True,
+        }})
 
     recommendations.append({{
         'technique': 'c1_lateral_mass',
@@ -1444,7 +1436,6 @@ result = {{
 }}
 __execResult = result
 """
-    )
 
 
 # =============================================================================

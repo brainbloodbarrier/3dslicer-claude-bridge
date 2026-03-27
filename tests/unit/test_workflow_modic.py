@@ -1,5 +1,6 @@
 """Unit tests for the workflow_modic_eval workflow tool."""
 
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -21,42 +22,26 @@ from slicer_mcp.features.workflows.modic import (
 class TestValidateRegion:
     """Test region parameter validation for the Modic workflow."""
 
-    def test_valid_lumbar(self):
-        assert _validate_region("lumbar") == "lumbar"
+    @pytest.mark.parametrize("region", ["lumbar", "cervical", "thoracic"])
+    def test_valid_regions(self, region):
+        assert _validate_region(region) == region
 
-    def test_valid_cervical(self):
-        assert _validate_region("cervical") == "cervical"
-
-    def test_valid_thoracic(self):
-        assert _validate_region("thoracic") == "thoracic"
-
-    def test_invalid_full(self):
+    @pytest.mark.parametrize("region", ["full", "", "sacral", "LUMBAR"])
+    def test_invalid_regions(self, region):
         with pytest.raises(ValidationError) as exc_info:
-            _validate_region("full")
-        assert exc_info.value.field == "region"
-
-    def test_invalid_empty(self):
-        with pytest.raises(ValidationError) as exc_info:
-            _validate_region("")
-        assert exc_info.value.field == "region"
-
-    def test_invalid_arbitrary(self):
-        with pytest.raises(ValidationError) as exc_info:
-            _validate_region("sacral")
+            _validate_region(region)
         assert exc_info.value.field == "region"
 
 
 class TestCordScreeningRegions:
     """Test cord screening region constant."""
 
-    def test_cervical_included(self):
-        assert "cervical" in CORD_SCREENING_REGIONS
-
-    def test_thoracic_included(self):
-        assert "thoracic" in CORD_SCREENING_REGIONS
-
-    def test_lumbar_excluded(self):
-        assert "lumbar" not in CORD_SCREENING_REGIONS
+    @pytest.mark.parametrize(
+        "region, expected",
+        [("cervical", True), ("thoracic", True), ("lumbar", False)],
+    )
+    def test_cord_screening_membership(self, region, expected):
+        assert (region in CORD_SCREENING_REGIONS) is expected
 
 
 # =============================================================================
@@ -89,9 +74,7 @@ MOCK_PFIRRMANN_RESULT = {
 }
 
 MOCK_CORD_RESULT = {
-    "levels": {
-        "C5-C6": {"compression_ratio": 0.35, "stenosis_grade": "moderate"},
-    },
+    "levels": {"C5-C6": {"compression_ratio": 0.35, "stenosis_grade": "moderate"}},
     "myelopathy_detected": False,
 }
 
@@ -101,70 +84,67 @@ MOCK_SCREENSHOT_RESULT = {
     "view_type": "sagittal",
 }
 
+_PATCH_PREFIX = "slicer_mcp.features.workflows.modic"
+
+
+@pytest.fixture()
+def modic_mocks():
+    """Patch all Modic pipeline tools and return mocks in a namespace."""
+    with (
+        patch(f"{_PATCH_PREFIX}.segment_spine") as m_segment,
+        patch(f"{_PATCH_PREFIX}.classify_modic_changes") as m_modic,
+        patch(f"{_PATCH_PREFIX}.assess_disc_degeneration_mri") as m_pfirrmann,
+        patch(f"{_PATCH_PREFIX}.capture_screenshot") as m_screenshot,
+    ):
+        m_segment.return_value = MOCK_SEGMENT_RESULT
+        m_modic.return_value = MOCK_MODIC_RESULT
+        m_pfirrmann.return_value = MOCK_PFIRRMANN_RESULT
+        m_screenshot.return_value = MOCK_SCREENSHOT_RESULT
+
+        yield SimpleNamespace(
+            segment=m_segment,
+            modic=m_modic,
+            pfirrmann=m_pfirrmann,
+            screenshot=m_screenshot,
+        )
+
 
 # =============================================================================
 # Input Validation Tests
 # =============================================================================
 
+_VALID_T1 = "vtkMRMLScalarVolumeNode1"
+_VALID_T2 = "vtkMRMLScalarVolumeNode2"
+
 
 class TestWorkflowModicEvalValidation:
     """Test input validation for workflow_modic_eval."""
 
-    def test_invalid_t1_node_id(self):
-        """Invalid T1 node ID raises ValidationError."""
+    @pytest.mark.parametrize(
+        "kwargs, field",
+        [
+            ({"t1_volume_id": "1invalid", "t2_volume_id": _VALID_T2}, "node_id"),
+            ({"t1_volume_id": _VALID_T1, "t2_volume_id": "DROP TABLE"}, "node_id"),
+            ({"t1_volume_id": _VALID_T1, "t2_volume_id": _VALID_T2, "region": "sacral"}, "region"),
+            (
+                {
+                    "t1_volume_id": _VALID_T1,
+                    "t2_volume_id": _VALID_T2,
+                    "segmentation_node_id": "123bad",
+                },
+                "node_id",
+            ),
+            ({"t1_volume_id": _VALID_T1, "t2_volume_id": _VALID_T2, "region": "full"}, "region"),
+        ],
+    )
+    def test_invalid_inputs(self, kwargs, field):
         with pytest.raises(ValidationError) as exc_info:
-            workflow_modic_eval(
-                t1_volume_id="1invalid",
-                t2_volume_id="vtkMRMLScalarVolumeNode2",
-            )
-        assert exc_info.value.field == "node_id"
-
-    def test_invalid_t2_node_id(self):
-        """Invalid T2 node ID raises ValidationError."""
-        with pytest.raises(ValidationError) as exc_info:
-            workflow_modic_eval(
-                t1_volume_id="vtkMRMLScalarVolumeNode1",
-                t2_volume_id="DROP TABLE",
-            )
-        assert exc_info.value.field == "node_id"
-
-    def test_invalid_region(self):
-        """Invalid region raises ValidationError."""
-        with pytest.raises(ValidationError) as exc_info:
-            workflow_modic_eval(
-                t1_volume_id="vtkMRMLScalarVolumeNode1",
-                t2_volume_id="vtkMRMLScalarVolumeNode2",
-                region="sacral",
-            )
-        assert exc_info.value.field == "region"
-
-    def test_invalid_segmentation_node_id(self):
-        """Invalid segmentation node ID raises ValidationError."""
-        with pytest.raises(ValidationError) as exc_info:
-            workflow_modic_eval(
-                t1_volume_id="vtkMRMLScalarVolumeNode1",
-                t2_volume_id="vtkMRMLScalarVolumeNode2",
-                segmentation_node_id="123bad",
-            )
-        assert exc_info.value.field == "node_id"
+            workflow_modic_eval(**kwargs)
+        assert exc_info.value.field == field
 
     def test_empty_t1_node_id(self):
-        """Empty T1 node ID raises ValidationError."""
         with pytest.raises(ValidationError):
-            workflow_modic_eval(
-                t1_volume_id="",
-                t2_volume_id="vtkMRMLScalarVolumeNode2",
-            )
-
-    def test_region_full_rejected(self):
-        """Region 'full' is not valid for MRI workflows."""
-        with pytest.raises(ValidationError) as exc_info:
-            workflow_modic_eval(
-                t1_volume_id="vtkMRMLScalarVolumeNode1",
-                t2_volume_id="vtkMRMLScalarVolumeNode2",
-                region="full",
-            )
-        assert exc_info.value.field == "region"
+            workflow_modic_eval(t1_volume_id="", t2_volume_id=_VALID_T2)
 
 
 # =============================================================================
@@ -175,21 +155,10 @@ class TestWorkflowModicEvalValidation:
 class TestWorkflowModicEvalHappyPath:
     """Test happy-path execution of workflow_modic_eval."""
 
-    @patch("slicer_mcp.features.workflows.modic.capture_screenshot")
-    @patch("slicer_mcp.features.workflows.modic.assess_disc_degeneration_mri")
-    @patch("slicer_mcp.features.workflows.modic.classify_modic_changes")
-    @patch("slicer_mcp.features.workflows.modic.segment_spine")
-    def test_full_pipeline_lumbar(self, mock_segment, mock_modic, mock_pfirrmann, mock_screenshot):
+    def test_full_pipeline_lumbar(self, modic_mocks):
         """Full pipeline with segmentation for lumbar region."""
-        mock_segment.return_value = MOCK_SEGMENT_RESULT
-        mock_modic.return_value = MOCK_MODIC_RESULT
-        mock_pfirrmann.return_value = MOCK_PFIRRMANN_RESULT
-        mock_screenshot.return_value = MOCK_SCREENSHOT_RESULT
-
         result = workflow_modic_eval(
-            t1_volume_id="vtkMRMLScalarVolumeNode1",
-            t2_volume_id="vtkMRMLScalarVolumeNode2",
-            region="lumbar",
+            t1_volume_id=_VALID_T1, t2_volume_id=_VALID_T2, region="lumbar"
         )
 
         assert result["segmentation_node_id"] == "vtkMRMLSegmentationNode1"
@@ -198,157 +167,88 @@ class TestWorkflowModicEvalHappyPath:
         assert result["cord_compression"] is None
         assert result["region"] == "lumbar"
         assert len(result["screenshots"]) == 1
-        assert "segment_spine" in result["steps_completed"]
-        assert "classify_modic_changes" in result["steps_completed"]
-        assert "assess_disc_degeneration_mri" in result["steps_completed"]
-        assert "capture_screenshot" in result["steps_completed"]
-        # Cord compression should NOT be run for lumbar
+
+        expected_steps = {
+            "segment_spine",
+            "classify_modic_changes",
+            "assess_disc_degeneration_mri",
+            "capture_screenshot",
+        }
+        assert expected_steps.issubset(set(result["steps_completed"]))
         assert "detect_cord_compression_mri" not in result["steps_completed"]
 
-        # Verify segment_spine was called with T2 volume and correct params
-        mock_segment.assert_called_once_with(
-            input_node_id="vtkMRMLScalarVolumeNode2",
+        modic_mocks.segment.assert_called_once_with(
+            input_node_id=_VALID_T2,
             region="lumbar",
             include_discs=True,
             include_spinal_cord=True,
         )
-
-        # Verify modic was called with correct params
-        mock_modic.assert_called_once_with(
-            t1_node_id="vtkMRMLScalarVolumeNode1",
-            t2_node_id="vtkMRMLScalarVolumeNode2",
+        modic_mocks.modic.assert_called_once_with(
+            t1_node_id=_VALID_T1,
+            t2_node_id=_VALID_T2,
+            region="lumbar",
+            segmentation_node_id="vtkMRMLSegmentationNode1",
+        )
+        modic_mocks.pfirrmann.assert_called_once_with(
+            t2_node_id=_VALID_T2,
             region="lumbar",
             segmentation_node_id="vtkMRMLSegmentationNode1",
         )
 
-        # Verify pfirrmann was called with correct params
-        mock_pfirrmann.assert_called_once_with(
-            t2_node_id="vtkMRMLScalarVolumeNode2",
-            region="lumbar",
-            segmentation_node_id="vtkMRMLSegmentationNode1",
-        )
-
-    @patch("slicer_mcp.features.workflows.modic.capture_screenshot")
-    @patch("slicer_mcp.features.workflows.modic.assess_disc_degeneration_mri")
-    @patch("slicer_mcp.features.workflows.modic.classify_modic_changes")
-    @patch("slicer_mcp.features.workflows.modic.segment_spine")
-    def test_existing_segmentation_skips_segment_spine(
-        self, mock_segment, mock_modic, mock_pfirrmann, mock_screenshot
-    ):
+    def test_existing_segmentation_skips_segment_spine(self, modic_mocks):
         """When segmentation_node_id is provided, segment_spine is skipped."""
-        mock_modic.return_value = MOCK_MODIC_RESULT
-        mock_pfirrmann.return_value = MOCK_PFIRRMANN_RESULT
-        mock_screenshot.return_value = MOCK_SCREENSHOT_RESULT
-
         result = workflow_modic_eval(
-            t1_volume_id="vtkMRMLScalarVolumeNode1",
-            t2_volume_id="vtkMRMLScalarVolumeNode2",
+            t1_volume_id=_VALID_T1,
+            t2_volume_id=_VALID_T2,
             region="lumbar",
             segmentation_node_id="vtkMRMLSegmentationNode5",
         )
 
-        # segment_spine should NOT have been called
-        mock_segment.assert_not_called()
+        modic_mocks.segment.assert_not_called()
         assert result["segmentation_node_id"] == "vtkMRMLSegmentationNode5"
         assert "segment_spine_skipped" in result["steps_completed"]
         assert "segment_spine" not in result["steps_completed"]
 
-    @patch("slicer_mcp.features.workflows.modic.capture_screenshot")
-    @patch("slicer_mcp.features.workflows.modic.detect_cord_compression_mri")
-    @patch("slicer_mcp.features.workflows.modic.assess_disc_degeneration_mri")
-    @patch("slicer_mcp.features.workflows.modic.classify_modic_changes")
-    @patch("slicer_mcp.features.workflows.modic.segment_spine")
-    def test_cervical_includes_cord_screening(
-        self, mock_segment, mock_modic, mock_pfirrmann, mock_cord, mock_screenshot
-    ):
-        """Cervical region includes cord compression screening by default."""
-        mock_segment.return_value = MOCK_SEGMENT_RESULT
-        mock_modic.return_value = MOCK_MODIC_RESULT
-        mock_pfirrmann.return_value = MOCK_PFIRRMANN_RESULT
-        mock_cord.return_value = MOCK_CORD_RESULT
-        mock_screenshot.return_value = MOCK_SCREENSHOT_RESULT
+    @pytest.mark.parametrize("region", ["cervical", "thoracic"])
+    def test_cord_screening_regions_include_cord(self, modic_mocks, region):
+        """Cervical and thoracic regions include cord compression screening."""
+        with patch(f"{_PATCH_PREFIX}.detect_cord_compression_mri") as m_cord:
+            m_cord.return_value = MOCK_CORD_RESULT
 
-        result = workflow_modic_eval(
-            t1_volume_id="vtkMRMLScalarVolumeNode1",
-            t2_volume_id="vtkMRMLScalarVolumeNode2",
-            region="cervical",
-        )
+            result = workflow_modic_eval(
+                t1_volume_id=_VALID_T1,
+                t2_volume_id=_VALID_T2,
+                region=region,
+            )
 
-        assert result["cord_compression"] == MOCK_CORD_RESULT
-        assert "detect_cord_compression_mri" in result["steps_completed"]
+            assert result["cord_compression"] == MOCK_CORD_RESULT
+            assert "detect_cord_compression_mri" in result["steps_completed"]
+            m_cord.assert_called_once_with(
+                t2_node_id=_VALID_T2,
+                t1_node_id=_VALID_T1,
+                region=region,
+                segmentation_node_id="vtkMRMLSegmentationNode1",
+            )
 
-        mock_cord.assert_called_once_with(
-            t2_node_id="vtkMRMLScalarVolumeNode2",
-            t1_node_id="vtkMRMLScalarVolumeNode1",
-            region="cervical",
-            segmentation_node_id="vtkMRMLSegmentationNode1",
-        )
-
-    @patch("slicer_mcp.features.workflows.modic.capture_screenshot")
-    @patch("slicer_mcp.features.workflows.modic.detect_cord_compression_mri")
-    @patch("slicer_mcp.features.workflows.modic.assess_disc_degeneration_mri")
-    @patch("slicer_mcp.features.workflows.modic.classify_modic_changes")
-    @patch("slicer_mcp.features.workflows.modic.segment_spine")
-    def test_thoracic_includes_cord_screening(
-        self, mock_segment, mock_modic, mock_pfirrmann, mock_cord, mock_screenshot
-    ):
-        """Thoracic region includes cord compression screening by default."""
-        mock_segment.return_value = MOCK_SEGMENT_RESULT
-        mock_modic.return_value = MOCK_MODIC_RESULT
-        mock_pfirrmann.return_value = MOCK_PFIRRMANN_RESULT
-        mock_cord.return_value = MOCK_CORD_RESULT
-        mock_screenshot.return_value = MOCK_SCREENSHOT_RESULT
-
-        result = workflow_modic_eval(
-            t1_volume_id="vtkMRMLScalarVolumeNode1",
-            t2_volume_id="vtkMRMLScalarVolumeNode2",
-            region="thoracic",
-        )
-
-        assert result["cord_compression"] == MOCK_CORD_RESULT
-        assert "detect_cord_compression_mri" in result["steps_completed"]
-
-    @patch("slicer_mcp.features.workflows.modic.capture_screenshot")
-    @patch("slicer_mcp.features.workflows.modic.detect_cord_compression_mri")
-    @patch("slicer_mcp.features.workflows.modic.assess_disc_degeneration_mri")
-    @patch("slicer_mcp.features.workflows.modic.classify_modic_changes")
-    @patch("slicer_mcp.features.workflows.modic.segment_spine")
-    def test_cord_screening_disabled(
-        self, mock_segment, mock_modic, mock_pfirrmann, mock_cord, mock_screenshot
-    ):
+    def test_cord_screening_disabled(self, modic_mocks):
         """Cord screening can be explicitly disabled even for cervical."""
-        mock_segment.return_value = MOCK_SEGMENT_RESULT
-        mock_modic.return_value = MOCK_MODIC_RESULT
-        mock_pfirrmann.return_value = MOCK_PFIRRMANN_RESULT
-        mock_screenshot.return_value = MOCK_SCREENSHOT_RESULT
+        with patch(f"{_PATCH_PREFIX}.detect_cord_compression_mri") as m_cord:
+            result = workflow_modic_eval(
+                t1_volume_id=_VALID_T1,
+                t2_volume_id=_VALID_T2,
+                region="cervical",
+                include_cord_screening=False,
+            )
 
-        result = workflow_modic_eval(
-            t1_volume_id="vtkMRMLScalarVolumeNode1",
-            t2_volume_id="vtkMRMLScalarVolumeNode2",
-            region="cervical",
-            include_cord_screening=False,
-        )
+            m_cord.assert_not_called()
+            assert result["cord_compression"] is None
+            assert "detect_cord_compression_mri" not in result["steps_completed"]
 
-        mock_cord.assert_not_called()
-        assert result["cord_compression"] is None
-        assert "detect_cord_compression_mri" not in result["steps_completed"]
-
-    @patch("slicer_mcp.features.workflows.modic.capture_screenshot")
-    @patch("slicer_mcp.features.workflows.modic.assess_disc_degeneration_mri")
-    @patch("slicer_mcp.features.workflows.modic.classify_modic_changes")
-    @patch("slicer_mcp.features.workflows.modic.segment_spine")
-    def test_lumbar_cord_screening_true_no_cord_run(
-        self, mock_segment, mock_modic, mock_pfirrmann, mock_screenshot
-    ):
+    def test_lumbar_cord_screening_true_no_cord_run(self, modic_mocks):
         """Even with include_cord_screening=True, lumbar does NOT run cord detection."""
-        mock_segment.return_value = MOCK_SEGMENT_RESULT
-        mock_modic.return_value = MOCK_MODIC_RESULT
-        mock_pfirrmann.return_value = MOCK_PFIRRMANN_RESULT
-        mock_screenshot.return_value = MOCK_SCREENSHOT_RESULT
-
         result = workflow_modic_eval(
-            t1_volume_id="vtkMRMLScalarVolumeNode1",
-            t2_volume_id="vtkMRMLScalarVolumeNode2",
+            t1_volume_id=_VALID_T1,
+            t2_volume_id=_VALID_T2,
             region="lumbar",
             include_cord_screening=True,
         )
@@ -365,163 +265,72 @@ class TestWorkflowModicEvalHappyPath:
 class TestWorkflowModicEvalErrors:
     """Test error propagation from underlying tools."""
 
-    @patch("slicer_mcp.features.workflows.modic.segment_spine")
+    @patch(f"{_PATCH_PREFIX}.segment_spine")
     def test_segment_spine_error_propagates(self, mock_segment):
-        """SlicerConnectionError from segment_spine propagates to caller."""
         mock_segment.side_effect = SlicerConnectionError("Slicer not responding")
-
         with pytest.raises(SlicerConnectionError):
-            workflow_modic_eval(
-                t1_volume_id="vtkMRMLScalarVolumeNode1",
-                t2_volume_id="vtkMRMLScalarVolumeNode2",
-            )
+            workflow_modic_eval(t1_volume_id=_VALID_T1, t2_volume_id=_VALID_T2)
 
-    @patch("slicer_mcp.features.workflows.modic.classify_modic_changes")
-    @patch("slicer_mcp.features.workflows.modic.segment_spine")
+    @patch(f"{_PATCH_PREFIX}.classify_modic_changes")
+    @patch(f"{_PATCH_PREFIX}.segment_spine")
     def test_modic_error_propagates(self, mock_segment, mock_modic):
-        """SlicerConnectionError from classify_modic_changes propagates."""
         mock_segment.return_value = MOCK_SEGMENT_RESULT
         mock_modic.side_effect = SlicerConnectionError("Modic analysis failed")
-
         with pytest.raises(SlicerConnectionError):
-            workflow_modic_eval(
-                t1_volume_id="vtkMRMLScalarVolumeNode1",
-                t2_volume_id="vtkMRMLScalarVolumeNode2",
-            )
+            workflow_modic_eval(t1_volume_id=_VALID_T1, t2_volume_id=_VALID_T2)
 
-    @patch("slicer_mcp.features.workflows.modic.assess_disc_degeneration_mri")
-    @patch("slicer_mcp.features.workflows.modic.classify_modic_changes")
-    @patch("slicer_mcp.features.workflows.modic.segment_spine")
+    @patch(f"{_PATCH_PREFIX}.assess_disc_degeneration_mri")
+    @patch(f"{_PATCH_PREFIX}.classify_modic_changes")
+    @patch(f"{_PATCH_PREFIX}.segment_spine")
     def test_pfirrmann_error_propagates(self, mock_segment, mock_modic, mock_pfirrmann):
-        """SlicerConnectionError from assess_disc_degeneration_mri propagates."""
         mock_segment.return_value = MOCK_SEGMENT_RESULT
         mock_modic.return_value = MOCK_MODIC_RESULT
         mock_pfirrmann.side_effect = SlicerConnectionError("Pfirrmann analysis failed")
-
         with pytest.raises(SlicerConnectionError):
-            workflow_modic_eval(
-                t1_volume_id="vtkMRMLScalarVolumeNode1",
-                t2_volume_id="vtkMRMLScalarVolumeNode2",
-            )
+            workflow_modic_eval(t1_volume_id=_VALID_T1, t2_volume_id=_VALID_T2)
 
-    @patch("slicer_mcp.features.workflows.modic.detect_cord_compression_mri")
-    @patch("slicer_mcp.features.workflows.modic.assess_disc_degeneration_mri")
-    @patch("slicer_mcp.features.workflows.modic.classify_modic_changes")
-    @patch("slicer_mcp.features.workflows.modic.segment_spine")
+    @patch(f"{_PATCH_PREFIX}.detect_cord_compression_mri")
+    @patch(f"{_PATCH_PREFIX}.assess_disc_degeneration_mri")
+    @patch(f"{_PATCH_PREFIX}.classify_modic_changes")
+    @patch(f"{_PATCH_PREFIX}.segment_spine")
     def test_cord_compression_error_propagates(
         self, mock_segment, mock_modic, mock_pfirrmann, mock_cord
     ):
-        """SlicerConnectionError from detect_cord_compression_mri propagates."""
         mock_segment.return_value = MOCK_SEGMENT_RESULT
         mock_modic.return_value = MOCK_MODIC_RESULT
         mock_pfirrmann.return_value = MOCK_PFIRRMANN_RESULT
         mock_cord.side_effect = SlicerConnectionError("Cord analysis failed")
-
         with pytest.raises(SlicerConnectionError):
-            workflow_modic_eval(
-                t1_volume_id="vtkMRMLScalarVolumeNode1",
-                t2_volume_id="vtkMRMLScalarVolumeNode2",
-                region="cervical",
-            )
+            workflow_modic_eval(t1_volume_id=_VALID_T1, t2_volume_id=_VALID_T2, region="cervical")
 
-    @patch("slicer_mcp.features.workflows.modic.capture_screenshot")
-    @patch("slicer_mcp.features.workflows.modic.assess_disc_degeneration_mri")
-    @patch("slicer_mcp.features.workflows.modic.classify_modic_changes")
-    @patch("slicer_mcp.features.workflows.modic.segment_spine")
-    def test_screenshot_failure_is_nonfatal(
-        self, mock_segment, mock_modic, mock_pfirrmann, mock_screenshot
-    ):
-        """Screenshot failure does not abort the workflow."""
-        mock_segment.return_value = MOCK_SEGMENT_RESULT
-        mock_modic.return_value = MOCK_MODIC_RESULT
-        mock_pfirrmann.return_value = MOCK_PFIRRMANN_RESULT
-        mock_screenshot.side_effect = SlicerConnectionError("Screenshot failed")
+    @pytest.mark.parametrize(
+        "error",
+        [
+            SlicerConnectionError("Screenshot failed"),
+            SlicerTimeoutError("Screenshot timed out"),
+            CircuitOpenError("Circuit breaker is open", "slicer", 30.0),
+            ValueError("Invalid view type"),
+        ],
+        ids=["connection", "timeout", "circuit_open", "value_error"],
+    )
+    def test_screenshot_failure_is_nonfatal(self, modic_mocks, error):
+        """Screenshot failures of any type do not abort the workflow."""
+        modic_mocks.screenshot.side_effect = error
 
-        result = workflow_modic_eval(
-            t1_volume_id="vtkMRMLScalarVolumeNode1",
-            t2_volume_id="vtkMRMLScalarVolumeNode2",
-        )
+        result = workflow_modic_eval(t1_volume_id=_VALID_T1, t2_volume_id=_VALID_T2)
 
-        # Workflow should still succeed
         assert result["modic_changes"] == MOCK_MODIC_RESULT
         assert result["pfirrmann_grades"] == MOCK_PFIRRMANN_RESULT
         assert len(result["screenshots"]) == 0
         assert "capture_screenshot" not in result["steps_completed"]
 
-    @patch("slicer_mcp.features.workflows.modic.capture_screenshot")
-    @patch("slicer_mcp.features.workflows.modic.assess_disc_degeneration_mri")
-    @patch("slicer_mcp.features.workflows.modic.classify_modic_changes")
-    @patch("slicer_mcp.features.workflows.modic.segment_spine")
-    def test_screenshot_value_error_is_nonfatal(
-        self, mock_segment, mock_modic, mock_pfirrmann, mock_screenshot
-    ):
-        """ValueError from screenshot does not abort the workflow."""
-        mock_segment.return_value = MOCK_SEGMENT_RESULT
-        mock_modic.return_value = MOCK_MODIC_RESULT
-        mock_pfirrmann.return_value = MOCK_PFIRRMANN_RESULT
-        mock_screenshot.side_effect = ValueError("Invalid view type")
-
-        result = workflow_modic_eval(
-            t1_volume_id="vtkMRMLScalarVolumeNode1",
-            t2_volume_id="vtkMRMLScalarVolumeNode2",
-        )
-
-        assert result["modic_changes"] == MOCK_MODIC_RESULT
-        assert len(result["screenshots"]) == 0
-
-    @patch("slicer_mcp.features.workflows.modic.capture_screenshot")
-    @patch("slicer_mcp.features.workflows.modic.assess_disc_degeneration_mri")
-    @patch("slicer_mcp.features.workflows.modic.classify_modic_changes")
-    @patch("slicer_mcp.features.workflows.modic.segment_spine")
-    def test_screenshot_timeout_is_nonfatal(
-        self, mock_segment, mock_modic, mock_pfirrmann, mock_screenshot
-    ):
-        """SlicerTimeoutError from screenshot does not abort the workflow."""
-        mock_segment.return_value = MOCK_SEGMENT_RESULT
-        mock_modic.return_value = MOCK_MODIC_RESULT
-        mock_pfirrmann.return_value = MOCK_PFIRRMANN_RESULT
-        mock_screenshot.side_effect = SlicerTimeoutError("Screenshot timed out")
-
-        result = workflow_modic_eval(
-            t1_volume_id="vtkMRMLScalarVolumeNode1",
-            t2_volume_id="vtkMRMLScalarVolumeNode2",
-        )
-
-        assert result["modic_changes"] == MOCK_MODIC_RESULT
-        assert len(result["screenshots"]) == 0
-        assert "capture_screenshot" not in result["steps_completed"]
-
-    @patch("slicer_mcp.features.workflows.modic.capture_screenshot")
-    @patch("slicer_mcp.features.workflows.modic.assess_disc_degeneration_mri")
-    @patch("slicer_mcp.features.workflows.modic.classify_modic_changes")
-    @patch("slicer_mcp.features.workflows.modic.segment_spine")
-    def test_screenshot_circuit_open_is_nonfatal(
-        self, mock_segment, mock_modic, mock_pfirrmann, mock_screenshot
-    ):
-        """CircuitOpenError from screenshot does not abort the workflow."""
-        mock_segment.return_value = MOCK_SEGMENT_RESULT
-        mock_modic.return_value = MOCK_MODIC_RESULT
-        mock_pfirrmann.return_value = MOCK_PFIRRMANN_RESULT
-        mock_screenshot.side_effect = CircuitOpenError("Circuit breaker is open", "slicer", 30.0)
-
-        result = workflow_modic_eval(
-            t1_volume_id="vtkMRMLScalarVolumeNode1",
-            t2_volume_id="vtkMRMLScalarVolumeNode2",
-        )
-
-        assert result["modic_changes"] == MOCK_MODIC_RESULT
-        assert len(result["screenshots"]) == 0
-        assert "capture_screenshot" not in result["steps_completed"]
-
-    @patch("slicer_mcp.features.workflows.modic.classify_modic_changes")
+    @patch(f"{_PATCH_PREFIX}.classify_modic_changes")
     def test_validation_error_from_underlying_tool_propagates(self, mock_modic):
-        """ValidationError raised inside a tool propagates unchanged."""
         mock_modic.side_effect = ValidationError("Bad input", "t1_node_id", "bad")
-
         with pytest.raises(ValidationError):
             workflow_modic_eval(
-                t1_volume_id="vtkMRMLScalarVolumeNode1",
-                t2_volume_id="vtkMRMLScalarVolumeNode2",
+                t1_volume_id=_VALID_T1,
+                t2_volume_id=_VALID_T2,
                 segmentation_node_id="vtkMRMLSegmentationNode1",
             )
 
@@ -534,24 +343,8 @@ class TestWorkflowModicEvalErrors:
 class TestWorkflowModicEvalResultStructure:
     """Test that the result dict has the expected keys."""
 
-    @patch("slicer_mcp.features.workflows.modic.capture_screenshot")
-    @patch("slicer_mcp.features.workflows.modic.assess_disc_degeneration_mri")
-    @patch("slicer_mcp.features.workflows.modic.classify_modic_changes")
-    @patch("slicer_mcp.features.workflows.modic.segment_spine")
-    def test_result_has_all_expected_keys(
-        self, mock_segment, mock_modic, mock_pfirrmann, mock_screenshot
-    ):
-        """Result dict contains all documented keys."""
-        mock_segment.return_value = MOCK_SEGMENT_RESULT
-        mock_modic.return_value = MOCK_MODIC_RESULT
-        mock_pfirrmann.return_value = MOCK_PFIRRMANN_RESULT
-        mock_screenshot.return_value = MOCK_SCREENSHOT_RESULT
-
-        result = workflow_modic_eval(
-            t1_volume_id="vtkMRMLScalarVolumeNode1",
-            t2_volume_id="vtkMRMLScalarVolumeNode2",
-        )
-
+    def test_result_has_all_expected_keys(self, modic_mocks):
+        result = workflow_modic_eval(t1_volume_id=_VALID_T1, t2_volume_id=_VALID_T2)
         expected_keys = {
             "segmentation_node_id",
             "modic_changes",
@@ -563,22 +356,6 @@ class TestWorkflowModicEvalResultStructure:
         }
         assert set(result.keys()) == expected_keys
 
-    @patch("slicer_mcp.features.workflows.modic.capture_screenshot")
-    @patch("slicer_mcp.features.workflows.modic.assess_disc_degeneration_mri")
-    @patch("slicer_mcp.features.workflows.modic.classify_modic_changes")
-    @patch("slicer_mcp.features.workflows.modic.segment_spine")
-    def test_default_region_is_lumbar(
-        self, mock_segment, mock_modic, mock_pfirrmann, mock_screenshot
-    ):
-        """Default region should be lumbar when not specified."""
-        mock_segment.return_value = MOCK_SEGMENT_RESULT
-        mock_modic.return_value = MOCK_MODIC_RESULT
-        mock_pfirrmann.return_value = MOCK_PFIRRMANN_RESULT
-        mock_screenshot.return_value = MOCK_SCREENSHOT_RESULT
-
-        result = workflow_modic_eval(
-            t1_volume_id="vtkMRMLScalarVolumeNode1",
-            t2_volume_id="vtkMRMLScalarVolumeNode2",
-        )
-
+    def test_default_region_is_lumbar(self, modic_mocks):
+        result = workflow_modic_eval(t1_volume_id=_VALID_T1, t2_volume_id=_VALID_T2)
         assert result["region"] == "lumbar"

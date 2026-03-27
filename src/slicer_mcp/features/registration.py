@@ -492,18 +492,13 @@ def place_landmarks(
 
     python_code = _build_place_landmarks_code(safe_name, safe_points, safe_labels)
 
-    try:
-        exec_result = client.exec_python(python_code, timeout=REGISTRATION_TIMEOUT)
+    exec_result = client.exec_python(python_code, timeout=REGISTRATION_TIMEOUT)
 
-        result = _parse_json_result(exec_result.get("result", ""), "place landmarks")
+    result = _parse_json_result(exec_result.get("result", ""), "place landmarks")
 
-        logger.info(f"Landmarks placed: name={name}, points={len(points)}")
+    logger.info(f"Landmarks placed: name={name}, points={len(points)}")
 
-        return result
-
-    except Exception:
-        logger.error(f"Place landmarks failed for '{name}'")
-        raise
+    return result
 
 
 def get_landmarks(node_id: str) -> dict:
@@ -527,18 +522,13 @@ def get_landmarks(node_id: str) -> dict:
 
     python_code = _build_get_landmarks_code(safe_node_id)
 
-    try:
-        exec_result = client.exec_python(python_code, timeout=REGISTRATION_TIMEOUT)
+    exec_result = client.exec_python(python_code, timeout=REGISTRATION_TIMEOUT)
 
-        result = _parse_json_result(exec_result.get("result", ""), "get landmarks")
+    result = _parse_json_result(exec_result.get("result", ""), "get landmarks")
 
-        logger.info(f"Retrieved landmarks from {node_id}: {result.get('point_count', 0)} points")
+    logger.info(f"Retrieved landmarks from {node_id}: {result.get('point_count', 0)} points")
 
-        return result
-
-    except Exception:
-        logger.error(f"Get landmarks failed for {node_id}")
-        raise
+    return result
 
 
 def register_volumes(
@@ -616,21 +606,16 @@ def register_volumes(
         safe_create_resampled,
     )
 
-    try:
-        exec_result = client.exec_python(python_code, timeout=REGISTRATION_TIMEOUT)
+    exec_result = client.exec_python(python_code, timeout=REGISTRATION_TIMEOUT)
 
-        result = _parse_json_result(exec_result.get("result", ""), "register volumes")
+    result = _parse_json_result(exec_result.get("result", ""), "register volumes")
 
-        logger.info(
-            f"Volume registration completed: type={transform_type}, "
-            f"transform={result.get('transform_node_id')}"
-        )
+    logger.info(
+        f"Volume registration completed: type={transform_type}, "
+        f"transform={result.get('transform_node_id')}"
+    )
 
-        return result
-
-    except Exception:
-        logger.error(f"Volume registration failed: fixed={fixed_node_id}, moving={moving_node_id}")
-        raise
+    return result
 
 
 def register_landmarks(
@@ -673,24 +658,16 @@ def register_landmarks(
         safe_fixed_fids, safe_moving_fids, safe_transform_type
     )
 
-    try:
-        exec_result = client.exec_python(python_code, timeout=REGISTRATION_TIMEOUT)
+    exec_result = client.exec_python(python_code, timeout=REGISTRATION_TIMEOUT)
 
-        result = _parse_json_result(exec_result.get("result", ""), "register landmarks")
+    result = _parse_json_result(exec_result.get("result", ""), "register landmarks")
 
-        logger.info(
-            f"Landmark registration completed: type={transform_type}, "
-            f"transform={result.get('transform_node_id')}"
-        )
+    logger.info(
+        f"Landmark registration completed: type={transform_type}, "
+        f"transform={result.get('transform_node_id')}"
+    )
 
-        return result
-
-    except Exception:
-        logger.error(
-            f"Landmark registration failed: fixed={fixed_landmarks_id}, "
-            f"moving={moving_landmarks_id}"
-        )
-        raise
+    return result
 
 
 def apply_transform(
@@ -722,17 +699,12 @@ def apply_transform(
 
     python_code = _build_apply_transform_code(safe_node_id, safe_transform_id, harden)
 
-    try:
-        exec_result = client.exec_python(python_code, timeout=REGISTRATION_TIMEOUT)
+    exec_result = client.exec_python(python_code, timeout=REGISTRATION_TIMEOUT)
 
-        result = _parse_json_result(exec_result.get("result", ""), "apply transform")
+    result = _parse_json_result(exec_result.get("result", ""), "apply transform")
 
-        logger.info(
-            f"Transform applied: node={node_id}, transform={transform_node_id}, hardened={harden}"
-        )
+    logger.info(
+        f"Transform applied: node={node_id}, transform={transform_node_id}, hardened={harden}"
+    )
 
-        return result
-
-    except Exception:
-        logger.error(f"Apply transform failed: node={node_id}, transform={transform_node_id}")
-        raise
+    return result

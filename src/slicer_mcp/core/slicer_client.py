@@ -432,7 +432,7 @@ class SlicerClient:
             current_parsed = pkg_version.parse(extract_version(current))
             min_parsed = pkg_version.parse(SLICER_MIN_VERSION)
             is_compatible = current_parsed >= min_parsed
-        except Exception as e:
+        except (ValueError, TypeError) as e:
             logger.warning(f"Could not parse version '{current}': {e}")
             is_compatible = False
 

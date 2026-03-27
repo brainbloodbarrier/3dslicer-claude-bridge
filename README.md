@@ -97,6 +97,8 @@ uv run pre-commit run --all-files
 |----------|---------|-------------|
 | `SLICER_URL` | `http://localhost:2016` | 3D Slicer WebServer endpoint |
 | `SLICER_TIMEOUT` | `30` | HTTP request timeout (seconds) |
+| `SLICER_AUDIT_LOG` | *(disabled)* | Path for audit log of all Python executions sent to Slicer |
+| `SLICER_METRICS_ENABLED` | `false` | Enable Prometheus metrics (requires `prometheus_client`) |
 
 ## Related Documentation
 

@@ -789,9 +789,7 @@ def measure_coronal_balance_xray(
             "coronal_cobb_severity": (
                 "mild"
                 if coronal_cobb < CORONAL_COBB_MILD_THRESHOLD_DEG
-                else "moderate"
-                if coronal_cobb < CORONAL_COBB_MODERATE_THRESHOLD_DEG
-                else "severe"
+                else "moderate" if coronal_cobb < CORONAL_COBB_MODERATE_THRESHOLD_DEG else "severe"
             ),
         },
         "magnification_factor": magnification_factor,

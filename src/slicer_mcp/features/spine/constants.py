@@ -664,6 +664,10 @@ TECHNIQUE_ANGULATION: dict[str, dict[str, float]] = {
 
 # =============================================================================
 # Instrumentation Safety Thresholds (mm)
+# All safety distances are intentionally set to a uniform 2.0 mm minimum.
+# This conservative default follows the general surgical planning convention
+# (Neo et al. 2005; Resnick & Benzel 2006). Differentiate per-structure when
+# institution-specific or patient-specific evidence supports it.
 # =============================================================================
 
 VA_SAFETY_DISTANCE_MM = 2.0

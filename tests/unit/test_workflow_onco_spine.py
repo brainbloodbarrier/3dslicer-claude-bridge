@@ -1,5 +1,6 @@
 """Unit tests for the workflow_onco_spine workflow tool."""
 
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -25,26 +26,14 @@ from slicer_mcp.features.workflows.onco_spine import (
 class TestValidateRegion:
     """Test region parameter validation for onco-spine."""
 
-    def test_valid_cervical(self):
-        assert _validate_region("cervical") == "cervical"
+    @pytest.mark.parametrize("region", ["cervical", "thoracic", "lumbar", "full"])
+    def test_valid_regions(self, region):
+        assert _validate_region(region) == region
 
-    def test_valid_thoracic(self):
-        assert _validate_region("thoracic") == "thoracic"
-
-    def test_valid_lumbar(self):
-        assert _validate_region("lumbar") == "lumbar"
-
-    def test_valid_full(self):
-        assert _validate_region("full") == "full"
-
-    def test_invalid_empty(self):
+    @pytest.mark.parametrize("region", ["", "sacral", "neck", "CERVICAL"])
+    def test_invalid_regions(self, region):
         with pytest.raises(ValidationError) as exc_info:
-            _validate_region("")
-        assert exc_info.value.field == "region"
-
-    def test_invalid_arbitrary(self):
-        with pytest.raises(ValidationError) as exc_info:
-            _validate_region("sacral")
+            _validate_region(region)
         assert exc_info.value.field == "region"
 
 
@@ -56,28 +45,20 @@ class TestValidateRegion:
 class TestValidatePainType:
     """Test pain_type parameter validation."""
 
-    def test_valid_mechanical(self):
-        assert _validate_pain_type("mechanical") == "mechanical"
-
-    def test_valid_occasional_non_mechanical(self):
-        result = _validate_pain_type("occasional_non_mechanical")
-        assert result == "occasional_non_mechanical"
-
-    def test_valid_pain_free(self):
-        result = _validate_pain_type("pain_free")
-        assert result == "pain_free"
+    @pytest.mark.parametrize(
+        "pain_type",
+        ["mechanical", "occasional_non_mechanical", "pain_free"],
+    )
+    def test_valid_pain_types(self, pain_type):
+        assert _validate_pain_type(pain_type) == pain_type
 
     def test_valid_none(self):
         assert _validate_pain_type(None) is None
 
-    def test_invalid_pain_type(self):
+    @pytest.mark.parametrize("pain_type", ["sharp", "", "chronic"])
+    def test_invalid_pain_types(self, pain_type):
         with pytest.raises(ValidationError) as exc_info:
-            _validate_pain_type("sharp")
-        assert exc_info.value.field == "pain_type"
-
-    def test_invalid_empty_string(self):
-        with pytest.raises(ValidationError) as exc_info:
-            _validate_pain_type("")
+            _validate_pain_type(pain_type)
         assert exc_info.value.field == "pain_type"
 
 
@@ -89,17 +70,9 @@ class TestValidatePainType:
 class TestConstants:
     """Test onco-spine workflow constants."""
 
-    def test_valid_regions_contains_full(self):
-        assert "full" in SPINE_REGIONS
-
-    def test_valid_regions_contains_cervical(self):
-        assert "cervical" in SPINE_REGIONS
-
-    def test_valid_regions_contains_thoracic(self):
-        assert "thoracic" in SPINE_REGIONS
-
-    def test_valid_regions_contains_lumbar(self):
-        assert "lumbar" in SPINE_REGIONS
+    @pytest.mark.parametrize("region", ["full", "cervical", "thoracic", "lumbar"])
+    def test_valid_regions(self, region):
+        assert region in SPINE_REGIONS
 
     def test_valid_pain_types(self):
         assert SINS_PAIN_SCORES == {
@@ -148,67 +121,37 @@ MOCK_SEGMENT_RESULT = {
 
 MOCK_METASTATIC_CT_RESULT = {
     "lesions": [
-        {
-            "level": "T10",
-            "type": "lytic",
-            "volume_mm3": 450.2,
-            "body_involvement_pct": 35,
-        },
-        {
-            "level": "L2",
-            "type": "blastic",
-            "volume_mm3": 280.1,
-            "body_involvement_pct": 20,
-        },
+        {"level": "T10", "type": "lytic", "volume_mm3": 450.2, "body_involvement_pct": 35},
+        {"level": "L2", "type": "blastic", "volume_mm3": 280.1, "body_involvement_pct": 20},
     ],
     "total_lesions": 2,
 }
 
 MOCK_SINS_RESULT = {
-    "levels": {
-        "T10": {
-            "total_score": 10,
-            "classification": "potentially_unstable",
-        },
-    },
+    "levels": {"T10": {"total_score": 10, "classification": "potentially_unstable"}},
     "summary": {"max_score": 10},
 }
 
 MOCK_LISTHESIS_RESULT = {
-    "levels": {
-        "L4": {
-            "translation_mm": 2.1,
-            "meyerding_grade": "I",
-        },
-    },
+    "levels": {"L4": {"translation_mm": 2.1, "meyerding_grade": "I"}},
 }
 
 MOCK_CANAL_RESULT = {
-    "levels": {
-        "T10": {
-            "ap_diameter_mm": 11.5,
-            "stenosis_grade": "moderate",
-        },
-    },
+    "levels": {"T10": {"ap_diameter_mm": 11.5, "stenosis_grade": "moderate"}},
 }
 
 MOCK_BONE_RESULT = {
     "levels": {
-        "L1": {
-            "mean_hu": 95.3,
-            "classification": "osteopenic",
-        },
+        "L1": {"mean_hu": 95.3, "classification": "osteopenic"},
+        "L2": {"mean_hu": 120.5, "classification": "normal"},
+        "L3": {"mean_hu": 88.1, "classification": "osteopenic"},
     },
+    "summary": {"osteoporotic_count": 0, "osteopenic_count": 2, "normal_count": 1},
 }
 
 MOCK_METASTATIC_MRI_RESULT = {
     "lesions": [
-        {
-            "level": "T10",
-            "type": "lytic",
-            "t1_signal": "low",
-            "t2_signal": "high",
-        },
+        {"level": "T10", "type": "lytic", "t1_signal": "low", "t2_signal": "high"},
     ],
     "total_lesions": 1,
 }
@@ -219,6 +162,44 @@ MOCK_SCREENSHOT_RESULT = {
     "view_type": "sagittal",
 }
 
+_PATCH_PREFIX = "slicer_mcp.features.workflows.onco_spine"
+
+
+# ================================================================
+# Shared fixture for CT-only pipeline mocks
+# ================================================================
+
+
+@pytest.fixture()
+def onco_ct_mocks():
+    """Patch all CT-pipeline tools and return mocks in a namespace."""
+    with (
+        patch(f"{_PATCH_PREFIX}.segment_spine") as m_segment,
+        patch(f"{_PATCH_PREFIX}.detect_metastatic_lesions_ct") as m_met_ct,
+        patch(f"{_PATCH_PREFIX}.calculate_sins_score") as m_sins,
+        patch(f"{_PATCH_PREFIX}.measure_listhesis_ct") as m_listhesis,
+        patch(f"{_PATCH_PREFIX}.measure_spinal_canal_ct") as m_canal,
+        patch(f"{_PATCH_PREFIX}.assess_osteoporosis_ct") as m_bone,
+        patch(f"{_PATCH_PREFIX}.capture_screenshot") as m_screenshot,
+    ):
+        m_segment.return_value = MOCK_SEGMENT_RESULT
+        m_met_ct.return_value = MOCK_METASTATIC_CT_RESULT
+        m_sins.return_value = MOCK_SINS_RESULT
+        m_listhesis.return_value = MOCK_LISTHESIS_RESULT
+        m_canal.return_value = MOCK_CANAL_RESULT
+        m_bone.return_value = MOCK_BONE_RESULT
+        m_screenshot.return_value = MOCK_SCREENSHOT_RESULT
+
+        yield SimpleNamespace(
+            segment=m_segment,
+            met_ct=m_met_ct,
+            sins=m_sins,
+            listhesis=m_listhesis,
+            canal=m_canal,
+            bone=m_bone,
+            screenshot=m_screenshot,
+        )
+
 
 # ================================================================
 # Input Validation Tests
@@ -228,59 +209,29 @@ MOCK_SCREENSHOT_RESULT = {
 class TestWorkflowOncoSpineValidation:
     """Test input validation for workflow_onco_spine."""
 
-    def test_invalid_ct_node_id(self):
-        """Invalid CT node ID raises ValidationError."""
+    @pytest.mark.parametrize(
+        "kwargs, field",
+        [
+            ({"ct_volume_id": "1invalid"}, "node_id"),
+            ({"ct_volume_id": "vtkMRMLScalarVolumeNode1", "region": "sacral"}, "region"),
+            ({"ct_volume_id": "vtkMRMLScalarVolumeNode1", "pain_type": "sharp"}, "pain_type"),
+            ({"ct_volume_id": "vtkMRMLScalarVolumeNode1", "t1_volume_id": "DROP TABLE"}, "node_id"),
+            ({"ct_volume_id": "vtkMRMLScalarVolumeNode1", "t2_volume_id": "123bad"}, "node_id"),
+            (
+                {
+                    "ct_volume_id": "vtkMRMLScalarVolumeNode1",
+                    "segmentation_node_id": "123bad",
+                },
+                "node_id",
+            ),
+        ],
+    )
+    def test_invalid_inputs(self, kwargs, field):
         with pytest.raises(ValidationError) as exc_info:
-            workflow_onco_spine(ct_volume_id="1invalid")
-        assert exc_info.value.field == "node_id"
-
-    def test_invalid_region(self):
-        """Invalid region raises ValidationError."""
-        with pytest.raises(ValidationError) as exc_info:
-            workflow_onco_spine(
-                ct_volume_id="vtkMRMLScalarVolumeNode1",
-                region="sacral",
-            )
-        assert exc_info.value.field == "region"
-
-    def test_invalid_pain_type(self):
-        """Invalid pain_type raises ValidationError."""
-        with pytest.raises(ValidationError) as exc_info:
-            workflow_onco_spine(
-                ct_volume_id="vtkMRMLScalarVolumeNode1",
-                pain_type="sharp",
-            )
-        assert exc_info.value.field == "pain_type"
-
-    def test_invalid_t1_node_id(self):
-        """Invalid T1 node ID raises ValidationError."""
-        with pytest.raises(ValidationError) as exc_info:
-            workflow_onco_spine(
-                ct_volume_id="vtkMRMLScalarVolumeNode1",
-                t1_volume_id="DROP TABLE",
-            )
-        assert exc_info.value.field == "node_id"
-
-    def test_invalid_t2_node_id(self):
-        """Invalid T2 node ID raises ValidationError."""
-        with pytest.raises(ValidationError) as exc_info:
-            workflow_onco_spine(
-                ct_volume_id="vtkMRMLScalarVolumeNode1",
-                t2_volume_id="123bad",
-            )
-        assert exc_info.value.field == "node_id"
-
-    def test_invalid_segmentation_node_id(self):
-        """Invalid segmentation node ID raises ValidationError."""
-        with pytest.raises(ValidationError) as exc_info:
-            workflow_onco_spine(
-                ct_volume_id="vtkMRMLScalarVolumeNode1",
-                segmentation_node_id="123bad",
-            )
-        assert exc_info.value.field == "node_id"
+            workflow_onco_spine(**kwargs)
+        assert exc_info.value.field == field
 
     def test_empty_ct_node_id(self):
-        """Empty CT node ID raises ValidationError."""
         with pytest.raises(ValidationError):
             workflow_onco_spine(ct_volume_id="")
 
@@ -289,45 +240,18 @@ class TestWorkflowOncoSpineValidation:
 # Happy Path Tests
 # ================================================================
 
-_PATCH_PREFIX = "slicer_mcp.features.workflows.onco_spine"
-
 
 class TestWorkflowOncoSpineHappyPath:
     """Test happy-path execution of workflow_onco_spine."""
 
-    @patch(f"{_PATCH_PREFIX}.capture_screenshot")
-    @patch(f"{_PATCH_PREFIX}.assess_osteoporosis_ct")
-    @patch(f"{_PATCH_PREFIX}.measure_spinal_canal_ct")
-    @patch(f"{_PATCH_PREFIX}.measure_listhesis_ct")
-    @patch(f"{_PATCH_PREFIX}.calculate_sins_score")
-    @patch(f"{_PATCH_PREFIX}.detect_metastatic_lesions_ct")
-    @patch(f"{_PATCH_PREFIX}.segment_spine")
-    def test_full_pipeline(
-        self,
-        mock_segment,
-        mock_met_ct,
-        mock_sins,
-        mock_listhesis,
-        mock_canal,
-        mock_bone,
-        mock_screenshot,
-    ):
+    def test_full_pipeline(self, onco_ct_mocks):
         """Full pipeline with segmentation, no MRI."""
-        mock_segment.return_value = MOCK_SEGMENT_RESULT
-        mock_met_ct.return_value = MOCK_METASTATIC_CT_RESULT
-        mock_sins.return_value = MOCK_SINS_RESULT
-        mock_listhesis.return_value = MOCK_LISTHESIS_RESULT
-        mock_canal.return_value = MOCK_CANAL_RESULT
-        mock_bone.return_value = MOCK_BONE_RESULT
-        mock_screenshot.return_value = MOCK_SCREENSHOT_RESULT
-
         result = workflow_onco_spine(
             ct_volume_id="vtkMRMLScalarVolumeNode1",
             region="full",
         )
 
-        seg_id = "vtkMRMLSegmentationNode1"
-        assert result["segmentation_node_id"] == seg_id
+        assert result["segmentation_node_id"] == "vtkMRMLSegmentationNode1"
         assert result["metastatic_lesions_ct"] == MOCK_METASTATIC_CT_RESULT
         assert result["sins_scores"] == MOCK_SINS_RESULT
         assert result["listhesis"] == MOCK_LISTHESIS_RESULT
@@ -337,162 +261,68 @@ class TestWorkflowOncoSpineHappyPath:
         assert result["region"] == "full"
         assert result["pain_type"] is None
         assert len(result["screenshots"]) == 1
-        assert "segment_spine" in result["steps_completed"]
-        assert "detect_metastatic_lesions_ct" in result["steps_completed"]
-        assert "calculate_sins_score" in result["steps_completed"]
-        assert "measure_listhesis_ct" in result["steps_completed"]
-        assert "measure_spinal_canal_ct" in result["steps_completed"]
-        assert "assess_osteoporosis_ct" in result["steps_completed"]
-        assert "capture_screenshot" in result["steps_completed"]
+
+        expected_steps = {
+            "segment_spine",
+            "detect_metastatic_lesions_ct",
+            "calculate_sins_score",
+            "measure_listhesis_ct",
+            "measure_spinal_canal_ct",
+            "assess_osteoporosis_ct",
+            "capture_screenshot",
+        }
+        assert expected_steps.issubset(set(result["steps_completed"]))
         assert "detect_metastatic_lesions_mri" not in result["steps_completed"]
 
-        mock_segment.assert_called_once_with(
+        onco_ct_mocks.segment.assert_called_once_with(
             input_node_id="vtkMRMLScalarVolumeNode1",
             region="full",
             include_discs=True,
             include_spinal_cord=False,
         )
 
-    @patch(f"{_PATCH_PREFIX}.capture_screenshot")
-    @patch(f"{_PATCH_PREFIX}.assess_osteoporosis_ct")
-    @patch(f"{_PATCH_PREFIX}.measure_spinal_canal_ct")
-    @patch(f"{_PATCH_PREFIX}.measure_listhesis_ct")
-    @patch(f"{_PATCH_PREFIX}.calculate_sins_score")
-    @patch(f"{_PATCH_PREFIX}.detect_metastatic_lesions_ct")
-    @patch(f"{_PATCH_PREFIX}.segment_spine")
-    def test_existing_segmentation_skips_segment(
-        self,
-        mock_segment,
-        mock_met_ct,
-        mock_sins,
-        mock_listhesis,
-        mock_canal,
-        mock_bone,
-        mock_screenshot,
-    ):
+    def test_existing_segmentation_skips_segment(self, onco_ct_mocks):
         """Pre-existing segmentation skips segment_spine."""
-        mock_met_ct.return_value = MOCK_METASTATIC_CT_RESULT
-        mock_sins.return_value = MOCK_SINS_RESULT
-        mock_listhesis.return_value = MOCK_LISTHESIS_RESULT
-        mock_canal.return_value = MOCK_CANAL_RESULT
-        mock_bone.return_value = MOCK_BONE_RESULT
-        mock_screenshot.return_value = MOCK_SCREENSHOT_RESULT
-
         result = workflow_onco_spine(
             ct_volume_id="vtkMRMLScalarVolumeNode1",
             segmentation_node_id="vtkMRMLSegmentationNode5",
         )
 
-        mock_segment.assert_not_called()
-        seg_id = "vtkMRMLSegmentationNode5"
-        assert result["segmentation_node_id"] == seg_id
+        onco_ct_mocks.segment.assert_not_called()
+        assert result["segmentation_node_id"] == "vtkMRMLSegmentationNode5"
         assert "segment_spine_skipped" in result["steps_completed"]
         assert "segment_spine" not in result["steps_completed"]
 
-    @patch(f"{_PATCH_PREFIX}.capture_screenshot")
-    @patch(f"{_PATCH_PREFIX}.detect_metastatic_lesions_mri")
-    @patch(f"{_PATCH_PREFIX}.assess_osteoporosis_ct")
-    @patch(f"{_PATCH_PREFIX}.measure_spinal_canal_ct")
-    @patch(f"{_PATCH_PREFIX}.measure_listhesis_ct")
-    @patch(f"{_PATCH_PREFIX}.calculate_sins_score")
-    @patch(f"{_PATCH_PREFIX}.detect_metastatic_lesions_ct")
-    @patch(f"{_PATCH_PREFIX}.segment_spine")
-    def test_with_mri(
-        self,
-        mock_segment,
-        mock_met_ct,
-        mock_sins,
-        mock_listhesis,
-        mock_canal,
-        mock_bone,
-        mock_met_mri,
-        mock_screenshot,
-    ):
+    def test_with_mri(self, onco_ct_mocks):
         """MRI analysis runs when both T1 and T2 are provided."""
-        mock_segment.return_value = MOCK_SEGMENT_RESULT
-        mock_met_ct.return_value = MOCK_METASTATIC_CT_RESULT
-        mock_sins.return_value = MOCK_SINS_RESULT
-        mock_listhesis.return_value = MOCK_LISTHESIS_RESULT
-        mock_canal.return_value = MOCK_CANAL_RESULT
-        mock_bone.return_value = MOCK_BONE_RESULT
-        mock_met_mri.return_value = MOCK_METASTATIC_MRI_RESULT
-        mock_screenshot.return_value = MOCK_SCREENSHOT_RESULT
+        with patch(f"{_PATCH_PREFIX}.detect_metastatic_lesions_mri") as m_met_mri:
+            m_met_mri.return_value = MOCK_METASTATIC_MRI_RESULT
 
-        result = workflow_onco_spine(
-            ct_volume_id="vtkMRMLScalarVolumeNode1",
-            t1_volume_id="vtkMRMLScalarVolumeNode2",
-            t2_volume_id="vtkMRMLScalarVolumeNode3",
-        )
+            result = workflow_onco_spine(
+                ct_volume_id="vtkMRMLScalarVolumeNode1",
+                t1_volume_id="vtkMRMLScalarVolumeNode2",
+                t2_volume_id="vtkMRMLScalarVolumeNode3",
+            )
 
-        assert result["metastatic_lesions_mri"] == MOCK_METASTATIC_MRI_RESULT
-        assert "detect_metastatic_lesions_mri" in result["steps_completed"]
+            assert result["metastatic_lesions_mri"] == MOCK_METASTATIC_MRI_RESULT
+            assert "detect_metastatic_lesions_mri" in result["steps_completed"]
 
-        mock_met_mri.assert_called_once_with(
-            t1_node_id="vtkMRMLScalarVolumeNode2",
-            t2_stir_node_id="vtkMRMLScalarVolumeNode3",
-            region="full",
-            segmentation_node_id=("vtkMRMLSegmentationNode1"),
-        )
+            m_met_mri.assert_called_once_with(
+                t1_node_id="vtkMRMLScalarVolumeNode2",
+                t2_stir_node_id="vtkMRMLScalarVolumeNode3",
+                region="full",
+                segmentation_node_id="vtkMRMLSegmentationNode1",
+            )
 
-    @patch(f"{_PATCH_PREFIX}.capture_screenshot")
-    @patch(f"{_PATCH_PREFIX}.assess_osteoporosis_ct")
-    @patch(f"{_PATCH_PREFIX}.measure_spinal_canal_ct")
-    @patch(f"{_PATCH_PREFIX}.measure_listhesis_ct")
-    @patch(f"{_PATCH_PREFIX}.calculate_sins_score")
-    @patch(f"{_PATCH_PREFIX}.detect_metastatic_lesions_ct")
-    @patch(f"{_PATCH_PREFIX}.segment_spine")
-    def test_without_mri(
-        self,
-        mock_segment,
-        mock_met_ct,
-        mock_sins,
-        mock_listhesis,
-        mock_canal,
-        mock_bone,
-        mock_screenshot,
-    ):
+    def test_without_mri(self, onco_ct_mocks):
         """MRI analysis skipped when T1/T2 not provided."""
-        mock_segment.return_value = MOCK_SEGMENT_RESULT
-        mock_met_ct.return_value = MOCK_METASTATIC_CT_RESULT
-        mock_sins.return_value = MOCK_SINS_RESULT
-        mock_listhesis.return_value = MOCK_LISTHESIS_RESULT
-        mock_canal.return_value = MOCK_CANAL_RESULT
-        mock_bone.return_value = MOCK_BONE_RESULT
-        mock_screenshot.return_value = MOCK_SCREENSHOT_RESULT
-
-        result = workflow_onco_spine(
-            ct_volume_id="vtkMRMLScalarVolumeNode1",
-        )
+        result = workflow_onco_spine(ct_volume_id="vtkMRMLScalarVolumeNode1")
 
         assert result["metastatic_lesions_mri"] is None
         assert "detect_metastatic_lesions_mri" not in result["steps_completed"]
 
-    @patch(f"{_PATCH_PREFIX}.capture_screenshot")
-    @patch(f"{_PATCH_PREFIX}.assess_osteoporosis_ct")
-    @patch(f"{_PATCH_PREFIX}.measure_spinal_canal_ct")
-    @patch(f"{_PATCH_PREFIX}.measure_listhesis_ct")
-    @patch(f"{_PATCH_PREFIX}.calculate_sins_score")
-    @patch(f"{_PATCH_PREFIX}.detect_metastatic_lesions_ct")
-    @patch(f"{_PATCH_PREFIX}.segment_spine")
-    def test_only_t1_no_mri_analysis(
-        self,
-        mock_segment,
-        mock_met_ct,
-        mock_sins,
-        mock_listhesis,
-        mock_canal,
-        mock_bone,
-        mock_screenshot,
-    ):
+    def test_only_t1_no_mri_analysis(self, onco_ct_mocks):
         """MRI analysis skipped when only T1 provided."""
-        mock_segment.return_value = MOCK_SEGMENT_RESULT
-        mock_met_ct.return_value = MOCK_METASTATIC_CT_RESULT
-        mock_sins.return_value = MOCK_SINS_RESULT
-        mock_listhesis.return_value = MOCK_LISTHESIS_RESULT
-        mock_canal.return_value = MOCK_CANAL_RESULT
-        mock_bone.return_value = MOCK_BONE_RESULT
-        mock_screenshot.return_value = MOCK_SCREENSHOT_RESULT
-
         result = workflow_onco_spine(
             ct_volume_id="vtkMRMLScalarVolumeNode1",
             t1_volume_id="vtkMRMLScalarVolumeNode2",
@@ -501,78 +331,27 @@ class TestWorkflowOncoSpineHappyPath:
         assert result["metastatic_lesions_mri"] is None
         assert "detect_metastatic_lesions_mri" not in result["steps_completed"]
 
-    @patch(f"{_PATCH_PREFIX}.capture_screenshot")
-    @patch(f"{_PATCH_PREFIX}.assess_osteoporosis_ct")
-    @patch(f"{_PATCH_PREFIX}.measure_spinal_canal_ct")
-    @patch(f"{_PATCH_PREFIX}.measure_listhesis_ct")
-    @patch(f"{_PATCH_PREFIX}.calculate_sins_score")
-    @patch(f"{_PATCH_PREFIX}.detect_metastatic_lesions_ct")
-    @patch(f"{_PATCH_PREFIX}.segment_spine")
-    def test_with_pain_type(
-        self,
-        mock_segment,
-        mock_met_ct,
-        mock_sins,
-        mock_listhesis,
-        mock_canal,
-        mock_bone,
-        mock_screenshot,
-    ):
+    def test_with_pain_type(self, onco_ct_mocks):
         """Pain type is passed to SINS calculation."""
-        mock_segment.return_value = MOCK_SEGMENT_RESULT
-        mock_met_ct.return_value = MOCK_METASTATIC_CT_RESULT
-        mock_sins.return_value = MOCK_SINS_RESULT
-        mock_listhesis.return_value = MOCK_LISTHESIS_RESULT
-        mock_canal.return_value = MOCK_CANAL_RESULT
-        mock_bone.return_value = MOCK_BONE_RESULT
-        mock_screenshot.return_value = MOCK_SCREENSHOT_RESULT
-
         result = workflow_onco_spine(
             ct_volume_id="vtkMRMLScalarVolumeNode1",
             pain_type="mechanical",
         )
 
         assert result["pain_type"] == "mechanical"
-
-        mock_sins.assert_called_once_with(
+        onco_ct_mocks.sins.assert_called_once_with(
             volume_node_id="vtkMRMLScalarVolumeNode1",
-            segmentation_node_id=("vtkMRMLSegmentationNode1"),
+            segmentation_node_id="vtkMRMLSegmentationNode1",
             pain_score=3,
         )
 
-    @patch(f"{_PATCH_PREFIX}.capture_screenshot")
-    @patch(f"{_PATCH_PREFIX}.assess_osteoporosis_ct")
-    @patch(f"{_PATCH_PREFIX}.measure_spinal_canal_ct")
-    @patch(f"{_PATCH_PREFIX}.measure_listhesis_ct")
-    @patch(f"{_PATCH_PREFIX}.calculate_sins_score")
-    @patch(f"{_PATCH_PREFIX}.detect_metastatic_lesions_ct")
-    @patch(f"{_PATCH_PREFIX}.segment_spine")
-    def test_without_pain_type(
-        self,
-        mock_segment,
-        mock_met_ct,
-        mock_sins,
-        mock_listhesis,
-        mock_canal,
-        mock_bone,
-        mock_screenshot,
-    ):
+    def test_without_pain_type(self, onco_ct_mocks):
         """SINS called without pain_score when pain_type is None."""
-        mock_segment.return_value = MOCK_SEGMENT_RESULT
-        mock_met_ct.return_value = MOCK_METASTATIC_CT_RESULT
-        mock_sins.return_value = MOCK_SINS_RESULT
-        mock_listhesis.return_value = MOCK_LISTHESIS_RESULT
-        mock_canal.return_value = MOCK_CANAL_RESULT
-        mock_bone.return_value = MOCK_BONE_RESULT
-        mock_screenshot.return_value = MOCK_SCREENSHOT_RESULT
+        workflow_onco_spine(ct_volume_id="vtkMRMLScalarVolumeNode1")
 
-        workflow_onco_spine(
-            ct_volume_id="vtkMRMLScalarVolumeNode1",
-        )
-
-        mock_sins.assert_called_once_with(
+        onco_ct_mocks.sins.assert_called_once_with(
             volume_node_id="vtkMRMLScalarVolumeNode1",
-            segmentation_node_id=("vtkMRMLSegmentationNode1"),
+            segmentation_node_id="vtkMRMLSegmentationNode1",
         )
 
 
@@ -586,61 +365,39 @@ class TestWorkflowOncoSpineErrors:
 
     @patch(f"{_PATCH_PREFIX}.segment_spine")
     def test_segment_spine_error_propagates(self, mock_segment):
-        """SlicerConnectionError from segment_spine propagates."""
         mock_segment.side_effect = SlicerConnectionError("Slicer not responding")
-
         with pytest.raises(SlicerConnectionError):
-            workflow_onco_spine(
-                ct_volume_id="vtkMRMLScalarVolumeNode1",
-            )
+            workflow_onco_spine(ct_volume_id="vtkMRMLScalarVolumeNode1")
 
     @patch(f"{_PATCH_PREFIX}.detect_metastatic_lesions_ct")
     @patch(f"{_PATCH_PREFIX}.segment_spine")
     def test_metastatic_ct_error_propagates(self, mock_segment, mock_met_ct):
-        """SlicerConnectionError from detect_metastatic_lesions_ct propagates."""
         mock_segment.return_value = MOCK_SEGMENT_RESULT
         mock_met_ct.side_effect = SlicerConnectionError("Lesion detection failed")
-
         with pytest.raises(SlicerConnectionError):
-            workflow_onco_spine(
-                ct_volume_id="vtkMRMLScalarVolumeNode1",
-            )
+            workflow_onco_spine(ct_volume_id="vtkMRMLScalarVolumeNode1")
 
     @patch(f"{_PATCH_PREFIX}.calculate_sins_score")
     @patch(f"{_PATCH_PREFIX}.detect_metastatic_lesions_ct")
     @patch(f"{_PATCH_PREFIX}.segment_spine")
     def test_sins_error_propagates(self, mock_segment, mock_met_ct, mock_sins):
-        """SlicerConnectionError from calculate_sins_score propagates."""
         mock_segment.return_value = MOCK_SEGMENT_RESULT
         mock_met_ct.return_value = MOCK_METASTATIC_CT_RESULT
         mock_sins.side_effect = SlicerConnectionError("SINS calculation failed")
-
         with pytest.raises(SlicerConnectionError):
-            workflow_onco_spine(
-                ct_volume_id="vtkMRMLScalarVolumeNode1",
-            )
+            workflow_onco_spine(ct_volume_id="vtkMRMLScalarVolumeNode1")
 
     @patch(f"{_PATCH_PREFIX}.measure_listhesis_ct")
     @patch(f"{_PATCH_PREFIX}.calculate_sins_score")
     @patch(f"{_PATCH_PREFIX}.detect_metastatic_lesions_ct")
     @patch(f"{_PATCH_PREFIX}.segment_spine")
-    def test_listhesis_error_propagates(
-        self,
-        mock_segment,
-        mock_met_ct,
-        mock_sins,
-        mock_listhesis,
-    ):
-        """SlicerConnectionError from measure_listhesis_ct propagates."""
+    def test_listhesis_error_propagates(self, mock_segment, mock_met_ct, mock_sins, mock_listhesis):
         mock_segment.return_value = MOCK_SEGMENT_RESULT
         mock_met_ct.return_value = MOCK_METASTATIC_CT_RESULT
         mock_sins.return_value = MOCK_SINS_RESULT
         mock_listhesis.side_effect = SlicerConnectionError("Listhesis measurement failed")
-
         with pytest.raises(SlicerConnectionError):
-            workflow_onco_spine(
-                ct_volume_id="vtkMRMLScalarVolumeNode1",
-            )
+            workflow_onco_spine(ct_volume_id="vtkMRMLScalarVolumeNode1")
 
     @patch(f"{_PATCH_PREFIX}.measure_spinal_canal_ct")
     @patch(f"{_PATCH_PREFIX}.measure_listhesis_ct")
@@ -648,24 +405,15 @@ class TestWorkflowOncoSpineErrors:
     @patch(f"{_PATCH_PREFIX}.detect_metastatic_lesions_ct")
     @patch(f"{_PATCH_PREFIX}.segment_spine")
     def test_canal_error_propagates(
-        self,
-        mock_segment,
-        mock_met_ct,
-        mock_sins,
-        mock_listhesis,
-        mock_canal,
+        self, mock_segment, mock_met_ct, mock_sins, mock_listhesis, mock_canal
     ):
-        """SlicerConnectionError from measure_spinal_canal_ct propagates."""
         mock_segment.return_value = MOCK_SEGMENT_RESULT
         mock_met_ct.return_value = MOCK_METASTATIC_CT_RESULT
         mock_sins.return_value = MOCK_SINS_RESULT
         mock_listhesis.return_value = MOCK_LISTHESIS_RESULT
         mock_canal.side_effect = SlicerConnectionError("Canal measurement failed")
-
         with pytest.raises(SlicerConnectionError):
-            workflow_onco_spine(
-                ct_volume_id="vtkMRMLScalarVolumeNode1",
-            )
+            workflow_onco_spine(ct_volume_id="vtkMRMLScalarVolumeNode1")
 
     @patch(f"{_PATCH_PREFIX}.assess_osteoporosis_ct")
     @patch(f"{_PATCH_PREFIX}.measure_spinal_canal_ct")
@@ -674,26 +422,16 @@ class TestWorkflowOncoSpineErrors:
     @patch(f"{_PATCH_PREFIX}.detect_metastatic_lesions_ct")
     @patch(f"{_PATCH_PREFIX}.segment_spine")
     def test_bone_quality_error_propagates(
-        self,
-        mock_segment,
-        mock_met_ct,
-        mock_sins,
-        mock_listhesis,
-        mock_canal,
-        mock_bone,
+        self, mock_segment, mock_met_ct, mock_sins, mock_listhesis, mock_canal, mock_bone
     ):
-        """SlicerConnectionError from assess_osteoporosis_ct propagates."""
         mock_segment.return_value = MOCK_SEGMENT_RESULT
         mock_met_ct.return_value = MOCK_METASTATIC_CT_RESULT
         mock_sins.return_value = MOCK_SINS_RESULT
         mock_listhesis.return_value = MOCK_LISTHESIS_RESULT
         mock_canal.return_value = MOCK_CANAL_RESULT
         mock_bone.side_effect = SlicerConnectionError("Osteoporosis assessment failed")
-
         with pytest.raises(SlicerConnectionError):
-            workflow_onco_spine(
-                ct_volume_id="vtkMRMLScalarVolumeNode1",
-            )
+            workflow_onco_spine(ct_volume_id="vtkMRMLScalarVolumeNode1")
 
     @patch(f"{_PATCH_PREFIX}.detect_metastatic_lesions_mri")
     @patch(f"{_PATCH_PREFIX}.assess_osteoporosis_ct")
@@ -712,7 +450,6 @@ class TestWorkflowOncoSpineErrors:
         mock_bone,
         mock_met_mri,
     ):
-        """SlicerConnectionError from detect_metastatic_lesions_mri propagates."""
         mock_segment.return_value = MOCK_SEGMENT_RESULT
         mock_met_ct.return_value = MOCK_METASTATIC_CT_RESULT
         mock_sins.return_value = MOCK_SINS_RESULT
@@ -720,7 +457,6 @@ class TestWorkflowOncoSpineErrors:
         mock_canal.return_value = MOCK_CANAL_RESULT
         mock_bone.return_value = MOCK_BONE_RESULT
         mock_met_mri.side_effect = SlicerConnectionError("MRI lesion detection failed")
-
         with pytest.raises(SlicerConnectionError):
             workflow_onco_spine(
                 ct_volume_id="vtkMRMLScalarVolumeNode1",
@@ -728,151 +464,34 @@ class TestWorkflowOncoSpineErrors:
                 t2_volume_id="vtkMRMLScalarVolumeNode3",
             )
 
-    @patch(f"{_PATCH_PREFIX}.capture_screenshot")
-    @patch(f"{_PATCH_PREFIX}.assess_osteoporosis_ct")
-    @patch(f"{_PATCH_PREFIX}.measure_spinal_canal_ct")
-    @patch(f"{_PATCH_PREFIX}.measure_listhesis_ct")
-    @patch(f"{_PATCH_PREFIX}.calculate_sins_score")
-    @patch(f"{_PATCH_PREFIX}.detect_metastatic_lesions_ct")
-    @patch(f"{_PATCH_PREFIX}.segment_spine")
-    def test_screenshot_failure_is_nonfatal(
-        self,
-        mock_segment,
-        mock_met_ct,
-        mock_sins,
-        mock_listhesis,
-        mock_canal,
-        mock_bone,
-        mock_screenshot,
-    ):
-        """Screenshot failure does not abort the workflow."""
-        mock_segment.return_value = MOCK_SEGMENT_RESULT
-        mock_met_ct.return_value = MOCK_METASTATIC_CT_RESULT
-        mock_sins.return_value = MOCK_SINS_RESULT
-        mock_listhesis.return_value = MOCK_LISTHESIS_RESULT
-        mock_canal.return_value = MOCK_CANAL_RESULT
-        mock_bone.return_value = MOCK_BONE_RESULT
-        mock_screenshot.side_effect = SlicerConnectionError("Screenshot failed")
+    @pytest.mark.parametrize(
+        "error",
+        [
+            SlicerConnectionError("Screenshot failed"),
+            SlicerTimeoutError("Screenshot timed out"),
+            CircuitOpenError("Circuit breaker is open", "slicer", 30.0),
+            ValueError("Invalid view type"),
+        ],
+        ids=["connection", "timeout", "circuit_open", "value_error"],
+    )
+    def test_screenshot_failure_is_nonfatal(self, onco_ct_mocks, error):
+        """Screenshot failures of any type do not abort the workflow."""
+        onco_ct_mocks.screenshot.side_effect = error
 
-        result = workflow_onco_spine(
-            ct_volume_id="vtkMRMLScalarVolumeNode1",
-        )
+        result = workflow_onco_spine(ct_volume_id="vtkMRMLScalarVolumeNode1")
 
         assert result["metastatic_lesions_ct"] == MOCK_METASTATIC_CT_RESULT
         assert result["sins_scores"] == MOCK_SINS_RESULT
         assert len(result["screenshots"]) == 0
         assert "capture_screenshot" not in result["steps_completed"]
 
-    @patch(f"{_PATCH_PREFIX}.capture_screenshot")
-    @patch(f"{_PATCH_PREFIX}.assess_osteoporosis_ct")
-    @patch(f"{_PATCH_PREFIX}.measure_spinal_canal_ct")
-    @patch(f"{_PATCH_PREFIX}.measure_listhesis_ct")
-    @patch(f"{_PATCH_PREFIX}.calculate_sins_score")
-    @patch(f"{_PATCH_PREFIX}.detect_metastatic_lesions_ct")
-    @patch(f"{_PATCH_PREFIX}.segment_spine")
-    def test_screenshot_timeout_is_nonfatal(
-        self,
-        mock_segment,
-        mock_met_ct,
-        mock_sins,
-        mock_listhesis,
-        mock_canal,
-        mock_bone,
-        mock_screenshot,
-    ):
-        """SlicerTimeoutError from screenshot is non-fatal."""
-        mock_segment.return_value = MOCK_SEGMENT_RESULT
-        mock_met_ct.return_value = MOCK_METASTATIC_CT_RESULT
-        mock_sins.return_value = MOCK_SINS_RESULT
-        mock_listhesis.return_value = MOCK_LISTHESIS_RESULT
-        mock_canal.return_value = MOCK_CANAL_RESULT
-        mock_bone.return_value = MOCK_BONE_RESULT
-        mock_screenshot.side_effect = SlicerTimeoutError("Screenshot timed out")
-
-        result = workflow_onco_spine(
-            ct_volume_id="vtkMRMLScalarVolumeNode1",
-        )
-
-        assert result["metastatic_lesions_ct"] == MOCK_METASTATIC_CT_RESULT
-        assert len(result["screenshots"]) == 0
-        assert "capture_screenshot" not in result["steps_completed"]
-
-    @patch(f"{_PATCH_PREFIX}.capture_screenshot")
-    @patch(f"{_PATCH_PREFIX}.assess_osteoporosis_ct")
-    @patch(f"{_PATCH_PREFIX}.measure_spinal_canal_ct")
-    @patch(f"{_PATCH_PREFIX}.measure_listhesis_ct")
-    @patch(f"{_PATCH_PREFIX}.calculate_sins_score")
-    @patch(f"{_PATCH_PREFIX}.detect_metastatic_lesions_ct")
-    @patch(f"{_PATCH_PREFIX}.segment_spine")
-    def test_screenshot_circuit_open_is_nonfatal(
-        self,
-        mock_segment,
-        mock_met_ct,
-        mock_sins,
-        mock_listhesis,
-        mock_canal,
-        mock_bone,
-        mock_screenshot,
-    ):
-        """CircuitOpenError from screenshot is non-fatal."""
-        mock_segment.return_value = MOCK_SEGMENT_RESULT
-        mock_met_ct.return_value = MOCK_METASTATIC_CT_RESULT
-        mock_sins.return_value = MOCK_SINS_RESULT
-        mock_listhesis.return_value = MOCK_LISTHESIS_RESULT
-        mock_canal.return_value = MOCK_CANAL_RESULT
-        mock_bone.return_value = MOCK_BONE_RESULT
-        mock_screenshot.side_effect = CircuitOpenError("Circuit breaker is open", "slicer", 30.0)
-
-        result = workflow_onco_spine(
-            ct_volume_id="vtkMRMLScalarVolumeNode1",
-        )
-
-        assert result["metastatic_lesions_ct"] == MOCK_METASTATIC_CT_RESULT
-        assert len(result["screenshots"]) == 0
-        assert "capture_screenshot" not in result["steps_completed"]
-
-    @patch(f"{_PATCH_PREFIX}.capture_screenshot")
-    @patch(f"{_PATCH_PREFIX}.assess_osteoporosis_ct")
-    @patch(f"{_PATCH_PREFIX}.measure_spinal_canal_ct")
-    @patch(f"{_PATCH_PREFIX}.measure_listhesis_ct")
-    @patch(f"{_PATCH_PREFIX}.calculate_sins_score")
-    @patch(f"{_PATCH_PREFIX}.detect_metastatic_lesions_ct")
-    @patch(f"{_PATCH_PREFIX}.segment_spine")
-    def test_screenshot_value_error_is_nonfatal(
-        self,
-        mock_segment,
-        mock_met_ct,
-        mock_sins,
-        mock_listhesis,
-        mock_canal,
-        mock_bone,
-        mock_screenshot,
-    ):
-        """ValueError from screenshot is non-fatal."""
-        mock_segment.return_value = MOCK_SEGMENT_RESULT
-        mock_met_ct.return_value = MOCK_METASTATIC_CT_RESULT
-        mock_sins.return_value = MOCK_SINS_RESULT
-        mock_listhesis.return_value = MOCK_LISTHESIS_RESULT
-        mock_canal.return_value = MOCK_CANAL_RESULT
-        mock_bone.return_value = MOCK_BONE_RESULT
-        mock_screenshot.side_effect = ValueError("Invalid view type")
-
-        result = workflow_onco_spine(
-            ct_volume_id="vtkMRMLScalarVolumeNode1",
-        )
-
-        assert result["metastatic_lesions_ct"] == MOCK_METASTATIC_CT_RESULT
-        assert len(result["screenshots"]) == 0
-
     @patch(f"{_PATCH_PREFIX}.detect_metastatic_lesions_ct")
     def test_validation_error_from_tool_propagates(self, mock_met_ct):
-        """ValidationError raised inside a tool propagates."""
         mock_met_ct.side_effect = ValidationError("Bad input", "volume_node_id", "bad")
-
         with pytest.raises(ValidationError):
             workflow_onco_spine(
                 ct_volume_id="vtkMRMLScalarVolumeNode1",
-                segmentation_node_id=("vtkMRMLSegmentationNode1"),
+                segmentation_node_id="vtkMRMLSegmentationNode1",
             )
 
 
@@ -884,36 +503,8 @@ class TestWorkflowOncoSpineErrors:
 class TestWorkflowOncoSpineResultStructure:
     """Test that the result dict has the expected keys."""
 
-    @patch(f"{_PATCH_PREFIX}.capture_screenshot")
-    @patch(f"{_PATCH_PREFIX}.assess_osteoporosis_ct")
-    @patch(f"{_PATCH_PREFIX}.measure_spinal_canal_ct")
-    @patch(f"{_PATCH_PREFIX}.measure_listhesis_ct")
-    @patch(f"{_PATCH_PREFIX}.calculate_sins_score")
-    @patch(f"{_PATCH_PREFIX}.detect_metastatic_lesions_ct")
-    @patch(f"{_PATCH_PREFIX}.segment_spine")
-    def test_result_has_all_expected_keys(
-        self,
-        mock_segment,
-        mock_met_ct,
-        mock_sins,
-        mock_listhesis,
-        mock_canal,
-        mock_bone,
-        mock_screenshot,
-    ):
-        """Result dict contains all documented keys."""
-        mock_segment.return_value = MOCK_SEGMENT_RESULT
-        mock_met_ct.return_value = MOCK_METASTATIC_CT_RESULT
-        mock_sins.return_value = MOCK_SINS_RESULT
-        mock_listhesis.return_value = MOCK_LISTHESIS_RESULT
-        mock_canal.return_value = MOCK_CANAL_RESULT
-        mock_bone.return_value = MOCK_BONE_RESULT
-        mock_screenshot.return_value = MOCK_SCREENSHOT_RESULT
-
-        result = workflow_onco_spine(
-            ct_volume_id="vtkMRMLScalarVolumeNode1",
-        )
-
+    def test_result_has_all_expected_keys(self, onco_ct_mocks):
+        result = workflow_onco_spine(ct_volume_id="vtkMRMLScalarVolumeNode1")
         expected_keys = {
             "segmentation_node_id",
             "metastatic_lesions_ct",
@@ -929,34 +520,6 @@ class TestWorkflowOncoSpineResultStructure:
         }
         assert set(result.keys()) == expected_keys
 
-    @patch(f"{_PATCH_PREFIX}.capture_screenshot")
-    @patch(f"{_PATCH_PREFIX}.assess_osteoporosis_ct")
-    @patch(f"{_PATCH_PREFIX}.measure_spinal_canal_ct")
-    @patch(f"{_PATCH_PREFIX}.measure_listhesis_ct")
-    @patch(f"{_PATCH_PREFIX}.calculate_sins_score")
-    @patch(f"{_PATCH_PREFIX}.detect_metastatic_lesions_ct")
-    @patch(f"{_PATCH_PREFIX}.segment_spine")
-    def test_default_region_is_full(
-        self,
-        mock_segment,
-        mock_met_ct,
-        mock_sins,
-        mock_listhesis,
-        mock_canal,
-        mock_bone,
-        mock_screenshot,
-    ):
-        """Default region should be full when not specified."""
-        mock_segment.return_value = MOCK_SEGMENT_RESULT
-        mock_met_ct.return_value = MOCK_METASTATIC_CT_RESULT
-        mock_sins.return_value = MOCK_SINS_RESULT
-        mock_listhesis.return_value = MOCK_LISTHESIS_RESULT
-        mock_canal.return_value = MOCK_CANAL_RESULT
-        mock_bone.return_value = MOCK_BONE_RESULT
-        mock_screenshot.return_value = MOCK_SCREENSHOT_RESULT
-
-        result = workflow_onco_spine(
-            ct_volume_id="vtkMRMLScalarVolumeNode1",
-        )
-
+    def test_default_region_is_full(self, onco_ct_mocks):
+        result = workflow_onco_spine(ct_volume_id="vtkMRMLScalarVolumeNode1")
         assert result["region"] == "full"
