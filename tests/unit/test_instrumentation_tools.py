@@ -790,6 +790,57 @@ class TestPlanCervicalScrewsOccipital:
             result = plan_cervical_screws("occipital", "Occiput", "vtkMRMLSegmentationNode1")
             assert result["success"] is True
 
+    def test_auto_occipital_code_degrades_confidence_on_thickness_failure(self):
+        """Auto mode generated code should degrade confidence to 'low' when thickness fails."""
+        with patch("slicer_mcp.features.spine.instrumentation.get_client") as mock_get_client:
+            mock_client = Mock()
+            mock_client.exec_python.return_value = _mock_exec_result(
+                {
+                    "success": True,
+                    "technique": "auto",
+                    "level": "Occiput",
+                    "analysis": {},
+                    "recommendations": [],
+                }
+            )
+            mock_get_client.return_value = mock_client
+
+            plan_cervical_screws("auto", "Occiput", "vtkMRMLSegmentationNode1")
+            python_code = mock_client.exec_python.call_args[0][0]
+
+            # Verify the generated code contains confidence degradation logic
+            assert "_occipital_confidence = 'high'" in python_code
+            assert "_occipital_confidence = 'low'" in python_code
+            assert "_occipital_warning" in python_code
+            assert "'confidence': _occipital_confidence" in python_code
+            # Verify warning is conditionally added to recommendation
+            assert "if _occipital_warning:" in python_code
+            assert "_occ_rec['warning'] = _occipital_warning" in python_code
+
+    def test_c1c2_code_degrades_transarticular_on_geometry_failure(self):
+        """C1C2 generated code should add low-confidence transarticular on ValueError."""
+        with patch("slicer_mcp.features.spine.instrumentation.get_client") as mock_get_client:
+            mock_client = Mock()
+            mock_client.exec_python.return_value = _mock_exec_result(
+                {
+                    "success": True,
+                    "technique": "auto",
+                    "level": "C1C2",
+                    "screws": [],
+                    "warnings": [],
+                    "recommendations": [],
+                }
+            )
+            mock_get_client.return_value = mock_client
+
+            plan_cervical_screws("auto", "C1C2", "vtkMRMLSegmentationNode1")
+            python_code = mock_client.exec_python.call_args[0][0]
+
+            # C1C2 path: ValueError should produce low-confidence transarticular with warning
+            assert "except ValueError as _c1c2_err:" in python_code
+            assert "'confidence': 'low'" in python_code
+            assert "'warning': 'C2 geometry measurement failed: '" in python_code
+
 
 class TestPlanCervicalScrewsAutoMode:
     """Test auto technique analysis mode."""

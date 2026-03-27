@@ -1325,8 +1325,14 @@ elif level_upper == 'C1C2':
                              'High risk — consider alternative.',
                 'va_required': True,
             }})
-    except ValueError:
-        pass
+    except ValueError as _c1c2_err:
+        recommendations.append({{
+            'technique': 'transarticular',
+            'confidence': 'low',
+            'rationale': 'Isthmus geometry could not be assessed',
+            'warning': 'C2 geometry measurement failed: ' + str(_c1c2_err),
+            'va_required': True,
+        }})
 
     recommendations.append({{
         'technique': 'c1_lateral_mass',

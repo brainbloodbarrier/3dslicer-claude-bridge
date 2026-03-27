@@ -748,6 +748,20 @@ class TestVersionChecking:
             with pytest.raises(SlicerConnectionError):
                 slicer_client.check_version_compatibility()
 
+    def test_version_parsing_lets_unexpected_errors_propagate(self, slicer_client):
+        """Narrowed except (ValueError, TypeError) should not catch AttributeError."""
+        with patch("slicer_mcp.core.slicer_client.requests.post") as mock_post:
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.text = "'5.6.1'"
+            mock_response.raise_for_status = Mock()
+            mock_post.return_value = mock_response
+
+            with patch("packaging.version.parse") as mock_parse:
+                mock_parse.side_effect = AttributeError("unexpected")
+                with pytest.raises(AttributeError):
+                    slicer_client.check_version_compatibility()
+
     def test_get_slicer_version_whitespace_handling(self, slicer_client):
         """Test version string handles whitespace."""
         with patch("slicer_mcp.core.slicer_client.requests.post") as mock_post:
