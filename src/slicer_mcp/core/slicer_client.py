@@ -389,10 +389,18 @@ class SlicerClient:
         Raises:
             SlicerConnectionError: If Slicer is not reachable
         """
-        python_code = "import slicer; slicer.app.applicationVersion"
+        python_code = (
+            "import json, slicer; " "__execResult = json.dumps(slicer.app.applicationVersion)"
+        )
         result = self.exec_python(python_code)
-        # Result comes back quoted, strip quotes and whitespace
-        version_str = result.get("result", "").strip().strip("'\"")
+        # Result comes back double-JSON-encoded: '"\"5.10.0\""'
+        raw = result.get("result", "").strip()
+        try:
+            import json
+
+            version_str = json.loads(json.loads(raw))
+        except (json.JSONDecodeError, TypeError):
+            version_str = raw.strip("'\"")
         logger.info(f"Slicer version: {version_str}")
         return version_str
 
