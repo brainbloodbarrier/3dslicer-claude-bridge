@@ -15,7 +15,29 @@ Replaces individual plan files (archived in `docs/plans/archive/`).
 
 ## Pending
 
-No pending items at this time. All planned work has been completed.
+### Open Issues
+
+| # | Title | Priority | Status |
+|---|-------|----------|--------|
+| #13 | Add runtime validation for configuration constants | Medium | In progress (this branch) |
+| #12 | Refactor tools to async for FastMCP progress reporting | Low | Planned (long-term) |
+| #66 | Claude code committed as me (commit authorship) | Low | Acknowledged |
+
+### In-Progress Work (branch `claude/gracious-hodgkin`)
+
+- **Integration smoke tests** — first real-Slicer test suite (`tests/integration/`)
+- **Contract tests** — `__execResult` protocol validation (`tests/contract/`)
+- **Split server.py** — domain-based registration modules (spine, diagnostics, workflows, core)
+- **CONTRIBUTING.md** — developer onboarding guide
+- **Pydantic Settings** — runtime config validation (Issue #13)
+- **Async refactor** — FastMCP progress reporting foundation (Issue #12)
+
+### Recently Completed
+
+- ✅ Merged PR #68 — canonical imports and formatting
+- ✅ Merged PR #65 — black bump (25.11.0 → 26.3.1)
+- ✅ Fixed worktree build — `uv sync --extra dev --extra metrics`
+- ✅ Cleaned duplicate docs from `docs/plans/` (5 files moved to archive only)
 
 ## Completed Work
 

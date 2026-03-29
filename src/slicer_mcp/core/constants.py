@@ -1,4 +1,11 @@
-"""Centralized constants for Slicer MCP Bridge."""
+"""Centralized constants for Slicer MCP Bridge.
+
+Configurable values (connection, retry, circuit breaker) are sourced from
+the validated Pydantic Settings object in ``slicer_mcp.core.config``.
+Static domain constants remain defined directly in this module.
+"""
+
+from slicer_mcp.core.config import settings as _settings
 
 __all__ = [
     "AUDIT_CODE_MAX_LENGTH",
@@ -61,16 +68,16 @@ __all__ = [
 ]
 
 # =============================================================================
-# Connection Settings
+# Connection Settings (sourced from validated config)
 # =============================================================================
-DEFAULT_SLICER_URL = "http://localhost:2016"
-DEFAULT_TIMEOUT_SECONDS = 30
+DEFAULT_SLICER_URL = _settings.url
+DEFAULT_TIMEOUT_SECONDS = _settings.timeout
 
 # =============================================================================
-# Retry Configuration
+# Retry Configuration (sourced from validated config)
 # =============================================================================
-RETRY_MAX_ATTEMPTS = 3
-RETRY_BACKOFF_BASE = 1.0  # seconds
+RETRY_MAX_ATTEMPTS = _settings.retry_max_attempts
+RETRY_BACKOFF_BASE = _settings.retry_backoff_base
 
 # =============================================================================
 # View Names (Slicer terminology)
@@ -112,9 +119,9 @@ AUDIT_CODE_MAX_LENGTH = 2000  # Increased from 500 to capture meaningful code sn
 AUDIT_RESULT_MAX_LENGTH = 500  # Increased from 200 for better debugging context
 
 # =============================================================================
-# Slicer Version Compatibility
+# Slicer Version Compatibility (min version sourced from validated config)
 # =============================================================================
-SLICER_MIN_VERSION = "5.0.0"
+SLICER_MIN_VERSION = _settings.min_version
 SLICER_TESTED_VERSIONS = frozenset(
     [
         "5.0.0",
@@ -128,10 +135,10 @@ SLICER_TESTED_VERSIONS = frozenset(
 )
 
 # =============================================================================
-# Circuit Breaker Configuration
+# Circuit Breaker Configuration (sourced from validated config)
 # =============================================================================
-CIRCUIT_BREAKER_FAILURE_THRESHOLD = 5  # Open circuit after 5 consecutive failures
-CIRCUIT_BREAKER_RECOVERY_TIMEOUT = 30.0  # Wait 30 seconds before testing recovery
+CIRCUIT_BREAKER_FAILURE_THRESHOLD = _settings.circuit_breaker_threshold
+CIRCUIT_BREAKER_RECOVERY_TIMEOUT = _settings.circuit_breaker_timeout
 
 # =============================================================================
 # DICOM Configuration

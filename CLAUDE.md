@@ -8,8 +8,21 @@ MCP server bridging Claude Code to 3D Slicer for AI-assisted medical image analy
 
 ```
 src/slicer_mcp/
-├── server.py           # ALL @mcp.tool() + @mcp.resource() wrappers (FastMCP)
-├── core/               # HTTP client, circuit breaker, constants, metrics, resources
+├── server.py           # Entry point (~90 lines): FastMCP init + delegates to _registry/
+├── _registry/          # Tool registration by domain (base, diagnostics, spine, workflows, etc.)
+│   ├── _common.py      # Shared: handle_tool_error(), register_tool()
+│   ├── _async_common.py # Async variant: register_async_tool()
+│   ├── base.py         # 12 base tools (screenshot, DICOM, scene)
+│   ├── diagnostics.py  # 16 diagnostic tools (CT, MRI, X-ray)
+│   ├── spine.py        # 7 spine surgery tools + instrumentation
+│   ├── workflows.py    # 3 orchestrated clinical workflows
+│   ├── registration.py # 5 landmark + volume registration tools
+│   ├── rendering.py    # 5 volume rendering + export tools
+│   └── resources.py    # 4 slicer:// MCP resources
+├── core/               # HTTP clients, circuit breaker, config, constants, metrics, resources
+│   ├── config.py       # Pydantic Settings runtime config validation
+│   ├── async_client.py # Async HTTP client (httpx) for non-blocking I/O
+│   └── ...
 ├── features/           # Domain tools: base, diagnostics/, spine/, workflows/, registration, rendering
 └── *.py (14 shims)     # Backward-compat re-exports → canonical core/ and features/ paths
 ```
@@ -19,7 +32,7 @@ src/slicer_mcp/
 **Error propagation** (innermost to outermost):
 1. `core/slicer_client.py` — maps `requests` exceptions to `SlicerConnectionError`/`SlicerTimeoutError`
 2. `features/*.py` — raises `ValidationError` (bad input) before any network call
-3. `server.py:_handle_tool_error()` — catch-all, maps to standardized `error_type` field
+3. `_registry/_common.py:handle_tool_error()` — catch-all, maps to standardized `error_type` field
 
 Full architectural details: `src/slicer_mcp/AGENTS.md`
 
@@ -27,7 +40,7 @@ Full architectural details: `src/slicer_mcp/AGENTS.md`
 
 ```bash
 # Install all deps (runtime + dev + metrics)
-uv sync && uv pip install pytest-cov black mypy types-requests
+uv sync --extra dev --extra metrics
 
 # Run unit tests (no running Slicer needed)
 uv run pytest -v -m "not integration and not benchmark"
@@ -50,7 +63,7 @@ uv run pre-commit run --all-files
 
 ## Key Conventions
 
-- **New tools**: implement in `features/*.py`, register wrapper in `server.py` with try/except calling `_handle_tool_error()`. No auto-discovery — every tool must be manually registered.
+- **New tools**: implement in `features/*.py`, register in the appropriate `_registry/*.py` domain module via `register_tool()`. No auto-discovery — every tool must be manually registered.
 - **Imports**: always use canonical paths `slicer_mcp.core.*` or `slicer_mcp.features.*`. The 14 root shim files exist only for backward compat.
 - **Reuse constants**: check `features/spine/constants.py` and `features/spine/tools.py` before defining new sets (e.g., `SPINE_REGIONS`, `VALID_POPULATIONS`, `SINS_PAIN_SCORES`)
 - **Error handling**: feature code raises `ValidationError` or `SlicerConnectionError`; never swallow exceptions — let them propagate to `_handle_tool_error()`.
