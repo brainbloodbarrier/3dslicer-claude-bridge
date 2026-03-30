@@ -390,7 +390,7 @@ class SlicerClient:
             SlicerConnectionError: If Slicer is not reachable
         """
         python_code = (
-            "import json, slicer; " "__execResult = json.dumps(slicer.app.applicationVersion)"
+            "import json, slicer; __execResult = json.dumps(slicer.app.applicationVersion)"
         )
         result = self.exec_python(python_code)
         # Result comes back double-JSON-encoded: '"\"5.10.0\""'

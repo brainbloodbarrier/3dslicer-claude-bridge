@@ -74,9 +74,9 @@ class TestCodeGenerationContracts:
             json.dumps("vtkMRMLSegmentationNode1"),
             json.dumps("Liver"),
         )
-        assert EXEC_RESULT_PATTERN.search(
-            code
-        ), "Generated code must contain __execResult assignment"
+        assert EXEC_RESULT_PATTERN.search(code), (
+            "Generated code must contain __execResult assignment"
+        )
 
     def test_all_segments_volume_code_has_exec_result(self):
         """_build_all_segments_volume_code must end with __execResult assignment."""

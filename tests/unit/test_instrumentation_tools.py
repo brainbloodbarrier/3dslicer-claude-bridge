@@ -1003,9 +1003,9 @@ class TestInstrumentationConstants:
     def test_screw_defaults_have_required_keys(self):
         required_keys = {"diameter_mm", "length_mm", "min_length_mm", "max_length_mm"}
         for technique, defaults in _TECHNIQUE_SCREW_DEFAULTS.items():
-            assert required_keys.issubset(
-                defaults.keys()
-            ), f"Missing keys in {technique}: {required_keys - defaults.keys()}"
+            assert required_keys.issubset(defaults.keys()), (
+                f"Missing keys in {technique}: {required_keys - defaults.keys()}"
+            )
 
     def test_valid_sides_contains_expected(self):
         assert "left" in VALID_SIDES
