@@ -214,9 +214,9 @@ class TestGetWorkflowsResource:
         valid_statuses = {"available", "planned"}
         result = json.loads(get_workflows_resource())
         for workflow in result["workflows"]:
-            assert (
-                workflow["status"] in valid_statuses
-            ), f"Unexpected status '{workflow['status']}' for {workflow['name']}"
+            assert workflow["status"] in valid_statuses, (
+                f"Unexpected status '{workflow['status']}' for {workflow['name']}"
+            )
 
     def test_modic_eval_is_available(self):
         """workflow_modic_eval is implemented and should be marked available."""
