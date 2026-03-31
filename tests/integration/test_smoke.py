@@ -49,9 +49,9 @@ class TestSlicerConnection:
         # Slicer versions look like "5.6.2" or "5.7.0-2024-01-01"
         parts = version.split("-")[0].split(".")
         assert len(parts) >= 2, f"Expected semver-like version, got: {version}"
-        assert all(
-            part.isdigit() for part in parts
-        ), f"Version parts should be numeric, got: {version}"
+        assert all(part.isdigit() for part in parts), (
+            f"Version parts should be numeric, got: {version}"
+        )
 
 
 class TestExecPython:

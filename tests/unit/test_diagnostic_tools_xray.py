@@ -682,9 +682,9 @@ class TestMeasureSagittalBalanceXray:
             "sacral_slope_deg",
         ]
         for param in angle_params:
-            assert (
-                abs(result_1x["parameters"][param] - result_2x["parameters"][param]) < 0.01
-            ), f"{param} changed with magnification"
+            assert abs(result_1x["parameters"][param] - result_2x["parameters"][param]) < 0.01, (
+                f"{param} changed with magnification"
+            )
 
 
 # =============================================================================
