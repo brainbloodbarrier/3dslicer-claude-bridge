@@ -41,6 +41,20 @@ Replaces individual plan files (archived in `docs/plans/archive/`).
 
 ## Completed Work
 
+### Production Surface — slicer-prod (2026-03-31)
+
+Created `slicer-prod/` — a minimal production directory for using the MCP server
+with Claude Code and OpenCode without loading the full development tree.
+
+- `.mcp.json` — Claude Code project-specific MCP config (points to parent repo)
+- `opencode.json` — OpenCode project-specific MCP config (points to parent repo)
+- `.claude/commands` — symlink to canonical `.claude/commands/`
+- `.opencode/commands/*.md` — generated from Claude commands via `sync_surface.py`
+- `scripts/sync_surface.py` — sync tool with `--check` mode for CI validation
+- `CLAUDE.md` — scoped instructions for the production surface
+- CI step added to lint job: `sync_surface.py --check` prevents drift
+- `tests/unit/test_slicer_prod_surface.py` — 4 tests covering symlink, configs, sync
+
 ### Command Docs (2026-03-21)
 
 Created all `.claude/commands/*.md` from scratch with correct tool signatures:

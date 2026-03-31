@@ -33,6 +33,9 @@ jobs:
       - name: Ruff format check
         run: uv run ruff format --check src tests
 
+      - name: slicer-prod surface sync check
+        run: python3 slicer-prod/scripts/sync_surface.py --check
+
   typecheck:
     runs-on: ubuntu-latest
     steps:

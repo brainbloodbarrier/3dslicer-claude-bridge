@@ -1,3 +1,5 @@
+> Extends `~/.claude/CLAUDE.md` — see global config for universal conventions (security, testing, debugging, communication).
+
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
@@ -73,6 +75,16 @@ uv run pre-commit run --all-files
 - **Line length**: 100 chars (black + ruff). Target Python 3.10+.
 - **Commit style**: conventional commits (`feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:`)
 - **Logging**: goes to stderr (stdout reserved for MCP protocol JSON). Format is JSON structured logging.
+
+## Production Surface
+
+`slicer-prod/` — minimal directory for using the MCP server with Claude Code and OpenCode without loading the full development tree. See `slicer-prod/README.md` for usage.
+
+- Claude Code config: `slicer-prod/.mcp.json`
+- OpenCode config: `slicer-prod/opencode.json`
+- Claude commands: symlinked from `.claude/commands/`
+- OpenCode commands: generated via `python3 slicer-prod/scripts/sync_surface.py`
+- CI validates sync: `slicer-prod/scripts/sync_surface.py --check` runs in the lint job
 
 ## Project Status
 

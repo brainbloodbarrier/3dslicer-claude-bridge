@@ -30,6 +30,7 @@ htmlcov/
 
 # Claude Code
 .claude/settings.local.json
+slicer-prod/.claude/settings.local.json
 
 # Medical imaging data
 *.nrrd

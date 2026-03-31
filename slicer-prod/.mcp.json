@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "slicer-bridge": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "..",
+        "run",
+        "slicer-mcp"
+      ],
+      "env": {
+        "SLICER_URL": "http://localhost:2016"
+      }
+    }
+  }
+}
