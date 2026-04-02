@@ -50,5 +50,8 @@
       "**Key internal services**: 3D Slicer WebServer on `http://localhost:2016` only",
       "**Data sensitivity**: This project may handle medical-imaging data; DICOM files, scene exports, screenshots, and reports may contain PHI"
     ]
+  },
+  "enabledPlugins": {
+    "remember@claude-plugins-official": true
   }
 }
