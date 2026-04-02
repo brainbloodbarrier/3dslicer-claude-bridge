@@ -946,11 +946,16 @@ else:
         if not _ts_pythonSlicer:
             raise RuntimeError("PythonSlicer not found in PATH")
 
-        from TotalSegmentator import TotalSegmentatorLogic as _ts_Logic
-        _ts_exec = _ts_os.path.join(
-            _ts_sysconfig.get_path('scripts'),
-            _ts_Logic.executableName("TotalSegmentator"),
-        )
+        _ts_exec = _ts_shutil.which('TotalSegmentator') or _ts_shutil.which('totalsegmentator')
+        if not _ts_exec:
+            # Fallback: check sysconfig scripts directory
+            _ts_exec = _ts_os.path.join(_ts_sysconfig.get_path('scripts'), 'TotalSegmentator')
+        if not _ts_os.path.isfile(_ts_exec):
+            raise RuntimeError(
+                "TotalSegmentator not found. Install via: "
+                "slicer.util.pip_install('TotalSegmentator') or "
+                "install the TotalSegmentator Slicer extension."
+            )
 
         _ts_cmd = [_ts_pythonSlicer, _ts_exec,
                     "-i", _ts_inputFile, "-o", _ts_outputFolder,
