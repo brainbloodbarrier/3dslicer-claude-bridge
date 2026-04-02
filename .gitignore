@@ -39,6 +39,24 @@ slicer-prod/.claude/settings.local.json
 *.dcm
 Exame_*
 
+# DICOM / patient imaging data (PHI — never commit)
+dicom/
+
+# Claude Code worktrees & session artifacts
+.claude/worktrees/
+
+# Honcho memory plugin
+.remember/
+
+# Pytest temp artifacts
+pytest-of-*/
+
+# Temporary uv lockfiles (distinct from committed uv.lock)
+uv-*.lock
+
+# Context-mode routing (local agent config, not project docs)
+AGENTS.md
+
 # OS
 .DS_Store
 Thumbs.db
