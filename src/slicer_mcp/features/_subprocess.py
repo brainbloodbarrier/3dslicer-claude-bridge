@@ -206,6 +206,7 @@ else:
             raise RuntimeError("TotalSegmentator did not produce output within timeout")
 
         # Import segmentation result
+        from TotalSegmentator import TotalSegmentatorLogic as _ts_Logic
         _ts_logic = _ts_Logic()
         _ts_logic.readSegmentation({seg_var}, _ts_outputFile, {safe_task})
 

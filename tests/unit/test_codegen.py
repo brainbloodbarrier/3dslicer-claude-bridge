@@ -58,8 +58,8 @@ class TestSafeOptional:
     def test_list_value(self):
         assert safe_optional([1, 2]) == "[1, 2]"
 
-    def test_custom_serializer(self):
-        assert safe_optional(True, serializer=str) == "True"
+    def test_bool_value(self):
+        assert safe_optional(True) == "true"
 
-    def test_none_ignores_serializer(self):
-        assert safe_optional(None, serializer=str) == "None"
+    def test_int_value(self):
+        assert safe_optional(42) == "42"

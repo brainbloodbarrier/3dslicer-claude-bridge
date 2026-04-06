@@ -22,7 +22,7 @@ from slicer_mcp.features._validation import _validate_region  # noqa: F401
 from slicer_mcp.features.diagnostics._common import (  # noqa: F401
     _validate_levels,
 )
-from slicer_mcp.features.diagnostics.ct_fracture import (  # noqa: F401  # noqa: F401
+from slicer_mcp.features.diagnostics.ct_fracture import (  # noqa: F401
     _build_canal_measurement_code,
     _build_fracture_detection_code,
     _build_listhesis_code,
@@ -34,7 +34,7 @@ from slicer_mcp.features.diagnostics.ct_fracture import (  # noqa: F401  # noqa:
     measure_listhesis_ct,
     measure_spinal_canal_ct,
 )
-from slicer_mcp.features.diagnostics.ct_metabolic import (  # noqa: F401  # noqa: F401
+from slicer_mcp.features.diagnostics.ct_metabolic import (  # noqa: F401
     _build_metastatic_detection_code,
     _build_osteoporosis_code,
     _classify_pickhardt,
@@ -42,7 +42,7 @@ from slicer_mcp.features.diagnostics.ct_metabolic import (  # noqa: F401  # noqa
     assess_osteoporosis_ct,
     detect_metastatic_lesions_ct,
 )
-from slicer_mcp.features.diagnostics.ct_scoring import (  # noqa: F401  # noqa: F401
+from slicer_mcp.features.diagnostics.ct_scoring import (  # noqa: F401
     _build_sins_code,
     _classify_sins_total,
     _sins_alignment_score,

@@ -38,16 +38,15 @@ def safe_json(value: Any) -> str:
     return json.dumps(value)
 
 
-def safe_optional(value: Any | None, serializer: Any = json.dumps) -> str:
+def safe_optional(value: Any | None) -> str:
     """Serialize a value that may be None.
 
     Args:
         value: Value to serialize, or None
-        serializer: Serialization function (default: json.dumps)
 
     Returns:
-        ``"None"`` if value is None, otherwise the serialized value
+        ``"None"`` if value is None, otherwise ``json.dumps(value)``
     """
     if value is None:
         return "None"
-    return serializer(value)
+    return json.dumps(value)
