@@ -21,6 +21,7 @@ import logging
 from typing import Any
 
 from slicer_mcp.core.slicer_client import SlicerConnectionError, get_client
+from slicer_mcp.features._subprocess import _build_totalseg_subprocess_block
 from slicer_mcp.features.base_tools import (
     ValidationError,
     _parse_json_result,
@@ -54,7 +55,6 @@ from slicer_mcp.features.spine.constants import (
     TOTALSEGMENTATOR_DISC_MAP,
     TOTALSEGMENTATOR_VERTEBRA_MAP,
 )
-from slicer_mcp.features.spine.tools import _build_totalseg_subprocess_block
 
 __all__ = [
     "assess_disc_degeneration_mri",

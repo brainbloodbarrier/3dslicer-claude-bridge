@@ -475,7 +475,7 @@ class TestDetectVertebralFracturesCT:
                 "vtkMRMLScalarVolumeNode1", classification_system="invalid"
             )
 
-    @patch("slicer_mcp.features.diagnostics.ct.get_client")
+    @patch("slicer_mcp.features.diagnostics.ct_fracture.get_client")
     def test_successful_detection(self, mock_get_client):
         mock_client = Mock()
         mock_get_client.return_value = mock_client
@@ -502,7 +502,7 @@ class TestDetectVertebralFracturesCT:
         assert result["success"] is True
         assert result["fractures_detected"] == 1
 
-    @patch("slicer_mcp.features.diagnostics.ct.get_client")
+    @patch("slicer_mcp.features.diagnostics.ct_fracture.get_client")
     def test_connection_error(self, mock_get_client):
         mock_client = Mock()
         mock_get_client.return_value = mock_client
@@ -535,7 +535,7 @@ class TestAssessOsteoporosisCT:
         with pytest.raises(ValidationError):
             assess_osteoporosis_ct("vtkMRMLScalarVolumeNode1", levels=["X1"])
 
-    @patch("slicer_mcp.features.diagnostics.ct.get_client")
+    @patch("slicer_mcp.features.diagnostics.ct_metabolic.get_client")
     def test_successful_assessment(self, mock_get_client):
         mock_client = Mock()
         mock_get_client.return_value = mock_client
@@ -564,7 +564,7 @@ class TestAssessOsteoporosisCT:
         assert result["success"] is True
         assert result["levels"][0]["classification"]["category"] == "OSTEOPOROSIS_PROBABLE"
 
-    @patch("slicer_mcp.features.diagnostics.ct.get_client")
+    @patch("slicer_mcp.features.diagnostics.ct_metabolic.get_client")
     def test_default_level_is_l1(self, mock_get_client):
         """Default level should be L1 per Pickhardt protocol."""
         mock_client = Mock()
@@ -598,7 +598,7 @@ class TestDetectMetastaticLesionsCT:
         with pytest.raises(ValidationError):
             detect_metastatic_lesions_ct("vtkMRMLScalarVolumeNode1", region="invalid")
 
-    @patch("slicer_mcp.features.diagnostics.ct.get_client")
+    @patch("slicer_mcp.features.diagnostics.ct_metabolic.get_client")
     def test_successful_detection(self, mock_get_client):
         mock_client = Mock()
         mock_get_client.return_value = mock_client
@@ -625,7 +625,7 @@ class TestDetectMetastaticLesionsCT:
         assert result["success"] is True
         assert result["lesions_detected"] == 2
 
-    @patch("slicer_mcp.features.diagnostics.ct.get_client")
+    @patch("slicer_mcp.features.diagnostics.ct_metabolic.get_client")
     def test_connection_error(self, mock_get_client):
         mock_client = Mock()
         mock_get_client.return_value = mock_client
@@ -651,7 +651,7 @@ class TestCalculateSINSScore:
         with pytest.raises(ValidationError):
             calculate_sins_score("vtkMRMLScalarVolumeNode1", pain_score=-1)
 
-    @patch("slicer_mcp.features.diagnostics.ct.get_client")
+    @patch("slicer_mcp.features.diagnostics.ct_scoring.get_client")
     def test_successful_with_pain_score(self, mock_get_client):
         mock_client = Mock()
         mock_get_client.return_value = mock_client
@@ -681,7 +681,7 @@ class TestCalculateSINSScore:
         assert result["success"] is True
         assert result["levels"][0]["sins_classification"] == "INDETERMINATE"
 
-    @patch("slicer_mcp.features.diagnostics.ct.get_client")
+    @patch("slicer_mcp.features.diagnostics.ct_scoring.get_client")
     def test_without_pain_score_reports_range(self, mock_get_client):
         mock_client = Mock()
         mock_get_client.return_value = mock_client
@@ -728,7 +728,7 @@ class TestMeasureListhesisCT:
         with pytest.raises(ValidationError):
             measure_listhesis_ct("vtkMRMLScalarVolumeNode1", levels=["Z1"])
 
-    @patch("slicer_mcp.features.diagnostics.ct.get_client")
+    @patch("slicer_mcp.features.diagnostics.ct_fracture.get_client")
     def test_successful_measurement(self, mock_get_client):
         mock_client = Mock()
         mock_get_client.return_value = mock_client
@@ -758,7 +758,7 @@ class TestMeasureListhesisCT:
         assert result["static_measurement"] is True
         assert "flexion/extension" in result["note"]
 
-    @patch("slicer_mcp.features.diagnostics.ct.get_client")
+    @patch("slicer_mcp.features.diagnostics.ct_fracture.get_client")
     def test_default_levels(self, mock_get_client):
         """Default levels should be L3, L4, L5."""
         mock_client = Mock()
@@ -788,7 +788,7 @@ class TestMeasureSpinalCanalCT:
         with pytest.raises(ValidationError):
             measure_spinal_canal_ct("vtkMRMLScalarVolumeNode1", levels=["X1"])
 
-    @patch("slicer_mcp.features.diagnostics.ct.get_client")
+    @patch("slicer_mcp.features.diagnostics.ct_fracture.get_client")
     def test_successful_measurement(self, mock_get_client):
         mock_client = Mock()
         mock_get_client.return_value = mock_client
@@ -817,7 +817,7 @@ class TestMeasureSpinalCanalCT:
         assert result["success"] is True
         assert result["levels"][0]["torg_pavlov_ratio"] == 0.82
 
-    @patch("slicer_mcp.features.diagnostics.ct.get_client")
+    @patch("slicer_mcp.features.diagnostics.ct_fracture.get_client")
     def test_default_levels_cervical(self, mock_get_client):
         """Default levels should be C3-C7 for canal measurement."""
         mock_client = Mock()
@@ -834,7 +834,7 @@ class TestMeasureSpinalCanalCT:
         assert '"C3"' in code
         assert '"C7"' in code
 
-    @patch("slicer_mcp.features.diagnostics.ct.get_client")
+    @patch("slicer_mcp.features.diagnostics.ct_fracture.get_client")
     def test_connection_error(self, mock_get_client):
         mock_client = Mock()
         mock_get_client.return_value = mock_client
@@ -857,7 +857,7 @@ class TestMeasureSpinalCanalCT:
 class TestCodegenTaskName:
     """Verify generated code uses 'total' task, not paid 'vertebral_body' task."""
 
-    @patch("slicer_mcp.features.diagnostics.ct.get_client")
+    @patch("slicer_mcp.features.diagnostics.ct_fracture.get_client")
     def test_fracture_detection_uses_total_task(self, mock_get_client):
         mock_client = Mock()
         mock_get_client.return_value = mock_client
@@ -870,7 +870,7 @@ class TestCodegenTaskName:
         assert 'task="vertebral_body"' not in code
         assert '"total"' in code
 
-    @patch("slicer_mcp.features.diagnostics.ct.get_client")
+    @patch("slicer_mcp.features.diagnostics.ct_metabolic.get_client")
     def test_osteoporosis_uses_total_task(self, mock_get_client):
         mock_client = Mock()
         mock_get_client.return_value = mock_client
@@ -885,7 +885,7 @@ class TestCodegenTaskName:
         assert 'task="vertebral_body"' not in code
         assert '"total"' in code
 
-    @patch("slicer_mcp.features.diagnostics.ct.get_client")
+    @patch("slicer_mcp.features.diagnostics.ct_metabolic.get_client")
     def test_metastatic_uses_total_task(self, mock_get_client):
         mock_client = Mock()
         mock_get_client.return_value = mock_client
@@ -900,7 +900,7 @@ class TestCodegenTaskName:
         assert 'task="vertebral_body"' not in code
         assert '"total"' in code
 
-    @patch("slicer_mcp.features.diagnostics.ct.get_client")
+    @patch("slicer_mcp.features.diagnostics.ct_scoring.get_client")
     def test_sins_uses_total_task(self, mock_get_client):
         mock_client = Mock()
         mock_get_client.return_value = mock_client
@@ -913,7 +913,7 @@ class TestCodegenTaskName:
         assert 'task="vertebral_body"' not in code
         assert '"total"' in code
 
-    @patch("slicer_mcp.features.diagnostics.ct.get_client")
+    @patch("slicer_mcp.features.diagnostics.ct_fracture.get_client")
     def test_listhesis_uses_total_task(self, mock_get_client):
         mock_client = Mock()
         mock_get_client.return_value = mock_client
@@ -926,7 +926,7 @@ class TestCodegenTaskName:
         assert 'task="vertebral_body"' not in code
         assert '"total"' in code
 
-    @patch("slicer_mcp.features.diagnostics.ct.get_client")
+    @patch("slicer_mcp.features.diagnostics.ct_fracture.get_client")
     def test_canal_uses_total_task(self, mock_get_client):
         mock_client = Mock()
         mock_get_client.return_value = mock_client
@@ -943,7 +943,7 @@ class TestCodegenTaskName:
 class TestSubprocessCodegen:
     """Verify generated code uses subprocess approach, not in-process TotalSegmentatorLogic."""
 
-    @patch("slicer_mcp.features.diagnostics.ct.get_client")
+    @patch("slicer_mcp.features.diagnostics.ct_fracture.get_client")
     def test_uses_subprocess_not_process(self, mock_get_client):
         """Auto-segmentation uses subprocess.Popen, not TotalSegmentatorLogic().process()."""
         mock_client = Mock()
@@ -960,7 +960,7 @@ class TestSubprocessCodegen:
         assert "--device" in code
         assert "--fast" in code
 
-    @patch("slicer_mcp.features.diagnostics.ct.get_client")
+    @patch("slicer_mcp.features.diagnostics.ct_fracture.get_client")
     def test_with_seg_id_skips_subprocess(self, mock_get_client):
         """When segmentation_node_id is provided, subprocess code is still present
         but the if/else branch selects existing segmentation."""
@@ -982,7 +982,7 @@ class TestSubprocessCodegen:
 class TestConditionalTimeout:
     """Verify timeout depends on whether segmentation is provided."""
 
-    @patch("slicer_mcp.features.diagnostics.ct.get_client")
+    @patch("slicer_mcp.features.diagnostics.ct_fracture.get_client")
     def test_fracture_auto_seg_uses_spine_timeout(self, mock_get_client):
         """Without segmentation_node_id, uses SPINE_SEGMENTATION_TIMEOUT (600s)."""
         mock_client = Mock()
@@ -995,7 +995,7 @@ class TestConditionalTimeout:
         _, kwargs = mock_client.exec_python.call_args
         assert kwargs["timeout"] == 600
 
-    @patch("slicer_mcp.features.diagnostics.ct.get_client")
+    @patch("slicer_mcp.features.diagnostics.ct_fracture.get_client")
     def test_fracture_with_seg_uses_fast_timeout(self, mock_get_client):
         """With segmentation_node_id, uses SEGMENTATION_TIMEOUT (180s)."""
         mock_client = Mock()
@@ -1011,7 +1011,7 @@ class TestConditionalTimeout:
         _, kwargs = mock_client.exec_python.call_args
         assert kwargs["timeout"] == 180
 
-    @patch("slicer_mcp.features.diagnostics.ct.get_client")
+    @patch("slicer_mcp.features.diagnostics.ct_metabolic.get_client")
     def test_osteoporosis_auto_seg_uses_spine_timeout(self, mock_get_client):
         mock_client = Mock()
         mock_get_client.return_value = mock_client
@@ -1025,7 +1025,7 @@ class TestConditionalTimeout:
         _, kwargs = mock_client.exec_python.call_args
         assert kwargs["timeout"] == 600
 
-    @patch("slicer_mcp.features.diagnostics.ct.get_client")
+    @patch("slicer_mcp.features.diagnostics.ct_fracture.get_client")
     def test_canal_with_seg_uses_fast_timeout(self, mock_get_client):
         mock_client = Mock()
         mock_get_client.return_value = mock_client

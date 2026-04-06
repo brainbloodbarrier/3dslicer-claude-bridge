@@ -93,10 +93,15 @@ __all__ = [
     "VA_LEVEL_SET_ITERATION_COUNT",
     "VA_SAFETY_DISTANCE_MM",
     "VA_VESSELNESS_CONTRAST_MEASURE",
+    "VALID_ALIGNMENT_REGIONS",
+    "VALID_ARTERY_SIDES",
+    "VALID_BONE_REGIONS",
+    "VALID_CCJ_LANDMARKS",
     "VALID_INSTRUMENTATION_TECHNIQUES",
     "VALID_LATERAL_MASS_LEVELS",
     "VALID_LATERAL_MASS_VARIANTS",
     "VALID_PEDICLE_SCREW_LEVELS",
+    "VALID_POPULATIONS",
     "VALID_SIDES",
     "VERTEBRA_LABEL_PATTERN",
     "VERTEBRA_LEVEL_PATTERN",
@@ -810,3 +815,33 @@ VA_VESSELNESS_CONTRAST_MEASURE = 200
 VA_LEVEL_SET_ITERATION_COUNT = 20
 VA_CENTERLINE_SAMPLE_POINTS = 20  # ~N points sampled along centerline
 TRAJECTORY_SAMPLE_POINTS = 20  # sample points along screw trajectory for distance check
+
+# =============================================================================
+# Valid Parameter Sets (migrated from spine/tools.py)
+# =============================================================================
+VALID_POPULATIONS = frozenset(["adult", "child"])
+
+VALID_CCJ_LANDMARKS = frozenset(
+    [
+        "basion",
+        "opisthion",
+        "dens_tip",
+        "dens_base",
+        "c1_anterior_arch",
+        "c1_posterior_arch",
+        "c2_posteroinferior",
+        "c2_anteroinferior",
+        "mcgregor_line_posterior",
+        "hard_palate_posterior",
+        "foramen_magnum_anterior",
+        "foramen_magnum_posterior",
+    ]
+)
+
+VALID_ALIGNMENT_REGIONS = frozenset(["cervical", "thoracic", "lumbar", "full"])
+
+VALID_ARTERY_SIDES = frozenset(["left", "right", "both"])
+"""Valid side parameters for vertebral artery segmentation."""
+
+VALID_BONE_REGIONS = frozenset(["cervical", "thoracic", "lumbar", "full"])
+"""Valid spine region parameters for bone quality analysis."""
