@@ -19,6 +19,7 @@ from slicer_mcp.core.slicer_client import (
     SlicerConnectionError,
     SlicerTimeoutError,
 )
+from slicer_mcp.features._validation import _validate_region
 from slicer_mcp.features.base_tools import (
     ValidationError,
     capture_screenshot,
@@ -36,7 +37,6 @@ from slicer_mcp.features.diagnostics.mri import (
 )
 from slicer_mcp.features.spine.constants import (
     SINS_PAIN_SCORES,
-    SPINE_REGIONS,
 )
 from slicer_mcp.features.spine.tools import segment_spine
 
@@ -45,25 +45,7 @@ __all__ = ["workflow_onco_spine"]
 logger = logging.getLogger("slicer-mcp")
 
 
-def _validate_region(region: str) -> str:
-    """Validate region parameter for onco-spine workflow.
-
-    Args:
-        region: Spine region to analyze
-
-    Returns:
-        Validated region string
-
-    Raises:
-        ValidationError: If region is invalid
-    """
-    if region not in SPINE_REGIONS:
-        raise ValidationError(
-            f"Invalid region '{region}'. Must be one of: {', '.join(sorted(SPINE_REGIONS))}",
-            "region",
-            region,
-        )
-    return region
+# _validate_region imported from features._validation
 
 
 def _validate_pain_type(

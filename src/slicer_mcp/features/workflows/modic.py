@@ -16,8 +16,8 @@ from typing import Any
 from slicer_mcp.core.circuit_breaker import CircuitOpenError
 from slicer_mcp.core.constants import CORD_SCREENING_REGIONS
 from slicer_mcp.core.slicer_client import SlicerConnectionError, SlicerTimeoutError
+from slicer_mcp.features._validation import _validate_region as _validate_region_shared
 from slicer_mcp.features.base_tools import (
-    ValidationError,
     capture_screenshot,
     validate_mrml_node_id,
 )
@@ -33,24 +33,8 @@ logger = logging.getLogger("slicer-mcp")
 
 
 def _validate_region(region: str) -> str:
-    """Validate region parameter for Modic workflow.
-
-    Args:
-        region: Spine region to analyze
-
-    Returns:
-        Validated region string
-
-    Raises:
-        ValidationError: If region is invalid
-    """
-    if region not in VALID_MRI_REGIONS:
-        raise ValidationError(
-            f"Invalid region '{region}'. Must be one of: {', '.join(sorted(VALID_MRI_REGIONS))}",
-            "region",
-            region,
-        )
-    return region
+    """Validate region parameter for Modic workflow (MRI regions only)."""
+    return _validate_region_shared(region, valid_regions=VALID_MRI_REGIONS)
 
 
 def workflow_modic_eval(
