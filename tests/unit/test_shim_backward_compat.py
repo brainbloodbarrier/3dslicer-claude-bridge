@@ -31,9 +31,9 @@ def test_shim_re_exports_canonical_symbol(shim_path, canonical_path, symbol):
 
     shim_obj = getattr(shim_mod, symbol, None)
     assert shim_obj is not None, f"{shim_path} does not export '{symbol}'"
-    assert (
-        shim_obj is canonical_obj
-    ), f"{shim_path}.{symbol} is not the same object as {canonical_path}.{symbol}"
+    assert shim_obj is canonical_obj, (
+        f"{shim_path}.{symbol} is not the same object as {canonical_path}.{symbol}"
+    )
 
 
 @pytest.mark.parametrize(

@@ -156,15 +156,14 @@ class SlicerAsyncClient:
         self._cb = get_circuit_breaker()
 
         logger.info(
-            f"Initialized SlicerAsyncClient with base_url={self.base_url}, "
-            f"timeout={self.timeout}s"
+            f"Initialized SlicerAsyncClient with base_url={self.base_url}, timeout={self.timeout}s"
         )
 
     def _check_circuit_breaker(self) -> None:
         """Check if circuit breaker allows the request."""
         if not self._cb.allow_request():
             raise CircuitOpenError(
-                f"Circuit breaker 'slicer' is OPEN. " f"Will retry in {self._cb.recovery_timeout}s",
+                f"Circuit breaker 'slicer' is OPEN. Will retry in {self._cb.recovery_timeout}s",
                 breaker_name="slicer",
                 recovery_timeout=self._cb.recovery_timeout,
             )
